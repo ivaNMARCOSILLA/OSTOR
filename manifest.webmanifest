@@ -1,0 +1,13 @@
+{
+  "name": "OSTO Multi",
+  "short_name": "OSTO",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#050807",
+  "theme_color": "#050807",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "icons": [
+    {"src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}
+  ]
+}

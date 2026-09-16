@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#050807">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/manifest.webmanifest">
+<title>OSTO · Multi</title>
+<style>
+:root{color-scheme:dark;--bg:#050807;--panel:#0a110e;--panel2:#0d1713;--line:#183027;--text:#effff8;--muted:#78968b;--accent:#00e5a0;--danger:#ff5b78;--shadow:0 18px 60px #0008}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html{background:var(--bg);scroll-behavior:smooth}body{margin:0;min-height:100svh;padding-bottom:96px;background:radial-gradient(900px 450px at 10% -10%,#064a35 0,transparent 55%),radial-gradient(700px 400px at 100% 0,#073022 0,transparent 55%),var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+button,input{font:inherit}button{color:inherit}.top{position:sticky;top:0;z-index:50;display:flex;gap:12px;align-items:center;padding:12px max(14px,env(safe-area-inset-left)) 12px;backdrop-filter:blur(22px);background:#050807df;border-bottom:1px solid var(--line)}.brand{font-weight:900;letter-spacing:-1px;white-space:nowrap}.brand i{font-style:normal;color:var(--accent)}.search{display:flex;flex:1;max-width:720px;margin:auto}.search input{min-width:0;flex:1;border:1px solid var(--line);border-right:0;border-radius:16px 0 0 16px;background:#07100c;color:#fff;padding:12px 15px;outline:0}.search input:focus{border-color:var(--accent);box-shadow:0 0 0 3px #00e5a018}.search button{border:0;border-radius:0 16px 16px 0;background:var(--accent);color:#00140d;padding:0 18px;font-weight:850}.round{width:42px;height:42px;border:1px solid var(--line);border-radius:14px;background:var(--panel);display:grid;place-items:center;cursor:pointer}.layout{width:min(1500px,100%);margin:auto;padding:18px;display:grid;grid-template-columns:minmax(300px,390px) 1fr;gap:18px}.player{position:sticky;top:78px;align-self:start;border:1px solid var(--line);border-radius:24px;overflow:hidden;background:linear-gradient(180deg,var(--panel2),var(--panel));box-shadow:var(--shadow)}.player.mini{position:fixed;z-index:100;right:14px;bottom:82px;top:auto;width:min(410px,calc(100vw - 28px));box-shadow:0 20px 80px #000d,0 0 0 1px #00e5a044}.bar{display:flex;align-items:center;justify-content:space-between;padding:10px;border-bottom:1px solid var(--line)}.bar .actions{display:flex;gap:7px}.tiny{border:1px solid var(--line);background:#07100c;border-radius:12px;padding:8px 10px;font-size:12px;cursor:pointer}.tiny.active{border-color:#00e5a066;background:#00e5a012;color:var(--accent)}.cover{aspect-ratio:1.35;background:#020403;position:relative;display:grid;place-items:center;overflow:hidden}.cover img{width:100%;height:100%;object-fit:cover;opacity:.88}.cover iframe{width:100%;height:100%;border:0;position:absolute;inset:0;z-index:2;background:#000}.cover iframe[hidden]{display:none}.cover:after{content:"";position:absolute;inset:0;background:linear-gradient(transparent 45%,#000c)}.disc{position:absolute;z-index:1;width:92px;height:92px;border-radius:50%;background:radial-gradient(circle,#101a16 0 12%,#000 13% 58%,#101b17 59%);border:1px solid #ffffff18;box-shadow:0 10px 50px #000}.playing .disc{animation:spin 5s linear infinite}.youtube-playing .disc{display:none}@keyframes spin{to{transform:rotate(360deg)}}.info{padding:16px}.eyebrow{font-size:10px;color:var(--muted);letter-spacing:1.2px}.title{font-size:19px;font-weight:800;line-height:1.25;margin:7px 0 4px}.meta{font-size:12px;color:var(--muted)}audio{width:100%;height:42px;margin-top:15px;accent-color:var(--accent)}.status{min-height:18px;margin-top:8px;font-size:11px;color:var(--muted)}.source{display:inline-flex;border:1px solid var(--line);padding:4px 8px;border-radius:999px;font-size:10px;font-weight:800}.links{display:flex;gap:8px;align-items:center;margin-top:10px}.links a{color:var(--accent);text-decoration:none;font-size:12px}.desc{margin-top:12px;color:#9ab3a9;font-size:12px;line-height:1.5;max-height:90px;overflow:auto}.results{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px;align-content:start}.card{min-width:0;overflow:hidden;border:1px solid var(--line);border-radius:18px;background:linear-gradient(180deg,var(--panel2),var(--panel));cursor:pointer;transition:transform .18s,border-color .18s,box-shadow .18s}.card:hover{transform:translateY(-3px);border-color:#00e5a066;box-shadow:0 15px 40px #0007}.thumb{aspect-ratio:16/10;background:#020403;position:relative}.thumb img{width:100%;height:100%;object-fit:cover;display:block}.play{position:absolute;right:10px;bottom:10px;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:#00140d;font-weight:900;box-shadow:0 5px 25px #00e5a055}.pad{padding:12px}.ctitle{font-size:14px;font-weight:750;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.channel{font-size:11px;color:var(--muted);margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.empty{grid-column:1/-1;border:1px dashed var(--line);border-radius:20px;padding:45px 20px;text-align:center;color:var(--muted);background:#07100c88}.empty b{color:var(--accent);cursor:pointer}.mini .cover{aspect-ratio:3.8/1}.mini .cover .disc{width:52px;height:52px}.mini .info{padding:11px 13px}.mini .eyebrow,.mini .desc,.mini .links{display:none}.mini .title{font-size:14px;margin:0}.mini .meta{font-size:11px}.mini audio{margin-top:8px;height:36px}.bottom{position:fixed;z-index:90;left:0;right:0;bottom:0;padding:8px 8px calc(8px + env(safe-area-inset-bottom));display:flex;justify-content:space-around;background:#050807f2;border-top:1px solid var(--line);backdrop-filter:blur(22px)}.bottom button{background:none;border:0;color:var(--muted);font-size:10px;padding:5px 13px;display:flex;flex-direction:column;gap:3px;align-items:center}.bottom .ico{font-size:20px;line-height:1}.bottom button.active{color:var(--accent)}.install{display:none}.install.show{display:block}.toast{position:fixed;z-index:200;left:50%;bottom:105px;transform:translateX(-50%);background:#101b16;border:1px solid #00e5a066;border-radius:999px;padding:10px 14px;font-size:12px;box-shadow:var(--shadow)}
+@media(max-width:900px){.layout{grid-template-columns:1fr;padding:12px}.player{position:relative;top:auto}.results{grid-template-columns:repeat(2,minmax(0,1fr))}.top{padding-left:10px;padding-right:10px}.brand{font-size:15px}.search{display:none}.search.open{display:flex;position:absolute;left:10px;right:10px;top:8px;max-width:none}.top.searching .brand,.top.searching .round{visibility:hidden}}
+@media(max-width:520px){.layout{padding:9px}.results{gap:9px}.card{border-radius:15px}.thumb{aspect-ratio:1.25}.pad{padding:10px}.ctitle{font-size:12px}.channel{font-size:10px}.player{border-radius:20px}.cover{aspect-ratio:1.45}.bottom button{padding-inline:9px}}
+@media(min-width:901px){.bottom{display:none}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<header class="top" id="top">
+<div class="brand">OSTO<i>·</i>MULTI</div>
+<form class="search" id="search" onsubmit="return doSearch(event)">
+<input id="q" maxlength="160" placeholder="Buscar música, artistas o sonidos…" enterkeyhint="search" autocomplete="off">
+<button aria-label="Buscar">Buscar</button>
+</form>
+<button class="round" id="searchBtn" onclick="openSearch()" aria-label="Abrir búsqueda">⌕</button>
+<button class="round" onclick="location.href='/logout'" aria-label="Salir">↪</button>
+</header>
+
+<main class="layout">
+<section class="player" id="player">
+<div class="bar">
+<div class="eyebrow">REPRODUCTOR</div>
+<div class="actions">
+<button class="tiny" id="miniBtn" onclick="toggleMini()">Mini</button>
+<button class="tiny" id="installBtn" onclick="installApp()">Instalar</button>
+<button class="tiny" onclick="stopPlayback()">×</button>
+</div>
+</div>
+<div class="cover" id="cover"><img id="coverImg" alt="" hidden><iframe id="ytFrame" title="Reproductor de vídeo" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen hidden></iframe><div class="disc"></div></div>
+<div class="info">
+<div class="eyebrow" id="sourceText">LISTO</div>
+<div class="title" id="title">Elige una pista</div>
+<div class="meta" id="meta">La reproducción aparecerá aquí</div>
+<audio id="audio" controls preload="none" playsinline></audio>
+<div class="status" id="status" role="status" aria-live="polite"></div>
+<div class="links"><a id="origin" href="#" target="_blank" rel="noopener noreferrer">Abrir origen ↗</a><span class="source" id="source">—</span></div>
+<div class="desc" id="desc"></div>
+</div>
+</section>
+
+<section class="results" id="results">
+<div class="empty">Busca algo para empezar<br><br><b onclick="quick('lofi')">lofi</b> · <b onclick="quick('jazz')">jazz</b> · <b onclick="quick('ambient')">ambient</b> · <b onclick="quick('rain')">rain</b></div>
+</section>
+</main>
+
+<nav class="bottom" aria-label="Navegación">
+<button onclick="window.scrollTo({top:0,behavior:'smooth'})"><span class="ico">⌂</span>Inicio</button>
+<button onclick="openSearch()"><span class="ico">⌕</span>Buscar</button>
+<button id="bottomMini" onclick="toggleMini()"><span class="ico">▣</span>Mini</button>
+<button onclick="document.getElementById('results').scrollIntoView({behavior:'smooth'})"><span class="ico">☰</span>Feed</button>
+<button onclick="location.href='/logout'"><span class="ico">↪</span>Salir</button>
+</nav>
+
+<script>
+const $=id=>document.getElementById(id);
+const audio=$("audio"), player=$("player"), search=$("search"), topbar=$("top");
+let current=null, mini=false, deferredInstall=null, triedProxy=false;
+
+function openSearch(){topbar.classList.add("searching");search.classList.add("open");$("q").focus()}
+function quick(q){$("q").value=q;doSearch()}
+async function doSearch(e){if(e)e.preventDefault();const q=$("q").value.trim();if(!q)return false;search.classList.remove("open");topbar.classList.remove("searching");$("results").innerHTML='<div class="empty">Buscando…</div>';
+try{const r=await fetch("/api/search?q="+encodeURIComponent(q),{credentials:"same-origin"});const data=await r.json();if(!r.ok)throw Error(data.error||"Error");render(data)}catch(err){$("results").innerHTML='<div class="empty">No se pudo completar la búsqueda.<br><br>'+esc(err.message)+'</div>'}return false}
+
+function render(list){const box=$("results");box.innerHTML="";if(!list?.length){box.innerHTML='<div class="empty">No hay resultados para esa búsqueda.</div>';return}
+for(const item of list){const card=document.createElement("article");card.className="card";const img=esc(item.thumbnail||"");card.innerHTML=`<div class="thumb">${img?`<img loading="lazy" src="${img}" alt="">`:""}<div class="play">▶</div></div><div class="pad"><div class="ctitle">${esc(item.title)}</div><div class="channel">${esc(item.channel||"")}</div></div>`;card.onclick=()=>play(item);box.appendChild(card)}}
+
+function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+
+async function play(item){
+current=item;triedProxy=false;player.classList.add("playing");$("title").textContent=item.title||"Pista";$("meta").textContent=item.channel||"";$("source").textContent=item.source||"AUDIO";$("sourceText").textContent="REPRODUCIENDO";$("desc").textContent=item.description||"";$("origin").href=item.url||"#";
+const cover=$("coverImg");if(item.thumbnail){cover.src=item.thumbnail;cover.hidden=false}else cover.hidden=true;
+audio.pause();audio.removeAttribute("src");audio.load();
+if(item.source==="YOUTUBE"){
+  audio.pause(); audio.removeAttribute("src"); audio.load();
+  const frame=$("ytFrame");
+  const vid=encodeURIComponent(item.video_id||"");
+  frame.src="https://www.youtube-nocookie.com/embed/"+vid+"?autoplay=1&playsinline=1&rel=0&modestbranding=1";
+  frame.hidden=false;
+  $("coverImg").hidden=true;
+  player.classList.add("youtube-playing");
+  setStatus("Reproduciendo vídeo de YouTube");
+  updateMediaSession(item);
+  return;
+}
+let url=item.stream_url;
+if(item.source==="ARCHIVE"&&item.id){try{const r=await fetch("/api/resolve/"+encodeURIComponent(item.id),{credentials:"same-origin"});const j=await r.json();url=j.stream_url||url}catch{}}
+if(!url){setStatus("Esta pista no tiene una URL de audio.");return}
+const frame=$("ytFrame"); frame.src="about:blank"; frame.hidden=true; player.classList.remove("youtube-playing"); audio.src=url;audio.load();try{await audio.play();setStatus("Reproduciendo")}catch{await useProxy(url)}
+updateMediaSession(item)}
+async function useProxy(url){if(triedProxy)return;triedProxy=true;setStatus("Conectando…");audio.src="/api/proxy?url="+encodeURIComponent(url);audio.load();try{await audio.play();setStatus("Reproduciendo")}catch{setStatus("No se pudo reproducir esta pista.")}}
+function setStatus(s){$("status").textContent=s}
+function stopPlayback(){
+  audio.pause();audio.removeAttribute("src");audio.load();
+  const frame=$("ytFrame"); frame.src="about:blank"; frame.hidden=true;
+  player.classList.remove("playing","youtube-playing");
+  current=null;setStatus("")
+}
+audio.addEventListener("error",()=>{if(current?.stream_url&&!triedProxy)useProxy(current.stream_url);else setStatus("No se pudo reproducir esta pista.")});
+audio.addEventListener("play",()=>{player.classList.add("playing");setStatus("Reproduciendo");$("sourceText").textContent="REPRODUCIENDO"});
+audio.addEventListener("pause",()=>{if(!audio.ended)setStatus("Pausado")});
+audio.addEventListener("waiting",()=>setStatus("Cargando…"));
+audio.addEventListener("canplay",()=>setStatus(audio.paused?"Listo":"Reproduciendo"));
+
+function updateMediaSession(item){
+if(!("mediaSession" in navigator))return;
+navigator.mediaSession.metadata=new MediaMetadata({title:item.title||"OSTO",artist:item.channel||"",album:"OSTO",artwork:item.thumbnail?[{src:item.thumbnail,sizes:"512x512",type:"image/jpeg"}]:[]});
+for(const [action,fn] of [["play",()=>audio.play()],["pause",()=>audio.pause()],["stop",stopPlayback],["seekbackward",()=>audio.currentTime=Math.max(0,audio.currentTime-10)],["seekforward",()=>audio.currentTime=Math.min(audio.duration||Infinity,audio.currentTime+10)],["previoustrack",()=>{}],["nexttrack",()=>{}]]){try{navigator.mediaSession.setActionHandler(action,fn)}catch{}}
+}
+audio.addEventListener("play",()=>{if("mediaSession"in navigator)navigator.mediaSession.playbackState="playing"});
+audio.addEventListener("pause",()=>{if("mediaSession"in navigator)navigator.mediaSession.playbackState="paused"});
+
+function toggleMini(){mini?expand():minimize()}
+function minimize(){mini=true;player.classList.add("mini");$("miniBtn").textContent="Expandir";$("bottomMini").classList.add("active")}
+function expand(){mini=false;player.classList.remove("mini");$("miniBtn").textContent="Mini";$("bottomMini").classList.remove("active")}
+
+window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredInstall=e;$("installBtn").classList.add("install","show")});
+async function installApp(){if(!deferredInstall)return;deferredInstall.prompt();await deferredInstall.userChoice;deferredInstall=null;$("installBtn").classList.remove("show")}
+window.addEventListener("appinstalled",()=>{$("installBtn").classList.remove("show")});
+
+if("serviceWorker"in navigator)navigator.serviceWorker.register("/sw.js").catch(()=>{});
+window.addEventListener("DOMContentLoaded",async()=>{try{const r=await fetch("/api/trending");const d=await r.json();if(Array.isArray(d))render(d)}catch{}});
+</script>
+</body></html>
