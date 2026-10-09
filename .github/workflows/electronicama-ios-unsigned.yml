@@ -35,6 +35,22 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
+      - name: Patch ExpoModulesJSI Swift annotations (experimental)
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          header = Path("node_modules/expo-modules-jsi/apple/Sources/ExpoModulesJSI-Cxx/include/RuntimeScheduler.h")
+          source = header.read_text()
+          annotation = "SWIFT_RETURNS_RETAINED RuntimeScheduler("
+          count = source.count(annotation)
+
+          if count != 2:
+              raise SystemExit(f"Expected 2 RuntimeScheduler annotations; found {count}")
+
+          header.write_text(source.replace(annotation, "RuntimeScheduler("))
+          print("Removed exactly 2 incompatible RuntimeScheduler annotations")
+          PY
       - name: Generate native iOS project
         run: npx expo prebuild --platform ios --no-install
 
