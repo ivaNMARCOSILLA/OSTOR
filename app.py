@@ -20,7 +20,6 @@ CORS(app, supports_credentials=True)
 OSTO_PASSWORD = os.environ.get("OSTO_PASSWORD", "")
 SECRET_KEY = os.environ.get("SECRET_KEY", "")
 JAMENDO_CLIENT_ID = os.environ.get("JAMENDO_CLIENT_ID", "")
-YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY", "")
 AUDIUS_APP_NAME = os.environ.get("AUDIUS_APP_NAME", "osto")
 
 if not SECRET_KEY:
@@ -111,7 +110,6 @@ def health():
         "configured": {
             "password": bool(OSTO_PASSWORD),
             "jamendo": bool(JAMENDO_CLIENT_ID),
-            "youtube": bool(YOUTUBE_API_KEY)
         }
     })
 
@@ -228,33 +226,10 @@ def search_jamendo(query, limit=7):
         app.logger.warning("Jamendo error: %s", exc)
         return []
 
-def search_youtube(query, limit=5):
-    if not YOUTUBE_API_KEY:
-        return []
-    try:
-        params = {"part": "snippet", "q": query, "maxResults": limit, "type": "video",
-                  "videoCategoryId": "10", "key": YOUTUBE_API_KEY}
-        items = requests.get("https://www.googleapis.com/youtube/v3/search", params=params, timeout=REQUEST_TIMEOUT).json().get("items", [])
-        return [{
-            "id": f"youtube_{i['id'].get('videoId')}",
-            "title": str(i["snippet"].get("title", "YouTube"))[:140],
-            "channel": str(i["snippet"].get("channelTitle", ""))[:90],
-            "description": str(i["snippet"].get("description", ""))[:600],
-            "thumbnail": i["snippet"].get("thumbnails", {}).get("high", {}).get("url", ""),
-            "url": f"https://www.youtube.com/watch?v={i['id'].get('videoId')}",
-            "source": "YOUTUBE",
-            "video_id": i["id"].get("videoId"),
-        } for i in items]
-    except Exception as exc:
-        app.logger.warning("YouTube error: %s", exc)
-        return []
-
 def multi_search(query, limit=60, page=1):
     if page > 1:
         return search_archive(query, limit=20, page=page)
     funcs = [search_archive, search_audius, search_jamendo]
-    if YOUTUBE_API_KEY:
-        funcs.append(search_youtube)
     per = max(4, limit // len(funcs))
     results = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(funcs)) as pool:

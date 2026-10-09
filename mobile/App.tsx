@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { WebView } from 'react-native-webview';
+
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { getTrendingTracks, searchTracks, resolveArchiveTrack, type Track } from './src/services/musicApi';
 import {
@@ -49,7 +49,7 @@ export default function App() {
             typeof item.id === 'string' &&
             typeof item.title === 'string' &&
             typeof item.channel === 'string' &&
-            ['ARCHIVE', 'AUDIUS', 'YOUTUBE'].includes(item.source)
+            ['ARCHIVE', 'AUDIUS'].includes(item.source)
         );
 
         setFavorites(valid);
@@ -89,7 +89,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
-  const [youtubeTrack, setYoutubeTrack] = useState<Track | null>(null);
+
   const [playerError, setPlayerError] = useState('');
   const playRequest = useRef(0);
   const player = useAudioPlayer(null);
@@ -107,20 +107,6 @@ export default function App() {
   async function playTrack(track: Track) {
     const requestId = ++playRequest.current;
 
-    if (track.source === 'YOUTUBE') {
-      if (!track.video_id || !/^[A-Za-z0-9_-]{11}$/.test(track.video_id)) {
-        setPlayerError('Este video de YouTube no tiene un identificador valido.');
-        return;
-      }
-
-      setPlayerError('');
-      player.pause();
-      setCurrentTrack(null);
-      setYoutubeTrack(track);
-      return;
-    }
-
-    setYoutubeTrack(null);
     setPlayerError('');
     player.pause();
     setCurrentTrack(null);
@@ -178,7 +164,7 @@ export default function App() {
 
     const playable = tracks.filter(
       (track) =>
-        track.source !== 'YOUTUBE' &&
+        ['ARCHIVE', 'AUDIUS'].includes(track.source) &&
         (!!track.stream_url || track.source === 'ARCHIVE')
     );
 
@@ -425,7 +411,7 @@ export default function App() {
           <View style={styles.sourceRow}>
             <Text style={styles.source}>AUDIUS</Text>
             <Text style={styles.source}>ARCHIVE</Text>
-            <Text style={styles.source}>YOUTUBE</Text>
+
           </View>
         </View>
       </ScrollView>
@@ -515,56 +501,6 @@ export default function App() {
         </View>
       )}
 
-      {youtubeTrack?.video_id && (
-        <View
-          style={{
-            marginHorizontal: 16,
-            marginBottom: 12,
-            borderWidth: 1,
-            borderColor: PURPLE,
-            borderRadius: 14,
-            backgroundColor: '#10101c',
-            overflow: 'hidden',
-          }}
-        >
-          <View
-            style={{
-              paddingHorizontal: 12,
-              paddingVertical: 10,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-          >
-            <Text
-              numberOfLines={1}
-              style={{ color: '#ffffff', fontWeight: '700', flex: 1 }}
-            >
-              {youtubeTrack.title}
-            </Text>
-            <TouchableOpacity
-              onPress={() => setYoutubeTrack(null)}
-              accessibilityRole="button"
-              accessibilityLabel="Cerrar reproductor de YouTube"
-              style={{ padding: 8 }}
-            >
-              <Text style={{ color: CYAN, fontWeight: '800' }}>CERRAR</Text>
-            </TouchableOpacity>
-          </View>
-          <WebView
-            key={youtubeTrack.video_id}
-            source={{
-              uri: `https://www.youtube.com/embed/${youtubeTrack.video_id}?playsinline=1`,
-            }}
-            style={{ height: 220, backgroundColor: '#000000' }}
-            javaScriptEnabled
-            domStorageEnabled
-            allowsInlineMediaPlayback
-            mediaPlaybackRequiresUserAction
-            originWhitelist={['https://*']}
-          />
-        </View>
-      )}
 
       <View style={styles.bottomNav}>
         {(['Descubrir', 'Buscar', 'Favoritos'] as Tab[]).map((item) => (

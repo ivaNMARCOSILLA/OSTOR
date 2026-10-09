@@ -7,7 +7,7 @@ import './App.css'
 type Filter = MusicSource | 'TODAS'
 
 const filters: Filter[] = [
-  'TODAS', 'ARCHIVE', 'AUDIUS', 'JAMENDO', 'YOUTUBE'
+  'TODAS', 'ARCHIVE', 'AUDIUS', 'JAMENDO'
 ]
 
 export default function App() {
@@ -30,7 +30,7 @@ export default function App() {
     getTrendingTracks()
       .then(data => {
         if (!active) return
-        setTracks(data)
+        setTracks(data.filter(track => ['ARCHIVE', 'AUDIUS', 'JAMENDO'].includes(track.source)))
         setMessage(data.length
           ? `${data.length} canciones para descubrir`
           : 'No hay resultados disponibles.')
@@ -57,7 +57,7 @@ export default function App() {
       const data = await searchTracks(search, 1)
       if (id !== requestId.current) return
 
-      setTracks(data)
+      setTracks(data.filter(track => ['ARCHIVE', 'AUDIUS', 'JAMENDO'].includes(track.source)))
       setFilter('TODAS')
       setHasMore(data.length > 0)
       setMessage(`${data.length} resultados encontrados`)
@@ -84,6 +84,7 @@ export default function App() {
       setTracks(previous => {
         const seen = new Set(previous.map(track => track.id))
         const additional = data.filter(track => {
+          if (!['ARCHIVE', 'AUDIUS', 'JAMENDO'].includes(track.source)) return false
           if (seen.has(track.id)) return false
           seen.add(track.id)
           return true
@@ -132,7 +133,7 @@ export default function App() {
 
   useEffect(() => {
     const audio = audioRef.current
-    if (!audio || !currentTrack || currentTrack.source === 'YOUTUBE') return
+    if (!audio || !currentTrack) return
 
     if (playing) {
       void audio.play().catch(() => {
@@ -145,7 +146,7 @@ export default function App() {
   }, [currentTrack, playing])
 
   function togglePlayback() {
-    if (!currentTrack || currentTrack.source === 'YOUTUBE') return
+    if (!currentTrack) return
 
     const audio = audioRef.current
 
@@ -335,7 +336,6 @@ export default function App() {
               type="button"
               onClick={togglePlayback}
               aria-label={playing ? 'Pausar' : 'Reproducir'}
-              disabled={currentTrack.source === 'YOUTUBE'}
             >
               {playing ? '⏸' : '▶'}
             </button>
@@ -346,15 +346,7 @@ export default function App() {
             }} aria-label="Cerrar reproductor">✕</button>
           </div>
 
-          {currentTrack.source === 'YOUTUBE' && currentTrack.video_id ? (
-            <iframe
-              className="player-youtube"
-              title={`YouTube: ${currentTrack.title}`}
-              src={`https://www.youtube.com/embed/${encodeURIComponent(currentTrack.video_id)}?autoplay=1`}
-              allow="autoplay; encrypted-media; picture-in-picture"
-              allowFullScreen
-            />
-          ) : currentTrack.stream_url ? (
+          {currentTrack.stream_url ? (
             <audio
               key={currentTrack.id}
               ref={audioRef}

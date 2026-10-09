@@ -1,4 +1,4 @@
-export type MusicSource = 'ARCHIVE' | 'AUDIUS' | 'YOUTUBE';
+export type MusicSource = 'ARCHIVE' | 'AUDIUS';
 
 export interface Track {
   id: string;
@@ -8,7 +8,7 @@ export interface Track {
   thumbnail?: string;
   url?: string;
   stream_url?: string;
-  video_id?: string;
+
   source: MusicSource;
 }
 
@@ -35,7 +35,7 @@ async function getTracks(path: string): Promise<Track[]> {
     throw new Error('Formato de catalogo no valido.');
   }
 
-  return data as Track[];
+  return (data as Track[]).filter((track) => track.source === 'ARCHIVE' || track.source === 'AUDIUS');
 }
 
 export function getTrendingTracks(): Promise<Track[]> {

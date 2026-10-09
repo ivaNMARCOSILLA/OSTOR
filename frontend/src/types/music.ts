@@ -2,7 +2,6 @@
   | 'ARCHIVE'
   | 'AUDIUS'
   | 'JAMENDO'
-  | 'YOUTUBE'
 
 export interface Track {
   id: string
@@ -12,6 +11,5 @@ export interface Track {
   thumbnail?: string
   url?: string
   stream_url?: string
-  video_id?: string
   source: MusicSource
 }
