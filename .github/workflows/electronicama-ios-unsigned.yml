@@ -1,6 +1,9 @@
 name: ELECTRONICAMA iOS unsigned
 
 on:
+  push:
+    branches:
+      - desarrollo/electronicama-ios-build
   workflow_dispatch:
 
 jobs:
