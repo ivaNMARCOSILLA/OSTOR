@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory, session, redirect, render_template_string, Response, stream_with_context
+﻿from flask import Flask, request, jsonify, send_from_directory, session, redirect, render_template_string, Response, stream_with_context
 from flask_cors import CORS
 from werkzeug.middleware.proxy_fix import ProxyFix
 from urllib.parse import quote, urlparse
@@ -15,7 +15,7 @@ app = Flask(__name__, static_folder=BASE_DIR, static_url_path="")
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 CORS(app, supports_credentials=True)
 
-# Configuración: no se guardan credenciales reales en el código.
+# ConfiguraciÃ³n: no se guardan credenciales reales en el cÃ³digo.
 OSTO_PASSWORD = os.environ.get("OSTO_PASSWORD", "")
 SECRET_KEY = os.environ.get("SECRET_KEY", "")
 JAMENDO_CLIENT_ID = os.environ.get("JAMENDO_CLIENT_ID", "")
@@ -36,7 +36,7 @@ LOGIN_HTML = """<!doctype html>
 <html lang="es">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#07100c"><title>OSTO · Acceso</title>
+<meta name="theme-color" content="#07100c"><title>OSTO Â· Acceso</title>
 <style>
 :root{color-scheme:dark;--bg:#050807;--card:#0c1310;--line:#1c3027;--text:#effff7;--muted:#719286;--accent:#00e5a0}
 *{box-sizing:border-box}body{margin:0;min-height:100svh;display:grid;place-items:center;background:radial-gradient(circle at 20% 10%,#0c3b2b 0,transparent 35%),var(--bg);color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:20px}
@@ -46,9 +46,9 @@ input{width:100%;padding:15px 16px;border:1px solid var(--line);border-radius:15
 button{width:100%;margin-top:12px;padding:15px;border:0;border-radius:15px;background:var(--accent);color:#00150e;font-weight:850;font-size:15px;cursor:pointer}
 .err{margin-top:12px;text-align:center;color:#ff6684;font-size:13px}
 </style></head>
-<body><main class="box"><div class="logo">OSTO<b>·</b>MULTI</div><div class="sub">Acceso privado</div>
+<body><main class="box"><div class="logo">OSTO<b>Â·</b>MULTI</div><div class="sub">Acceso privado</div>
 <form method="post" action="/login" autocomplete="on">
-<input type="password" name="password" placeholder="Contraseña" autocomplete="current-password" required autofocus>
+<input type="password" name="password" placeholder="ContraseÃ±a" autocomplete="current-password" required autofocus>
 <button type="submit">Entrar</button>
 {% if error %}<div class="err">{{ error }}</div>{% endif %}
 </form></main></body></html>"""
@@ -81,7 +81,7 @@ def login():
             session["osto_auth"] = True
             session.permanent = True
             return redirect("/")
-        error = "Contraseña incorrecta"
+        error = "ContraseÃ±a incorrecta"
     return render_template_string(LOGIN_HTML, error=error)
 
 @app.route("/logout")
@@ -90,17 +90,14 @@ def logout():
     return redirect("/login")
 
 @app.route("/")
-@login_required
 def index():
     return send_from_directory(BASE_DIR, "index.html")
 
 @app.route("/manifest.webmanifest")
-@login_required
 def manifest():
     return send_from_directory(BASE_DIR, "manifest.webmanifest", mimetype="application/manifest+json")
 
 @app.route("/sw.js")
-@login_required
 def service_worker():
     return send_from_directory(BASE_DIR, "sw.js", mimetype="application/javascript")
 
@@ -139,14 +136,14 @@ def _archive_file_url(identifier):
     _cache_time[identifier] = now
     return url
 
-def search_archive(query, limit=7):
+def search_archive(query, limit=7, page=1):
     try:
         params = {
             "q": f"({query}) AND mediatype:audio",
             "fl[]": ["identifier", "title", "creator", "description"],
             "sort[]": ["downloads desc"],
-            "rows": limit * 2,
-            "page": 1,
+            "rows": limit * 4,
+            "page": page,
             "output": "json",
         }
         data = requests.get("https://archive.org/advancedsearch.php", params=params, timeout=REQUEST_TIMEOUT).json()
@@ -158,7 +155,7 @@ def search_archive(query, limit=7):
                 d = futures[f]
                 try:
                     identifier = d["identifier"]
-                    title = d.get("title", "Sin título")
+                    title = d.get("title", "Sin tÃ­tulo")
                     creator = d.get("creator", "Archive")
                     out.append({
                         "id": f"archive_{identifier}",
@@ -220,7 +217,7 @@ def search_jamendo(query, limit=7):
             "id": f"jamendo_{t.get('id')}",
             "title": str(t.get("name", "Track"))[:140],
             "channel": str(t.get("artist_name", "Jamendo"))[:90],
-            "description": f"{t.get('album_name','')} · {t.get('artist_name','')}",
+            "description": f"{t.get('album_name','')} Â· {t.get('artist_name','')}",
             "thumbnail": t.get("image") or t.get("album_image") or "",
             "url": t.get("shareurl") or f"https://www.jamendo.com/track/{t.get('id')}",
             "stream_url": t.get("audio") or t.get("audiodownload") or "",
@@ -251,7 +248,9 @@ def search_youtube(query, limit=5):
         app.logger.warning("YouTube error: %s", exc)
         return []
 
-def multi_search(query, limit=24):
+def multi_search(query, limit=60, page=1):
+    if page > 1:
+        return search_archive(query, limit=20, page=page)
     funcs = [search_archive, search_audius, search_jamendo]
     if YOUTUBE_API_KEY:
         funcs.append(search_youtube)
@@ -264,7 +263,7 @@ def multi_search(query, limit=24):
                 results.extend(f.result() or [])
             except Exception as exc:
                 app.logger.warning("Search source error: %s", exc)
-    # Deduplicación estable.
+    # DeduplicaciÃ³n estable.
     seen, clean = set(), []
     for item in results:
         key = (item.get("source"), item.get("id"))
@@ -273,20 +272,21 @@ def multi_search(query, limit=24):
     return clean[:limit]
 
 @app.route("/api/search")
-@login_required
 def api_search():
     q = request.args.get("q", "").strip()[:160]
     if not q:
         return jsonify([])
-    return jsonify(multi_search(q))
+    try:
+        page = max(1, min(int(request.args.get("page", "1")), 100))
+    except ValueError:
+        page = 1
+    return jsonify(multi_search(q, page=page))
 
 @app.route("/api/trending")
-@login_required
 def api_trending():
     return jsonify(multi_search("lofi chill jazz", 20))
 
 @app.route("/api/resolve/<path:item_id>")
-@login_required
 def api_resolve(item_id):
     if item_id.startswith("archive_"):
         identifier = item_id[len("archive_"):]
@@ -325,7 +325,7 @@ def api_proxy():
     try:
         upstream = requests.get(target, headers=headers, stream=True, timeout=REQUEST_TIMEOUT, allow_redirects=True)
         if not upstream.ok and upstream.status_code != 206:
-            return jsonify({"error": f"Origen respondió {upstream.status_code}"}), 502
+            return jsonify({"error": f"Origen respondiÃ³ {upstream.status_code}"}), 502
 
         response_headers = {}
         for name in ("Content-Type", "Content-Length", "Content-Range", "Accept-Ranges", "ETag", "Last-Modified"):
@@ -350,3 +350,6 @@ def api_proxy():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "8080"))
     app.run(host="0.0.0.0", port=port, debug=False)
+
+
+
