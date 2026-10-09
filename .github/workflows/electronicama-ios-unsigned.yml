@@ -50,6 +50,45 @@ jobs:
 
           header.write_text(source.replace(annotation, "RuntimeScheduler("))
           print("Removed exactly 2 incompatible RuntimeScheduler annotations")
+          swift_file = Path("node_modules/expo-modules-jsi/apple/Sources/ExpoModulesJSI/Runtime/JavaScriptRuntime.swift")
+          swift_source = swift_file.read_text()
+
+          pointer_names = ("thisPtr", "argumentsPtr", "resultPtr")
+          expected_counts = {"thisPtr": 2, "argumentsPtr": 2, "resultPtr": 3}
+
+          for name in pointer_names:
+              original = f"nonisolated(unsafe) let {name} = {name}"
+              actual = swift_source.count(original)
+              expected = expected_counts[name]
+              if actual != expected:
+                  raise SystemExit(f"Expected {expected} declarations of {name}; found {actual}")
+
+          for name in pointer_names:
+              original = f"nonisolated(unsafe) let {name} = {name}"
+              replacement = f"let {name} = NonisolatedUnsafeVar({name})"
+              swift_source = swift_source.replace(original, replacement)
+
+          for name in pointer_names:
+              swift_source = swift_source.replace(
+                  f"to: {name})",
+                  f"to: {name}.value)"
+              )
+
+          swift_source = swift_source.replace(
+              "UnsafeMutablePointer(mutating: thisPtr).move()",
+              "UnsafeMutablePointer(mutating: thisPtr.value).move()"
+          )
+          swift_source = swift_source.replace(
+              "start: argumentsPtr, count: argumentsCount",
+              "start: argumentsPtr.value, count: argumentsCount"
+          )
+          swift_source = swift_source.replace(
+              "JavaScriptUnownedValue(runtime.pointee, thisPtr)",
+              "JavaScriptUnownedValue(runtime.pointee, thisPtr.value)"
+          )
+
+          swift_file.write_text(swift_source)
+          print("Patched exactly 7 Swift pointer declarations")
           PY
       - name: Generate native iOS project
         run: npx expo prebuild --platform ios --no-install
