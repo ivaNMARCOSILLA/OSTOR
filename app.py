@@ -1,4 +1,4 @@
-﻿from flask import Flask, request, jsonify, send_from_directory, session, redirect, render_template_string, Response, stream_with_context
+from flask import Flask, request, jsonify, send_from_directory, session, redirect, render_template_string, Response, stream_with_context
 from flask_cors import CORS
 from werkzeug.middleware.proxy_fix import ProxyFix
 from urllib.parse import quote, urlparse
@@ -11,7 +11,8 @@ import secrets
 import hashlib
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-app = Flask(__name__, static_folder=BASE_DIR, static_url_path="")
+FRONTEND_DIST = os.path.join(BASE_DIR, "frontend", "dist")
+app = Flask(__name__, static_folder=os.path.join(FRONTEND_DIST, "assets"), static_url_path="/assets")
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 CORS(app, supports_credentials=True)
 
@@ -91,7 +92,7 @@ def logout():
 
 @app.route("/")
 def index():
-    return send_from_directory(BASE_DIR, "index.html")
+    return send_from_directory(FRONTEND_DIST, "index.html")
 
 @app.route("/manifest.webmanifest")
 def manifest():
