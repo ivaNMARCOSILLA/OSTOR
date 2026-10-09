@@ -115,13 +115,15 @@ export default function App() {
 
       setPlayerError('');
       player.pause();
+      setCurrentTrack(null);
       setYoutubeTrack(track);
       return;
     }
 
     setYoutubeTrack(null);
-
     setPlayerError('');
+    player.pause();
+    setCurrentTrack(null);
 
     try {
       let uri = track.stream_url;
@@ -152,6 +154,13 @@ export default function App() {
 
   function togglePlayback() {
     if (!currentTrack) return;
+
+    if (!playerStatus.isLoaded || playerStatus.error) {
+      setPlayerError(
+        playerStatus.error || 'El audio todavia no esta preparado.'
+      );
+      return;
+    }
 
     try {
       if (playerStatus.playing) {
@@ -421,7 +430,7 @@ export default function App() {
         </View>
       </ScrollView>
 
-      {!!playerError && (
+      {!!(playerError || (currentTrack && playerStatus.error)) && (
         <Text style={{
           color: MAGENTA,
           paddingHorizontal: 18,
@@ -429,7 +438,7 @@ export default function App() {
           backgroundColor: '#160c1c',
           fontSize: 12,
         }}>
-          {playerError}
+          {playerError || playerStatus.error}
         </Text>
       )}
 
@@ -443,6 +452,12 @@ export default function App() {
           flexDirection: 'row',
           alignItems: 'center',
         }}>
+          {currentTrack.thumbnail ? (
+            <Image
+              source={{ uri: currentTrack.thumbnail }}
+              style={{ width: 44, height: 44, borderRadius: 7, marginRight: 10 }}
+            />
+          ) : null}
           <View style={{ flex: 1, marginRight: 10 }}>
             <Text
               numberOfLines={1}
@@ -456,6 +471,20 @@ export default function App() {
             >
               {currentTrack.channel}
             </Text>
+            <Text
+              numberOfLines={1}
+              style={{ color: '#aaa4c0', fontSize: 10, marginTop: 3 }}
+            >
+              {playerStatus.error
+                ? 'Error de reproduccion'
+                : playerStatus.isBuffering
+                    ? 'Cargando audio...'
+                    : !playerStatus.isLoaded
+                    ? 'Cargando audio...'
+                    : playerStatus.playing
+                      ? 'Reproduciendo'
+                      : 'En pausa'}
+            </Text>
           </View>
 
           <TouchableOpacity
@@ -463,7 +492,7 @@ export default function App() {
             accessibilityLabel="Cancion anterior"
             style={{ padding: 10 }}
           >
-            <Text style={{ color: '#fff', fontSize: 20 }}>??</Text>
+            <Text style={{ color: '#fff', fontSize: 20 }}>{'\u23EE'}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -472,7 +501,7 @@ export default function App() {
             style={{ padding: 10 }}
           >
             <Text style={{ color: CYAN, fontSize: 25 }}>
-              {playerStatus.playing ? '?' : '?'}
+              {playerStatus.playing ? '\u23F8' : '\u25B6'}
             </Text>
           </TouchableOpacity>
 
@@ -481,7 +510,7 @@ export default function App() {
             accessibilityLabel="Cancion siguiente"
             style={{ padding: 10 }}
           >
-            <Text style={{ color: '#fff', fontSize: 20 }}>??</Text>
+            <Text style={{ color: '#fff', fontSize: 20 }}>{'\u23ED'}</Text>
           </TouchableOpacity>
         </View>
       )}
