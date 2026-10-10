@@ -1,0 +1,103 @@
+name: ELECTRONICAMA Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - desarrollo/electronicama-ios-build
+    paths:
+      - .github/workflows/electronicama-android-apk.yml
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Generate Android project
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Build standalone release APK
+        run: |
+          set -e
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Locate APK
+        run: |
+          set -e
+          APK=$(find android/app/build/outputs/apk/release -name '*.apk' -type f -print -quit)
+          test -n "$APK"
+          cp "$APK" "$GITHUB_WORKSPACE/ELECTRONICAMA-Android-release.apk"
+          ls -lh "$GITHUB_WORKSPACE/ELECTRONICAMA-Android-release.apk"
+
+      - name: Sign and verify APK
+        run: |
+          set -e
+          APK="$GITHUB_WORKSPACE/ELECTRONICAMA-Android-release.apk"
+          test -s "$APK"
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)
+          ZIPALIGN=$(find "$ANDROID_HOME/build-tools" -name zipalign -type f | sort -V | tail -n 1)
+          test -n "$APKSIGNER"
+          test -n "$ZIPALIGN"
+
+          if ! "$APKSIGNER" verify "$APK" >/dev/null 2>&1; then
+            KEYSTORE="$RUNNER_TEMP/electronicama-test.jks"
+            keytool -genkeypair -v \
+              -keystore "$KEYSTORE" \
+              -alias electronicama \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 3650 \
+              -storepass android \
+              -keypass android \
+              -dname "CN=ELECTRONICAMA Test, OU=Development, O=ELECTRONICAMA, C=ES"
+
+            "$ZIPALIGN" -f -p 4 "$APK" "$RUNNER_TEMP/electronicama-aligned.apk"
+
+            "$APKSIGNER" sign \
+              --ks "$KEYSTORE" \
+              --ks-key-alias electronicama \
+              --ks-pass pass:android \
+              --key-pass pass:android \
+              --out "$APK" \
+              "$RUNNER_TEMP/electronicama-aligned.apk"
+          fi
+
+          "$APKSIGNER" verify --verbose "$APK"
+          echo "APK signature verified"
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ELECTRONICAMA-Android-release
+          path: ${{ github.workspace }}/ELECTRONICAMA-Android-release.apk
+          if-no-files-found: error
+          retention-days: 7
