@@ -8,38 +8,155 @@ export interface Track {
   thumbnail?: string;
   url?: string;
   stream_url?: string;
-
   source: MusicSource;
 }
 
-const API_BASE = 'https://www.electronicama.com';
+const AUDIUS_APP_NAME = 'osto';
+const AUDIUS_ENDPOINTS = [
+  'https://discoveryprovider.audius.co',
+  'https://audius-discovery-1.cultur3stake.com',
+  'https://discoveryprovider2.audius.co',
+];
 
-async function getTracks(path: string): Promise<Track[]> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    headers: { Accept: 'application/json' },
+async function fetchJson(url: string): Promise<any> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 12000);
+
+  try {
+    const response = await fetch(url, {
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Servicio musical: HTTP ${response.status}`);
+    }
+
+    return await response.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function firstText(value: unknown, fallback: string): string {
+  if (Array.isArray(value)) {
+    return firstText(value[0], fallback);
+  }
+
+  return typeof value === 'string' && value.trim()
+    ? value
+    : fallback;
+}
+
+async function searchArchive(query: string, limit: number): Promise<Track[]> {
+  const params = new URLSearchParams();
+
+  params.append('q', `(${query}) AND mediatype:audio`);
+
+  for (const field of ['identifier', 'title', 'creator', 'description']) {
+    params.append('fl[]', field);
+  }
+
+  params.append('sort[]', 'downloads desc');
+  params.append('rows', String(limit * 4));
+  params.append('page', '1');
+  params.append('output', 'json');
+
+  const data = await fetchJson(
+    `https://archive.org/advancedsearch.php?${params.toString()}`
+  );
+
+  const docs = Array.isArray(data?.response?.docs)
+    ? data.response.docs
+    : [];
+
+  return docs
+    .filter((item: any) => typeof item?.identifier === 'string')
+    .slice(0, limit)
+    .map((item: any): Track => {
+      const identifier = item.identifier;
+
+      return {
+        id: `archive_${identifier}`,
+        title: firstText(item.title, 'Sin titulo').slice(0, 140),
+        channel: firstText(item.creator, 'Archive').slice(0, 90),
+        description: firstText(item.description, '').slice(0, 600),
+        thumbnail: `https://archive.org/services/img/${encodeURIComponent(identifier)}`,
+        url: `https://archive.org/details/${encodeURIComponent(identifier)}`,
+        source: 'ARCHIVE',
+      };
+    });
+}
+
+async function searchAudius(query: string, limit: number): Promise<Track[]> {
+  for (const endpoint of AUDIUS_ENDPOINTS) {
+    try {
+      const params = new URLSearchParams({
+        query,
+        app_name: AUDIUS_APP_NAME,
+      });
+
+      const data = await fetchJson(
+        `${endpoint}/v1/tracks/search?${params.toString()}`
+      );
+
+      if (!Array.isArray(data?.data) || data.data.length === 0) {
+        continue;
+      }
+
+      return data.data
+        .filter((item: any) => item?.id)
+        .slice(0, limit)
+        .map((item: any): Track => {
+          const art = item.artwork || {};
+          const id = String(item.id);
+
+          return {
+            id: `audius_${id}`,
+            title: firstText(item.title, 'Track').slice(0, 140),
+            channel: firstText(item.user?.name, 'Audius').slice(0, 90),
+            description: firstText(item.description, '').slice(0, 600),
+            thumbnail: art['1000x1000'] || art['480x480'] || art['150x150'] || '',
+            url: item.permalink
+              ? `https://audius.co${item.permalink}`
+              : `https://audius.co/tracks/${id}`,
+            stream_url: `${endpoint}/v1/tracks/${encodeURIComponent(id)}/stream?app_name=${encodeURIComponent(AUDIUS_APP_NAME)}`,
+            source: 'AUDIUS',
+          };
+        });
+    } catch {
+      // Intentar el siguiente servidor de Audius.
+    }
+  }
+
+  return [];
+}
+
+async function searchProviders(query: string): Promise<Track[]> {
+  const results = await Promise.allSettled([
+    searchArchive(query, 20),
+    searchAudius(query, 20),
+  ]);
+
+  const tracks = results.flatMap((result) =>
+    result.status === 'fulfilled' ? result.value : []
+  );
+
+  if (results.every((result) => result.status === 'rejected')) {
+    throw new Error('No se pudo conectar con Archive ni Audius.');
+  }
+
+  const seen = new Set<string>();
+
+  return tracks.filter((track) => {
+    if (seen.has(track.id)) return false;
+    seen.add(track.id);
+    return true;
   });
-
-  if (!response.ok) {
-    throw new Error(`Servidor musical: HTTP ${response.status}`);
-  }
-
-  const contentType = response.headers.get('content-type') || '';
-
-  if (!contentType.includes('application/json')) {
-    throw new Error('El servidor no devolvio datos musicales JSON.');
-  }
-
-  const data: unknown = await response.json();
-
-  if (!Array.isArray(data)) {
-    throw new Error('Formato de catalogo no valido.');
-  }
-
-  return (data as Track[]).filter((track) => track.source === 'ARCHIVE' || track.source === 'AUDIUS');
 }
 
 export function getTrendingTracks(): Promise<Track[]> {
-  return getTracks('/api/trending');
+  return searchProviders('lofi chill jazz');
 }
 
 const searchResultCache = new Map<string, { tracks: Track[]; expiresAt: number }>();
@@ -48,7 +165,6 @@ const SEARCH_CACHE_LIMIT = 30;
 
 export async function searchTracks(query: string): Promise<Track[]> {
   const text = query.trim();
-
   if (!text) return [];
 
   const key = text.toLocaleLowerCase();
@@ -58,7 +174,7 @@ export async function searchTracks(query: string): Promise<Track[]> {
     return cached.tracks;
   }
 
-  const tracks = await getTracks(`/api/search?q=${encodeURIComponent(text)}&page=1`);
+  const tracks = await searchProviders(text);
 
   searchResultCache.delete(key);
   searchResultCache.set(key, {
@@ -76,14 +192,15 @@ export async function searchTracks(query: string): Promise<Track[]> {
 
 const archiveStreamCache = new Map<string, { uri: string; expiresAt: number }>();
 const ARCHIVE_CACHE_MS = 10 * 60 * 1000;
-
 const archivePendingRequests = new Map<string, Promise<string>>();
+
 export function resolveArchiveTrack(id: string): Promise<string> {
   if (!id.startsWith('archive_')) {
     return Promise.reject(new Error('Identificador de Archive no valido.'));
   }
 
   const cached = archiveStreamCache.get(id);
+
   if (cached && cached.expiresAt > Date.now()) {
     return Promise.resolve(cached.uri);
   }
@@ -103,30 +220,47 @@ export function resolveArchiveTrack(id: string): Promise<string> {
 }
 
 async function fetchArchiveStream(id: string): Promise<string> {
-  const response = await fetch(
-    `https://www.electronicama.com/api/resolve/${encodeURIComponent(id)}`
+  const identifier = id.slice('archive_'.length);
+
+  if (!identifier || identifier.includes('/') || identifier.includes('\\')) {
+    throw new Error('Identificador de Archive no valido.');
+  }
+
+  const data = await fetchJson(
+    `https://archive.org/metadata/${encodeURIComponent(identifier)}`
   );
 
-  if (!response.ok) {
-    throw new Error(`No se pudo resolver Archive: HTTP ${response.status}`);
+  const files = Array.isArray(data?.files) ? data.files : [];
+
+  const audio = files
+    .filter((file: any) => {
+      const name = String(file?.name || '').toLowerCase();
+
+      return /\.(mp3|m4a)$/.test(name) &&
+        !name.includes('spectrogram') &&
+        !name.includes('waveform');
+    })
+    .sort((a: any, b: any) =>
+      (Number(b.size) || 0) - (Number(a.size) || 0)
+    );
+
+  if (audio.length === 0) {
+    throw new Error('Archive no contiene audio compatible.');
   }
 
-  const data: unknown = await response.json();
+  const fileName = String(audio[0].name);
+  const encodedFile = fileName
+    .split('/')
+    .map((part) => encodeURIComponent(part))
+    .join('/');
 
-  if (
-    typeof data !== 'object' ||
-    data === null ||
-    !('stream_url' in data) ||
-    typeof data.stream_url !== 'string' ||
-    !data.stream_url.startsWith('https://')
-  ) {
-    throw new Error('Archive no ha devuelto un enlace de audio valido.');
-  }
+  const uri =
+    `https://archive.org/download/${encodeURIComponent(identifier)}/${encodedFile}`;
 
   archiveStreamCache.set(id, {
-    uri: data.stream_url,
+    uri,
     expiresAt: Date.now() + ARCHIVE_CACHE_MS,
   });
 
-  return data.stream_url;
+  return uri;
 }

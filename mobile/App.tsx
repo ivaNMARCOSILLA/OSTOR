@@ -94,6 +94,23 @@ export default function App() {
   const playRequest = useRef(0);
   const player = useAudioPlayer(null);
   const playerStatus = useAudioPlayerStatus(player);
+  const [audioTimedOut, setAudioTimedOut] = useState(false);
+  const audioDeadline = useRef(0);
+  const audioReady = playerStatus.playing || (playerStatus.isLoaded && !playerStatus.isBuffering);
+  const audioFailed = Boolean(playerStatus.error);
+
+  useEffect(() => {
+    if (!currentTrack || audioTimedOut || audioReady || audioFailed) return;
+
+    const remaining = Math.max(0, audioDeadline.current - Date.now());
+    const timer = setTimeout(() => {
+      setAudioTimedOut(true);
+      setPlayerError('El audio tarda demasiado. Prueba con otra cancion.');
+      player.pause();
+    }, remaining);
+
+    return () => clearTimeout(timer);
+  }, [currentTrack, audioTimedOut, audioReady, audioFailed, player]);
 
   useEffect(() => {
     void setAudioModeAsync({
@@ -108,6 +125,7 @@ export default function App() {
     const requestId = ++playRequest.current;
 
     setPlayerError('');
+    setAudioTimedOut(false);
     player.pause();
     setCurrentTrack(null);
 
@@ -124,6 +142,7 @@ export default function App() {
         throw new Error('No hay un enlace directo de audio disponible.');
       }
 
+      audioDeadline.current = Date.now() + 15000;
       player.replace({ uri });
       setCurrentTrack(track);
       player.play();
