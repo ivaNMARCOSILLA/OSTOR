@@ -42,19 +42,67 @@ export function getTrendingTracks(): Promise<Track[]> {
   return getTracks('/api/trending');
 }
 
-export function searchTracks(query: string): Promise<Track[]> {
+const searchResultCache = new Map<string, { tracks: Track[]; expiresAt: number }>();
+const SEARCH_CACHE_MS = 2 * 60 * 1000;
+const SEARCH_CACHE_LIMIT = 30;
+
+export async function searchTracks(query: string): Promise<Track[]> {
   const text = query.trim();
 
-  if (!text) return Promise.resolve([]);
+  if (!text) return [];
 
-  return getTracks(`/api/search?q=${encodeURIComponent(text)}&page=1`);
-}
+  const key = text.toLocaleLowerCase();
+  const cached = searchResultCache.get(key);
 
-export async function resolveArchiveTrack(id: string): Promise<string> {
-  if (!id.startsWith('archive_')) {
-    throw new Error('Identificador de Archive no valido.');
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.tracks;
   }
 
+  const tracks = await getTracks(`/api/search?q=${encodeURIComponent(text)}&page=1`);
+
+  searchResultCache.delete(key);
+  searchResultCache.set(key, {
+    tracks,
+    expiresAt: Date.now() + SEARCH_CACHE_MS,
+  });
+
+  if (searchResultCache.size > SEARCH_CACHE_LIMIT) {
+    const oldestKey = searchResultCache.keys().next().value;
+    if (oldestKey !== undefined) searchResultCache.delete(oldestKey);
+  }
+
+  return tracks;
+}
+
+const archiveStreamCache = new Map<string, { uri: string; expiresAt: number }>();
+const ARCHIVE_CACHE_MS = 10 * 60 * 1000;
+
+const archivePendingRequests = new Map<string, Promise<string>>();
+export function resolveArchiveTrack(id: string): Promise<string> {
+  if (!id.startsWith('archive_')) {
+    return Promise.reject(new Error('Identificador de Archive no valido.'));
+  }
+
+  const cached = archiveStreamCache.get(id);
+  if (cached && cached.expiresAt > Date.now()) {
+    return Promise.resolve(cached.uri);
+  }
+
+  const pending = archivePendingRequests.get(id);
+  if (pending) return pending;
+
+  const request = fetchArchiveStream(id);
+  archivePendingRequests.set(id, request);
+
+  void request.then(
+    () => archivePendingRequests.delete(id),
+    () => archivePendingRequests.delete(id)
+  );
+
+  return request;
+}
+
+async function fetchArchiveStream(id: string): Promise<string> {
   const response = await fetch(
     `https://www.electronicama.com/api/resolve/${encodeURIComponent(id)}`
   );
@@ -74,6 +122,11 @@ export async function resolveArchiveTrack(id: string): Promise<string> {
   ) {
     throw new Error('Archive no ha devuelto un enlace de audio valido.');
   }
+
+  archiveStreamCache.set(id, {
+    uri: data.stream_url,
+    expiresAt: Date.now() + ARCHIVE_CACHE_MS,
+  });
 
   return data.stream_url;
 }

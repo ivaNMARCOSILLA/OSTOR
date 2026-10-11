@@ -190,7 +190,20 @@ export default function App() {
           ? await searchTracks(query)
           : await getTrendingTracks();
 
-        if (active) setTracks(results);
+        if (active) {
+          setTracks(results);
+
+          // Prepara enlaces de Archive sin retrasar la visualizacion.
+          const preloadArchiveTracks = results
+            .filter((track) => track.source === 'ARCHIVE' && !track.stream_url)
+            .slice(0, 3);
+
+          for (const track of preloadArchiveTracks) {
+            void resolveArchiveTrack(track.id).catch(() => {
+              // Si falla la precarga, Play podra intentarlo de nuevo.
+            });
+          }
+        }
       } catch (cause) {
         if (active) {
           setTracks([]);
@@ -203,7 +216,7 @@ export default function App() {
       }
     }
 
-    const timeout = setTimeout(() => { void load(); }, query.trim() ? 450 : 0);
+    const timeout = setTimeout(() => { void load(); }, query.trim() ? 200 : 0);
 
     return () => {
       active = false;
