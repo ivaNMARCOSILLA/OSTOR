@@ -46,6 +46,7 @@ class StreamerTests(unittest.TestCase):
             self.assertEqual(page.status_code,200)
             self.assertIn('camera=(self)',page.headers['Permissions-Policy'])
             self.assertIn('microphone=(self)',page.headers['Permissions-Policy'])
+            self.assertIn('display-capture=(self)',page.headers['Permissions-Policy'])
         with self.admin.get('/') as page:
             self.assertIn('camera=()',page.headers['Permissions-Policy'])
             self.assertIn('microphone=()',page.headers['Permissions-Policy'])
@@ -112,6 +113,8 @@ class StreamerTests(unittest.TestCase):
             parts=token.split('.');claims=json.loads(base64.urlsafe_b64decode(parts[1]+'='*(-len(parts[1])%4)))
             self.assertEqual(claims['video']['canPublish'],publish)
             self.assertFalse(claims['video']['canPublishData'])
+            if publish:self.assertEqual(set(claims['video']['canPublishSources']),{'camera','microphone','screen_share','screen_share_audio'})
+            else:self.assertNotIn('canPublishSources',claims['video'])
             signature=base64.urlsafe_b64encode(hmac.new(('x'*40).encode(),'.'.join(parts[:2]).encode(),hashlib.sha256).digest()).rstrip(b'=').decode()
             self.assertEqual(parts[2],signature)
             self.assertLessEqual(claims['exp']-claims['iat'],300)

@@ -8,7 +8,7 @@
 await window.MaggySession.ready;
 const storageKey = name => window.MaggySession ? window.MaggySession.key(name) : name;
 
-const VERSION = '8.7.0';
+const VERSION = '8.8.0';
 const KEY = Object.freeze({ favorites: storageKey('electronicama_v7_favorites'), history: storageKey('electronicama_v7_history'), ads: storageKey('electronicama_ads_consent_v1') });
 const MAX_FAVORITES = 160;
 const MAX_HISTORY = 75;
@@ -71,7 +71,7 @@ function toggleFavorite(track) {
   render();
 }
 function maggyCover() {
-  const img = document.createElement('img'); img.src = '/assets/app-icon-192.png?v=8.7.0'; img.alt = 'Logo de Maggy'; img.loading = 'lazy';
+  const img = document.createElement('img'); img.src = '/assets/app-icon-192.png?v=8.8.0'; img.alt = 'Logo de Maggy'; img.loading = 'lazy';
   img.addEventListener('error', () => img.replaceWith(emptyNode('span', 'cover-fallback', 'MAGGY')), {once:true});
   return img;
 }

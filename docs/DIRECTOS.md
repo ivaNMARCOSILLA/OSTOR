@@ -37,3 +37,9 @@ La aplicación no solicita grabación ni almacenamiento de las emisiones. La lis
 ## Entrada al estudio
 
 Al guardar el canal se abre el estudio visual y se muestran los errores junto al formulario. El acceso desde la pantalla de login vuelve al estudio mediante un destino interno permitido. «Ver cámara y micrófono» solicita permisos y muestra una vista privada local; no conecta con LiveKit ni publica nada. «Apagar vista privada» cierra todas las pistas capturadas. Solo «Iniciar directo» conecta y publica. La política de permisos permite cámara/micrófono únicamente en `/streamers`; el resto de páginas los mantiene bloqueados.
+
+## Herramientas del estudio
+
+Selector de cámara y micrófono, calidades de captura 480p/720p/1080p, reducción de ruido/eco, medidor real del micrófono, pantalla completa y enlace de canal. La pantalla se puede preparar en privado con cámara superpuesta. Durante la emisión, «Compartir pantalla» usa LiveKit; el permiso de publicación de pantalla y su audio solo se firma para el propietario autorizado, nunca para espectadores. El audio de pantalla es opcional y depende del navegador. La selección privada no se publica automáticamente al iniciar el directo: debe elegirse de nuevo desde los controles de emisión. La parada nativa del navegador cierra la captura.
+
+El tiempo mostrado es el de la conexión actual; el contador de conexiones usa los participantes presentes en la sala, incluido el emisor. No se inventan espectadores ni estadísticas de regalos. Compartir pantalla suele requerir un navegador de escritorio; donde no existe getDisplayMedia el botón se deshabilita y se explica la limitación. No hay grabación automática, chat ni un historial de pagos de regalos.

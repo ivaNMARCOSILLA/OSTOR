@@ -2,7 +2,7 @@
 const $ = id => document.getElementById(id);
 let csrf = '', current = null, members = [], payments = [];
 const requestedReturn=new URLSearchParams(location.search).get('next');
-const streamReturn=['/streamers','/streamers#stream-studio'].includes(requestedReturn)?requestedReturn:null;
+const streamReturn=(['/streamers','/streamers#stream-studio'].includes(requestedReturn)||/^\/streamers#canal-[a-f0-9]{32}$/.test(requestedReturn||''))?requestedReturn:null;
 const inviteToken = new URLSearchParams(location.hash.slice(1)).get('invite');
 if (inviteToken) { history.replaceState(null, '', '/account'); $('invitation').classList.remove('hidden'); $('credentials').classList.add('hidden'); }
 const date = value => value ? new Date(value).toLocaleString('es-ES', {dateStyle:'medium',timeStyle:'short'}) : 'Sin activar';

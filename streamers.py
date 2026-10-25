@@ -76,7 +76,7 @@ def publisher_allowed():
 def mint_token(user,channel,publish):
     now=int(time.time())
     grant={'roomJoin':True,'room':channel['room_name'],'canPublish':publish,'canSubscribe':True,'canPublishData':False}
-    if publish: grant['canPublishSources']=['camera','microphone']
+    if publish: grant['canPublishSources']=['camera','microphone','screen_share','screen_share_audio']
     claims={'iss':os.environ['LIVEKIT_API_KEY'].strip(),'sub':f"maggy-{user['id']}-{secrets.token_hex(5)}",'name':user['username'],
             'iat':now,'nbf':now-5,'exp':now+300,'video':grant}
     return sign_token(claims)
@@ -139,7 +139,8 @@ def channels():
                    channels=[channel_public(row) for row in rows],mine=channel_public(own) if own else None,
                    user={'id':user['id'],'username':user['username']},
                    setup_checks=video_configuration_checks() if user['role']=='admin' else None,
-                   streamer_sales_available=streamer_sales_ready())
+                   streamer_sales_available=streamer_sales_ready(),
+                   setup_environment=os.getenv('VERCEL_ENV','local') if user['role']=='admin' else None)
 
 
 @bp.post('/api/streamers/me')
