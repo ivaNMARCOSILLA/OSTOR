@@ -43,3 +43,5 @@ Validación 8.6.1: consultas reales desde Vercel a Commons y Radio Browser; desc
 ### Zona Streamer 8.7 · pendiente de conectar vídeo
 
 `/streamers` prepara emisión nativa de cámara/micrófono con LiveKit, perfiles de creador, espectadores con acceso activo y regalos externos por el PayPal.me del creador, con 0 % de comisión de Maggy. Plan normal 6 EUR/mes; Streamer 8 EUR/mes con su propio vencimiento. No se ofrece ni se confirma el plan Streamer mientras el vídeo no esté configurado y habilitado explícitamente. No se han contratado servicios externos ni probado una emisión WebRTC real. Consulta [la guía de activación](docs/DIRECTOS.md).
+
+El estudio de directos se abre automáticamente al guardar el canal o al volver del login de esa zona. Incluye vista privada de cámara y micrófono con permiso explícito, apagado de pistas y errores visibles junto al formulario. La vista privada no inicia emisiones ni habilita cobros.

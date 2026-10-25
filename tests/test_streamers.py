@@ -41,6 +41,15 @@ class StreamerTests(unittest.TestCase):
         self.assertEqual(result.status_code,200)
         return client,ident,result.json['channel']['id']
 
+    def test_camera_permissions_are_allowed_only_on_the_streaming_page(self):
+        with self.admin.get('/streamers') as page:
+            self.assertEqual(page.status_code,200)
+            self.assertIn('camera=(self)',page.headers['Permissions-Policy'])
+            self.assertIn('microphone=(self)',page.headers['Permissions-Policy'])
+        with self.admin.get('/') as page:
+            self.assertIn('camera=()',page.headers['Permissions-Policy'])
+            self.assertIn('microphone=()',page.headers['Permissions-Policy'])
+
     def test_no_streamer_sale_until_video_is_explicitly_enabled(self):
         client,ident=self.member('viewer')
         self.assertFalse(client.get('/api/account/me').json['streamer_available'])

@@ -1,6 +1,8 @@
 'use strict';
 const $ = id => document.getElementById(id);
 let csrf = '', current = null, members = [], payments = [];
+const requestedReturn=new URLSearchParams(location.search).get('next');
+const streamReturn=['/streamers','/streamers#stream-studio'].includes(requestedReturn)?requestedReturn:null;
 const inviteToken = new URLSearchParams(location.hash.slice(1)).get('invite');
 if (inviteToken) { history.replaceState(null, '', '/account'); $('invitation').classList.remove('hidden'); $('credentials').classList.add('hidden'); }
 const date = value => value ? new Date(value).toLocaleString('es-ES', {dateStyle:'medium',timeStyle:'short'}) : 'Sin activar';
@@ -27,6 +29,8 @@ async function refresh() {
   $('member-title').textContent = `Tu cuenta · ${current.username}`;
   $('access-status').textContent = current.role === 'admin' ? 'Administrador: acceso de gestión activo en todos tus dispositivos.' : current.active ? `Acceso activo hasta ${date(current.access_until)}.` : 'Acceso musical bloqueado. Se requiere un pago comprobado para activar o renovar tu cuenta.';
   $('enter-maggy').classList.toggle('hidden', !current.active);
+  $('enter-streamers').classList.toggle('hidden',!current.active);
+  $('enter-streamers').textContent=current.streamer_active?'Entrar a mi estudio ↗':'Ver directos ↗';
   $('welcome-plan').classList.toggle('hidden', Boolean(current.welcome_used));
   $('next-payment').textContent = current.role === 'admin' ? 'Tu cuenta de gestión no tiene vencimiento de cliente.' : current.access_until ? `Vencimiento de Maggy: ${date(current.access_until)}. ${current.streamer_until ? 'Streamer hasta '+date(current.streamer_until)+'. Renovación Streamer: 8 € por un mes; Maggy normal: 6 €.' : 'Para continuar: 6 € por un mes.'} Sin cargo automático.` : 'Primer acceso: 1 € por 14 días. Comienza cuando se confirme el pago.';
   $('my-payments').replaceChildren();
@@ -84,11 +88,11 @@ function renderCalendar() {
 const today=new Date(); $('calendar-month').value=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
 $('calendar-month').addEventListener('change',renderCalendar);
 for (const [id,endpoint] of [['login-form','login'],['register-form','register'],['invite-form','accept-invite']]) {
-  $(id).addEventListener('submit',async event=>{event.preventDefault(); const button=$(id).querySelector('button');button.disabled=true; try {const data=Object.fromEntries(new FormData($(id)));if(endpoint==='accept-invite')data.token=inviteToken;await api(`/api/account/${endpoint}`,data);if(endpoint==='accept-invite'){location.assign('/account');return;}$(id).reset();await refresh();status('Sesión iniciada.');}catch(error){status(error.message);}finally{button.disabled=false;}});
+  $(id).addEventListener('submit',async event=>{event.preventDefault(); const button=$(id).querySelector('button');button.disabled=true; try {const data=Object.fromEntries(new FormData($(id)));if(endpoint==='accept-invite')data.token=inviteToken;await api(`/api/account/${endpoint}`,data);if(endpoint==='accept-invite'){location.assign('/account');return;}$(id).reset();await refresh();if(endpoint==='login'&&streamReturn&&current?.active){location.assign(streamReturn);return;}status('Sesión iniciada.');}catch(error){status(error.message);}finally{button.disabled=false;}});
 }
 $('logout').addEventListener('click',async()=>{try{await api('/api/account/logout',{});location.assign('/account');}catch(error){status(error.message);}});
 $('create-invite').addEventListener('submit',async event=>{event.preventDefault();try{const result=await api('/api/admin/invite',Object.fromEntries(new FormData(event.target)));const link=text('a',`${location.origin}${result.path}`);link.href=result.path;$('invite-result').replaceChildren(text('span','Comparte esta invitación privada con tu amigo (48 horas): '),link);event.target.reset();await loadAdmin();}catch(error){status(error.message);}});
 $('payment-form').addEventListener('submit',async event=>{event.preventDefault();const button=event.target.querySelector('button');button.disabled=true;try{const result=await api('/api/admin/confirm-payment',Object.fromEntries(new FormData(event.target)));status(`Pago registrado. Acceso hasta ${date(result.access_until)}.`);event.target.reset();await refresh();}catch(error){status(error.message);}finally{button.disabled=false;}});
-refresh().catch(error=>status(error.message));
+refresh().then(()=>{if(streamReturn&&current?.active)location.assign(streamReturn);}).catch(error=>status(error.message));
 
 if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('/sw.js').catch(()=>{});

@@ -404,7 +404,7 @@ def multi_search(query: str, page: int = 1, source: str = "ALL") -> list:
 def response_headers(response):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["Permissions-Policy"] = "camera=(self), microphone=(self), geolocation=()" if request.path == "/streamers" else "camera=(), microphone=(), geolocation=()"
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
     if request.path.startswith("/assets/"):
         response.headers["Cache-Control"] = "public, max-age=3600"

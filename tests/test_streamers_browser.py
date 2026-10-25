@@ -1,25 +1,57 @@
-"""Pending video cannot be sold or request a camera; direct profiles escape input."""
+"""Saving and login open the private studio; camera preview never publishes."""
+import os
 from playwright.sync_api import sync_playwright
 from browser_support import BASE_URL,login_context
 
 def run():
     with sync_playwright() as p:
-        browser=p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox'])
-        context=browser.new_context(viewport={'width':390,'height':844});login_context(context)
+        browser=p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox','--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream'])
+        context=browser.new_context(viewport={'width':390,'height':844},permissions=['camera','microphone']);login_context(context)
         page=context.new_page();errors=[];requests=[]
         page.on('pageerror',lambda e:errors.append(str(e)));page.on('request',lambda r:requests.append(r.url))
         page.goto(BASE_URL+'/streamers');page.locator('#stream-unavailable').wait_for(state='visible')
         assert page.locator('#video-setup').is_visible()
         assert 'LIVEKIT_URL' in page.locator('#video-checks').inner_text()
         assert not page.locator('#start-camera').is_visible()
-        assert page.locator('video').count()==0
+        assert not page.locator('#stream-studio').is_visible()
+        assert page.evaluate("document.querySelector('#preview-video').srcObject === null")
         assert not any('livekit-client' in url for url in requests)
         page.locator('#channel-title').fill('My live channel')
         page.locator('#channel-bio').fill('<script>window.unwanted=true</script>')
         page.locator('#creator-paypal').fill('https://paypal.me/CreatorLink')
-        page.locator('#owns-paypal').check();page.locator('#creator-form button').click()
+        page.locator('#save-channel').click()
+        assert 'casilla' in page.locator('#creator-status').inner_text()
+        assert not page.locator('#stream-studio').is_visible()
+        page.locator('#owns-paypal').check();page.locator('#save-channel').click()
         page.wait_for_function("document.querySelector('#stream-status').textContent==='Canal guardado.'")
         assert not page.evaluate('Boolean(window.unwanted)')
+        assert page.locator('#stream-studio').is_visible()
+        assert page.evaluate("document.activeElement.id === 'studio-title'")
+        assert page.locator('#start-camera').is_disabled()
+        assert page.evaluate("document.querySelector('#preview-video').srcObject === null")
+        page.locator('#preview-camera').click()
+        page.wait_for_function("document.querySelector('#preview-video').currentTime > 0")
+        assert 'todavía no estás emitiendo' in page.locator('#studio-status').inner_text()
+        page.evaluate("window.previewTracks = document.querySelector('#preview-video').srcObject.getTracks()")
+        page.locator('#close-preview').click()
+        assert page.evaluate("window.previewTracks.every(track => track.readyState === 'ended')")
+        assert not any('/token' in url or '/me/live' in url for url in requests)
+        page.locator('#creator-panel').screenshot(path='/tmp/maggy-creator-form.png')
+        page.goto(BASE_URL+'/account?next=%2Fstreamers%23stream-studio')
+        page.wait_for_url('**/streamers#stream-studio')
+        assert page.locator('#stream-studio').is_visible()
+        fresh=browser.new_context(viewport={'width':390,'height':844})
+        login=fresh.new_page();login.goto(BASE_URL+'/streamers')
+        login.locator('#stream-access a').click()
+        login.locator('#login-form [name=username]').fill(os.environ['MAGGY_TEST_USER'])
+        login.locator('#login-form [name=password]').fill(os.environ['MAGGY_TEST_PASSWORD'])
+        login.locator('#login-form button').click()
+        login.wait_for_url('**/streamers#stream-studio')
+        login.locator('#stream-studio').wait_for(state='visible')
+        fresh.close()
+        page.goto(BASE_URL+'/account?next=https%3A%2F%2Fevil.test')
+        page.locator('#member-panel').wait_for(state='visible')
+        assert '/account?' in page.url
         page.goto(BASE_URL+'/account');page.locator('#member-panel').wait_for(state='visible')
         assert not page.locator('#pay-streamer').is_visible()
         assert page.locator('#pay-streamer').get_attribute('href') is None
@@ -31,6 +63,6 @@ def run():
         page.set_viewport_size({'width':390,'height':844});page.screenshot(path='/tmp/maggy-streamers-preview.png',full_page=True)
         assert not errors,errors
         browser.close()
-    print('OK: streamer preview; no video sale/camera before configuration; profile, PayPal declaration and 4 widths')
+    print('OK: saving and login open studio; private camera starts/stops; no broadcast/sale; safe redirect; 4 widths')
 
 if __name__=='__main__':run()

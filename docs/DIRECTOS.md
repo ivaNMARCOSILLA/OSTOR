@@ -33,3 +33,7 @@ La aplicación no solicita grabación ni almacenamiento de las emisiones. La lis
 ## Comprobar cambios
 
 `python -m unittest discover -s tests -p 'test_*.py'` prueba importes, permisos de publicación, firmas de credenciales, regalos sin comisión, validación de destinos PayPal, vencimientos y revocación. `python tests/run_browsers.py test_streamers_browser.py` prueba interfaz y bloqueo cuando no hay vídeo conectado. La emisión WebRTC real necesita el proyecto externo; no se declara comprobada con una simulación.
+
+## Entrada al estudio
+
+Al guardar el canal se abre el estudio visual y se muestran los errores junto al formulario. El acceso desde la pantalla de login vuelve al estudio mediante un destino interno permitido. «Ver cámara y micrófono» solicita permisos y muestra una vista privada local; no conecta con LiveKit ni publica nada. «Apagar vista privada» cierra todas las pistas capturadas. Solo «Iniciar directo» conecta y publica. La política de permisos permite cámara/micrófono únicamente en `/streamers`; el resto de páginas los mantiene bloqueados.
