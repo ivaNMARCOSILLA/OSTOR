@@ -8,6 +8,7 @@ import os
 import re
 import secrets
 import time
+import requests
 from datetime import timedelta
 from urllib.parse import urlparse
 from flask import Blueprint, current_app, jsonify, request
@@ -18,16 +19,26 @@ STREAMER_MONTHLY_CENTS=800
 GIFT_COMMISSION_BPS=0
 
 
-def live_ready():
+def video_configuration_checks():
     try:
         parsed=urlparse(os.getenv('LIVEKIT_URL','').strip())
         port=parsed.port
-        return bool(os.getenv('MAGGY_STREAMERS_ENABLED')=='1' and parsed.scheme=='wss' and parsed.hostname
-                    and (port is None or 1<=port<=65535) and not parsed.username and not parsed.password
-                    and not parsed.query and not parsed.fragment and os.getenv('LIVEKIT_API_KEY')
-                    and len(os.getenv('LIVEKIT_API_SECRET',''))>=32)
+        url_ok=bool(parsed.scheme=='wss' and parsed.hostname and (port is None or 1<=port<=65535)
+                    and not parsed.username and not parsed.password and not parsed.query and not parsed.fragment)
     except (ValueError,TypeError):
-        return False
+        url_ok=False
+    key=os.getenv('LIVEKIT_API_KEY','').strip();secret=os.getenv('LIVEKIT_API_SECRET','').strip()
+    return {'LIVEKIT_URL':url_ok,'LIVEKIT_API_KEY':bool(key and not key.startswith(('wss:','https:'))),
+            'LIVEKIT_API_SECRET':bool(len(secret)>=32 and secret!=key and not secret.startswith(('wss:','https:'))),
+            'MAGGY_STREAMERS_ENABLED':os.getenv('MAGGY_STREAMERS_ENABLED')=='1'}
+
+
+def live_ready():
+    return all(video_configuration_checks().values())
+
+
+def streamer_sales_ready():
+    return live_ready() and os.getenv('MAGGY_STREAMER_SALES_ENABLED')=='1'
 
 
 def init_database():
@@ -66,12 +77,44 @@ def mint_token(user,channel,publish):
     now=int(time.time())
     grant={'roomJoin':True,'room':channel['room_name'],'canPublish':publish,'canSubscribe':True,'canPublishData':False}
     if publish: grant['canPublishSources']=['camera','microphone']
-    claims={'iss':os.environ['LIVEKIT_API_KEY'],'sub':f"maggy-{user['id']}-{secrets.token_hex(5)}",'name':user['username'],
+    claims={'iss':os.environ['LIVEKIT_API_KEY'].strip(),'sub':f"maggy-{user['id']}-{secrets.token_hex(5)}",'name':user['username'],
             'iat':now,'nbf':now-5,'exp':now+300,'video':grant}
+    return sign_token(claims)
+
+
+def sign_token(claims):
     def encode(value): return base64.urlsafe_b64encode(json.dumps(value,separators=(',',':')).encode()).rstrip(b'=')
     message=encode({'alg':'HS256','typ':'JWT'})+b'.'+encode(claims)
-    signature=base64.urlsafe_b64encode(hmac.new(os.environ['LIVEKIT_API_SECRET'].encode(),message,hashlib.sha256).digest()).rstrip(b'=')
+    signature=base64.urlsafe_b64encode(hmac.new(os.environ['LIVEKIT_API_SECRET'].strip().encode(),message,hashlib.sha256).digest()).rstrip(b'=')
     return (message+b'.'+signature).decode()
+
+
+@bp.post('/api/streamers/admin/check-video')
+def check_video():
+    if get_user()['role']!='admin': return jsonify(error='Se requiere administración.'),403
+    checks=video_configuration_checks()
+    if not all(checks.values()): return jsonify(connected=False,checks=checks,message='Revisa las variables marcadas como pendientes en Vercel Preview.'),409
+    parsed=urlparse(os.environ['LIVEKIT_URL'].strip())
+    now=int(time.time())
+    token=sign_token({'iss':os.environ['LIVEKIT_API_KEY'].strip(),'sub':'maggy-connection-check','iat':now,'nbf':now-5,'exp':now+60,'video':{'roomList':True}})
+    try:
+        response=requests.post('https://'+parsed.netloc+'/twirp/livekit.RoomService/ListRooms',json={},
+                               headers={'Authorization':'Bearer '+token,'User-Agent':'Maggy video connection check'},
+                               timeout=(3,8),allow_redirects=False)
+        try:
+            if response.status_code==200:
+                try: payload=response.json()
+                except ValueError: payload=None
+                if not isinstance(payload,dict) or (payload and not isinstance(payload.get('rooms'),list)):
+                    return jsonify(connected=False,checks=checks,message='La URL no devolvió una respuesta válida de LiveKit. Comprueba la URL WebSocket del proyecto.'),502
+                return jsonify(connected=True,checks=checks,message='Conexión con LiveKit correcta. Puedes probar cámara y micrófono. Los cobros siguen bloqueados hasta habilitarlos por separado.')
+            if response.status_code in (401,403):
+                return jsonify(connected=False,checks=checks,message='LiveKit no acepta la pareja de API Key y API Secret. Comprueba que pertenecen a la misma clave y al proyecto de esa URL.'),502
+            return jsonify(connected=False,checks=checks,message='LiveKit no respondió correctamente. Vuelve a intentarlo.'),502
+        finally:
+            response.close()
+    except requests.RequestException:
+        return jsonify(connected=False,checks=checks,message='No se pudo conectar con la URL de LiveKit. Comprueba la URL WebSocket del proyecto.'),502
 
 
 @bp.before_request
@@ -94,7 +137,9 @@ def channels():
     own=own_channel()
     return jsonify(video_ready=live_ready(),streamer_active=publisher_allowed(),streamer_monthly_cents=800,gift_commission_bps=0,
                    channels=[channel_public(row) for row in rows],mine=channel_public(own) if own else None,
-                   user={'id':user['id'],'username':user['username']})
+                   user={'id':user['id'],'username':user['username']},
+                   setup_checks=video_configuration_checks() if user['role']=='admin' else None,
+                   streamer_sales_available=streamer_sales_ready())
 
 
 @bp.post('/api/streamers/me')
@@ -129,7 +174,7 @@ def token(channel_id):
     user=get_user()
     if publish and (channel['member_id']!=user['id'] or not publisher_allowed()): return jsonify(error='Solo el creador con plan Streamer activo puede emitir en este canal.'),403
     if not publish and not (channel['live_until'] and channel['live_until']>stamp(now_utc())): return jsonify(error='Este canal no está en directo.'),404
-    return jsonify(url=os.environ['LIVEKIT_URL'],token=mint_token(user,channel,publish))
+    return jsonify(url=os.environ['LIVEKIT_URL'].strip(),token=mint_token(user,channel,publish))
 
 
 @bp.post('/api/streamers/me/live')

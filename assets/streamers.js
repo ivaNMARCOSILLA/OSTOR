@@ -9,6 +9,8 @@ async function refresh(){
  if(!window.MaggySession.active)return;
  info=await api('/api/streamers');
  $('stream-unavailable').classList.toggle('hidden',info.video_ready);
+ $('video-setup').classList.toggle('hidden',!info.setup_checks);
+ if(info.setup_checks){const list=$('video-checks');list.replaceChildren();for(const [name,ok] of Object.entries(info.setup_checks))list.append(node('li',`${name}: ${ok?'correcto':'pendiente de corregir'}`));}
  $('creator-panel').classList.toggle('hidden',!info.streamer_active);
  $('live-catalogue').classList.toggle('hidden',!info.video_ready);
  $('start-camera').classList.toggle('hidden',!info.mine||!info.video_ready);
@@ -48,6 +50,7 @@ async function connect(channel,publish){
   status(publish?'Estás en directo.':'Conectado al directo. Pulsa «Activar sonido» si no lo escuchas.');$('live-stage').scrollIntoView({behavior:'smooth'});
  }catch(error){if(generation===undefined||generation===connectionGeneration){await disconnect();status(error.name==='NotAllowedError'?'Autoriza la cámara y el micrófono para emitir.':error.message||'No se pudo iniciar el directo.');}}finally{connecting=false;}
 }
+$('check-video').addEventListener('click',async()=>{const button=$('check-video');button.disabled=true;$('video-check-status').textContent='Comprobando conexión…';try{const r=await window.MaggySession.fetch('/api/streamers/admin/check-video',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});const data=await r.json();$('video-check-status').textContent=data.message||data.error||'No se pudo comprobar la conexión.';}catch{$('video-check-status').textContent='No se pudo conectar. Vuelve a intentarlo.';}finally{button.disabled=false;}});
 $('creator-form').addEventListener('submit',async event=>{event.preventDefault();try{await api('/api/streamers/me',{title:$('channel-title').value,bio:$('channel-bio').value,paypal_url:$('creator-paypal').value,owns_paypal:$('owns-paypal').checked});status('Canal guardado.');await refresh();}catch(error){status(error.message);}});
 $('start-camera').addEventListener('click',()=>{if(info?.mine)connect(info.mine,true);});
 $('leave-room').addEventListener('click',async()=>{await disconnect();status('Has salido del directo.');await refresh();});

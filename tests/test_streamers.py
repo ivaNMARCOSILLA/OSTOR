@@ -5,7 +5,7 @@ import json
 import os
 import unittest
 from datetime import timedelta
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 import app
 import membership as m
 import streamers as st
@@ -15,7 +15,7 @@ class StreamerTests(unittest.TestCase):
     def setUp(self):
         self.admin=authenticated_client(app.app,self.addCleanup)
         with app.app.app_context():st.init_database()
-        self.env=patch.dict(os.environ,{'LIVEKIT_URL':'','LIVEKIT_API_KEY':'','LIVEKIT_API_SECRET':'','MAGGY_STREAMERS_ENABLED':'0'})
+        self.env=patch.dict(os.environ,{'LIVEKIT_URL':'','LIVEKIT_API_KEY':'','LIVEKIT_API_SECRET':'','MAGGY_STREAMERS_ENABLED':'0','MAGGY_STREAMER_SALES_ENABLED':'0'})
         self.env.start();self.addCleanup(self.env.stop)
 
     def post(self,client,path,data):
@@ -29,7 +29,7 @@ class StreamerTests(unittest.TestCase):
         return client,ident
 
     def enable(self):
-        os.environ.update(LIVEKIT_URL='wss://video.example.org',LIVEKIT_API_KEY='test-key',LIVEKIT_API_SECRET='x'*40,MAGGY_STREAMERS_ENABLED='1')
+        os.environ.update(LIVEKIT_URL='wss://video.example.org',LIVEKIT_API_KEY='test-key',LIVEKIT_API_SECRET='x'*40,MAGGY_STREAMERS_ENABLED='1',MAGGY_STREAMER_SALES_ENABLED='1')
 
     def pay(self,ident,plan,ref):
         return self.admin.post('/api/admin/confirm-payment',json={'member_id':ident,'plan':plan,'reference':ref})
@@ -48,6 +48,32 @@ class StreamerTests(unittest.TestCase):
         self.assertEqual(self.pay(ident,'monthly','VIEWER-OK-001').status_code,200)
         self.assertFalse(client.get('/api/account/me').json['user']['streamer_active'])
         self.assertEqual(self.post(client,'/api/streamers/me',{'title':'No rights'}).status_code,403)
+
+    def test_video_testing_does_not_enable_streamer_sales(self):
+        self.enable();os.environ['MAGGY_STREAMER_SALES_ENABLED']='0'
+        self.assertTrue(st.live_ready());self.assertFalse(st.streamer_sales_ready())
+        client,ident=self.member('preview-viewer')
+        self.assertFalse(client.get('/api/account/me').json['streamer_available'])
+        self.assertEqual(self.pay(ident,'streamer','PREVIEW-NO-SALE').status_code,409)
+
+    @patch.object(st.requests,'post')
+    def test_admin_can_probe_service_without_disclosing_credentials_or_creating_rooms(self,post):
+        self.enable();post.return_value=Mock(status_code=200,json=Mock(return_value={'rooms':[]}))
+        result=self.admin.post('/api/streamers/admin/check-video',json={})
+        self.assertEqual(result.status_code,200);self.assertTrue(result.json['connected'])
+        self.assertTrue(post.call_args.args[0].endswith('/twirp/livekit.RoomService/ListRooms'))
+        self.assertEqual(post.call_args.kwargs['json'],{})
+        self.assertFalse(post.call_args.kwargs['allow_redirects'])
+        self.assertNotIn('x'*40,result.get_data(as_text=True))
+        post.return_value=Mock(status_code=401)
+        result=self.admin.post('/api/streamers/admin/check-video',json={})
+        self.assertEqual(result.status_code,502);self.assertFalse(result.json['connected'])
+
+    @patch.object(st.requests,'post')
+    def test_service_probe_requires_admin(self,post):
+        client,ident=self.member('probe-viewer');self.pay(ident,'monthly','PROBE-VIEWER-001')
+        self.assertEqual(self.post(client,'/api/streamers/admin/check-video',{}).status_code,403)
+        post.assert_not_called()
 
     def test_invalid_video_configuration_does_not_break_normal_accounts(self):
         with patch.dict(os.environ,{'MAGGY_STREAMERS_ENABLED':'1','LIVEKIT_URL':'wss://[invalid'}):

@@ -49,7 +49,7 @@ class PostgresMembershipTests(unittest.TestCase):
         return self.post(client,'/api/admin/confirm-payment',{'member_id':self.member['id'],'plan':plan,'reference':reference})
 
     def test_streamer_eight_euro_upgrade_and_revocation(self):
-        with patch.dict(os.environ,{'LIVEKIT_URL':'wss://test.example.org','LIVEKIT_API_KEY':'test-key','LIVEKIT_API_SECRET':'x'*40,'MAGGY_STREAMERS_ENABLED':'1'}):
+        with patch.dict(os.environ,{'LIVEKIT_URL':'wss://test.example.org','LIVEKIT_API_KEY':'test-key','LIVEKIT_API_SECRET':'x'*40,'MAGGY_STREAMERS_ENABLED':'1','MAGGY_STREAMER_SALES_ENABLED':'1'}):
             self.assertEqual(self.grant(self.admin,'monthly','PG-NORMAL-STREAMER-001').status_code,200)
             self.assertEqual(self.grant(self.admin,'streamer','PG-STREAMER-001').status_code,200)
             data=self.client.get('/api/account/me').json

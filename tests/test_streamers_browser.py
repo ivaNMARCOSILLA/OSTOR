@@ -9,6 +9,8 @@ def run():
         page=context.new_page();errors=[];requests=[]
         page.on('pageerror',lambda e:errors.append(str(e)));page.on('request',lambda r:requests.append(r.url))
         page.goto(BASE_URL+'/streamers');page.locator('#stream-unavailable').wait_for(state='visible')
+        assert page.locator('#video-setup').is_visible()
+        assert 'LIVEKIT_URL' in page.locator('#video-checks').inner_text()
         assert not page.locator('#start-camera').is_visible()
         assert page.locator('video').count()==0
         assert not any('livekit-client' in url for url in requests)

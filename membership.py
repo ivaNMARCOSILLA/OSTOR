@@ -192,8 +192,8 @@ def account_me():
     user = get_user()
     with database() as conn:
         payments = [dict(row) for row in conn.execute('SELECT plan,amount_cents,starts_at,ends_at,verified_at FROM payments WHERE member_id=? ORDER BY ends_at DESC', (user['id'] if user else '',))]
-    from streamers import live_ready
-    return jsonify(user=user_public(user) if user else None, csrf=csrf_token(), payments=payments, payment_mode='manual_verified', streamer_available=live_ready())
+    from streamers import streamer_sales_ready
+    return jsonify(user=user_public(user) if user else None, csrf=csrf_token(), payments=payments, payment_mode='manual_verified', streamer_available=streamer_sales_ready())
 
 
 @bp.post('/api/account/register')
@@ -301,8 +301,8 @@ def confirm_payment():
     if plan not in PLANS or not 4 <= len(reference) <= 120:
         return jsonify(error='Indica plan y referencia única del pago comprobado en PayPal.'), 400
     if plan == 'streamer':
-        from streamers import live_ready
-        if not live_ready(): return jsonify(error='No se puede activar ni cobrar el plan Streamer hasta conectar las emisiones.'),409
+        from streamers import streamer_sales_ready
+        if not streamer_sales_ready(): return jsonify(error='No se puede activar ni cobrar el plan Streamer hasta conectar las emisiones.'),409
     try:
         with database() as conn:
             conn.execute('BEGIN IMMEDIATE')

@@ -22,10 +22,11 @@ Hace falta un proyecto de vídeo LiveKit propio. Este cambio no crea ni contrata
    - `LIVEKIT_URL`: URL de conexión `wss://...` del proyecto.
    - `LIVEKIT_API_KEY`: identificador de API del proyecto.
    - `LIVEKIT_API_SECRET`: secreto del proyecto, de al menos 32 caracteres.
-   - `MAGGY_STREAMERS_ENABLED=1`: habilitación explícita en esa vista previa.
+   - `MAGGY_STREAMERS_ENABLED=1`: habilitación del vídeo en esa vista previa.
+   - `MAGGY_STREAMER_SALES_ENABLED=0`: mantener bloqueados los cobros de 8 EUR durante las pruebas.
 3. Volver a desplegar la vista previa. Nunca pegar secretos en chats, repositorios o documentos.
-4. Con la cuenta administradora (exenta de pagar), guardar el canal y probar cámara/micrófono. Mirar el directo desde otro navegador o dispositivo; comprobar sonido, permisos del espectador y fin de emisión. No registrar pagos ficticios en producción.
-5. Solo después de una prueba real satisfactoria, configurar las mismas variables en Production y publicar el código. Se habilitará entonces el enlace de suscripción Streamer de 8 EUR en PayPal. Sin activación explícita, el servidor rechaza confirmar ese plan.
+4. Abrir `/streamers` en la vista previa con la cuenta administradora y pulsar «Comprobar conexión con LiveKit». Comprueba la pareja de claves mediante ListRooms sin crear salas ni mostrar secretos. Después, con la cuenta administradora (exenta de pagar), guardar el canal y probar cámara/micrófono. Mirar el directo desde otro navegador o dispositivo; comprobar sonido, permisos del espectador y fin de emisión. No registrar pagos ficticios en producción.
+5. Solo después de una prueba real satisfactoria, configurar las mismas variables en Production y publicar el código, con `MAGGY_STREAMER_SALES_ENABLED=1` únicamente cuando se autorice abrir la contratación. Se habilitará entonces el enlace de suscripción Streamer de 8 EUR en PayPal. Sin activación explícita, el servidor rechaza confirmar ese plan.
 
 La aplicación no solicita grabación ni almacenamiento de las emisiones. La lista de directos usa un aviso del emisor cada 25 segundos; una desconexión deja de aparecer al caducar el aviso, como máximo 75 segundos después. La cuenta necesita acceso vigente para obtener credenciales de sala; solo el propietario con permiso Streamer recibe permiso de publicar cámara y micrófono. Las credenciales duran cinco minutos y no contienen el secreto de API.
 
