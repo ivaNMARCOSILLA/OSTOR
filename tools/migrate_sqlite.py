@@ -10,6 +10,8 @@ from urllib.parse import quote
 ROOT=Path(__file__).resolve().parents[1]
 TABLES={
     'members':['id','username','password_hash','role','created_at','access_until','welcome_used','session_version'],
+    'sticker_designs':['id','name','points','image_data','updated_at'],
+    'member_rewards':['member_id','active_seconds','last_seen'],
     'friend_access':['member_id','granted_at','granted_by','revoked_at'],
     'streamer_access':['member_id','until_at'],
     'streamer_channels':['id','member_id','title','bio','paypal_url','room_name','live_until','updated_at'],
@@ -33,7 +35,7 @@ def migrate(source,app):
         rows={}
         for table,columns in TABLES.items():
             actual=[row['name'] for row in original.execute('PRAGMA table_info('+table+')')]
-            if not actual and table in {'friend_access','streamer_access','streamer_channels','community_messages','admin_notifications'}:
+            if not actual and table in {'sticker_designs','member_rewards','friend_access','streamer_access','streamer_channels','community_messages','admin_notifications'}:
                 rows[table]=[];continue
             if set(actual)!=set(columns):raise ValueError('La estructura SQLite no es compatible: '+table)
             rows[table]=[dict(row) for row in original.execute('SELECT '+','.join(columns)+' FROM '+table)]

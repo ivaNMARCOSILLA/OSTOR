@@ -30,7 +30,7 @@ app = Flask(__name__, static_folder=os.path.join(ROOT, "assets"), static_url_pat
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 app.logger.setLevel(logging.INFO)
 
-VERSION = "9.1.0"
+VERSION = "9.2.0"
 AUDIUS_APP_NAME = os.getenv("AUDIUS_APP_NAME", "electronicama")
 SEARCH_CACHE_SECONDS = max(15, min(int(os.getenv("SEARCH_CACHE_SECONDS", "300")), 3600))
 ARCHIVE_CACHE_SECONDS = max(60, min(int(os.getenv("ARCHIVE_CACHE_SECONDS", "3600")), 86400))
@@ -704,6 +704,8 @@ from community import install as install_community
 install_community(app)
 from notifications import install as install_notifications
 install_notifications(app)
+from rewards import install as install_rewards
+install_rewards(app)
 
 
 if __name__ == "__main__":

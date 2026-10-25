@@ -4,3 +4,5 @@ gunicorn==23.0.0
 # Edición de proyecto: Iván Marcos Illa / ELECTRONICAMA 7.0.0
 
 psycopg[binary]==3.3.6
+
+Pillow==12.3.0

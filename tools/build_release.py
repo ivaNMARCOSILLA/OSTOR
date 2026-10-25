@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
 parser.add_argument('--output', type=Path, default=ROOT.parent/'artifacts'/'MAGGY_8_3_VERCEL.zip')
 args = parser.parse_args()
-root_files = ['.dockerignore','.env.example','.gitignore','.vercelignore','README.md','AUTORIA_MAGGY.md','Dockerfile','compose.yaml','app.py','membership.py','streamers.py', 'moderation.py','community.py','notifications.py','storage.py','manage.py','vercel.json','.python-version','index.html','manifest.webmanifest','sw.js','requirements.txt','requirements-dev.txt']
+root_files = ['.dockerignore','.env.example','.gitignore','.vercelignore','README.md','AUTORIA_MAGGY.md','Dockerfile','compose.yaml','app.py','membership.py','streamers.py', 'moderation.py','community.py','notifications.py','rewards.py','storage.py','manage.py','vercel.json','.python-version','index.html','manifest.webmanifest','sw.js','requirements.txt','requirements-dev.txt']
 files = [ROOT/name for name in root_files]
 for directory in ['api','assets','legal','tests','docs','tools']:
     for path in (ROOT/directory).rglob('*'):

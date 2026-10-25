@@ -51,6 +51,8 @@ def init_database():
         )''')
     from community import init_database as init_community_database
     init_community_database()
+    from rewards import init_database as init_rewards_database
+    init_rewards_database()
 
 
 def paypal_link(value):

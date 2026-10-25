@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- Ol PRO 9.1.0 · Edición y mantenimiento: Iván Marcos Illa · 2026-10-24 -->
+<!-- Ol PRO 9.2.0 · Edición y mantenimiento: Iván Marcos Illa · 2026-10-24 -->
 <html lang="es">
 <head>
   <meta charset="UTF-8">
@@ -9,21 +9,21 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Ol">
   <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="apple-touch-icon" href="/assets/app-icon-192.png?v=9.1.1">
+  <link rel="apple-touch-icon" href="/assets/app-icon-192.png?v=9.2.0">
   <meta name="description" content="Ol: descubre y escucha música en Audius e Internet Archive. Guarda tus favoritos y consulta tu historial.">
   <link rel="canonical" href="https://electronicama.com/">
   <meta property="og:title" content="Ol · Tu música, otra órbita">
   <meta property="og:description" content="Tu estación musical personal en electronicama.com">
   <meta name="author" content="Iván Marcos Illa">
   <title>Ol · Music Universe</title>
-  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg?v=9.1.1">
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg?v=9.2.0">
   <link rel="preconnect" href="https://api.audius.co">
   <link rel="preconnect" href="https://creatornode.audius.co">
   <link rel="preconnect" href="https://archive.org">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/assets/styles.css?v=9.1.1">
+  <link rel="stylesheet" href="/assets/styles.css?v=9.2.0">
   <!-- Vercel Web Analytics: habilitar en Project > Analytics para recibir datos. -->
   <script>
     // La ruta de Web Analytics existe solo en Vercel, no en localhost.
@@ -34,10 +34,10 @@
       document.head.appendChild(analytics);
     }
   </script>
-  <script defer src="/assets/session.js?v=9.1.1"></script>
-  <script type="module" src="/assets/app.js?v=9.1.1"></script>
-  <script type="module" src="/assets/maggy.js?v=9.1.1"></script>
-<link rel="stylesheet" href="/assets/ol-theme.css?v=9.1.1"></head>
+  <script defer src="/assets/session.js?v=9.2.0"></script>
+  <script type="module" src="/assets/app.js?v=9.2.0"></script>
+  <script type="module" src="/assets/maggy.js?v=9.2.0"></script>
+<link rel="stylesheet" href="/assets/ol-theme.css?v=9.2.0"><script type="module" src="/assets/rewards.js?v=9.2.0"></script></head>
 <body>
   <div class="app-shell">
     <aside class="sidebar" aria-label="Navegación principal">
@@ -48,7 +48,7 @@
         <button class="nav-item" data-view="favorites" type="button"><span class="nav-icon">♡</span> Favoritos <span id="favorites-count" class="nav-count">0</span></button>
         <a class="nav-item" href="/account">◇ Mi cuenta y pagos</a>
         <button class="nav-item" data-view="history" type="button"><span class="nav-icon">◷</span> Historial</button>
-      <a class="nav-item" href="/streamers#live-catalogue">◉ Directos</a><a class="nav-item" href="#mas-musica">↗ Más música</a><a class="nav-item" href="#mi-espacio">✦ Mi espacio</a><a class="nav-item" href="#planes">◇ Planes</a></nav>
+      <a class="nav-item" href="/streamers#live-catalogue">◉ Directos</a><a class="nav-item" href="#mas-musica">↗ Más música</a><a class="nav-item" href="#mi-espacio">✦ Mi espacio</a><a class="nav-item" href="#ol-collection">✧ Mi colección</a><a class="nav-item" href="#planes">◇ Planes</a></nav>
       <div class="sidebar-bottom">
         <div class="live-status"><span class="pulse-dot"></span> UNIVERSO EN LÍNEA</div>
         <p>Tu música, tu espacio.<br>Tu acceso, tus canales.</p>
@@ -64,7 +64,7 @@
       </header>
       <nav class="mobile-nav hidden" id="mobile-nav" aria-label="Navegación móvil">
         <button data-view="discover" type="button">Explorar</button><button data-view="favorites" type="button">♡ Favoritos</button><button data-view="history" type="button">◷ Historial</button>
-        <a href="/streamers#live-catalogue">Directos</a><a href="#mas-musica">Más música</a><a href="#mi-espacio">Mi espacio</a><a href="#planes">Planes</a>
+        <a href="/streamers#live-catalogue">Directos</a><a href="#mas-musica">Más música</a><a href="#mi-espacio">Mi espacio</a><a href="#ol-collection">Colección ✧</a><a href="#planes">Planes</a>
       </nav>
 
       <section id="preview-banner" class="preview-banner" aria-label="Vista previa de Ol"><div><strong>EXPLORA Ol · VISTA PREVIA</strong><p>Descubre el catálogo. Para escuchar y guardar tu música, desbloquea tu acceso.</p></div><button type="button" data-unlock>DESBLOQUEAR · 1 € / 14 DÍAS ↗</button></section>
@@ -109,7 +109,7 @@
       </section>
 
       <section class="maggy-section" id="mas-musica" aria-labelledby="more-music-title"><span class="eyebrow">MÁS WEBS · MÁS DESCUBRIMIENTOS</span><h2 id="more-music-title">Amplía tu <em>catálogo.</em></h2><p>Un directorio de webs con música o radio que puedes explorar gratis, algunas con anuncios, límites o planes opcionales. Cada botón abre el servicio original. Escuchar, descargar y reutilizar una canción son permisos diferentes.</p><p class="directory-query" id="directory-query" role="status">Los botones de búsqueda utilizan lo que escribas en el buscador de Ol.</p><div class="music-directory"><article class="music-web-card"><span class="web-badge">OPCIONES GRATUITAS</span><h3>SoundCloud</h3><p>Artistas independientes, sesiones y novedades. Algunas pistas o funciones requieren Go+.</p><a data-external-search="soundcloud" href="https://soundcloud.com/search/sounds" target="_blank" rel="noopener noreferrer">Buscar música ↗<span class="sr-only"> en SoundCloud, se abre en otra pestaña</span></a></article><article class="music-web-card"><span class="web-badge">GRATIS CON ANUNCIOS</span><h3>YouTube</h3><p>Vídeos y canales musicales. La disponibilidad depende del vídeo, del país y de las condiciones de YouTube.</p><a data-external-search="youtube" href="https://www.youtube.com/results" target="_blank" rel="noopener noreferrer">Buscar vídeos ↗<span class="sr-only"> en YouTube, se abre en otra pestaña</span></a></article><article class="music-web-card"><span class="web-badge">MÚSICA INDEPENDIENTE</span><h3>Free Music Archive</h3><p>Descubre música y descargas disponibles según la licencia de cada pista. Consulta sus condiciones antes de reutilizarla.</p><a href="https://freemusicarchive.org/" target="_blank" rel="noopener noreferrer">Explorar catálogo ↗<span class="sr-only"> en Free Music Archive, se abre en otra pestaña</span></a></article><article class="music-web-card"><span class="web-badge">CREATIVE COMMONS</span><h3>dig.ccMixter</h3><p>Descubre música y remixes con licencias Creative Commons. La atribución y los usos permitidos varían según la pista.</p><a href="https://dig.ccmixter.org/" target="_blank" rel="noopener noreferrer">Explorar música ↗<span class="sr-only"> en dig.ccMixter, se abre en otra pestaña</span></a></article><article class="music-web-card"><span class="web-badge">CLÁSICA · OPCIONES GRATUITAS</span><h3>Musopen</h3><p>Grabaciones clásicas y partituras. La cuenta gratuita tiene límites; algunas funciones son de pago.</p><a href="https://musopen.org/music/" target="_blank" rel="noopener noreferrer">Explorar clásica ↗<span class="sr-only"> en Musopen, se abre en otra pestaña</span></a></article><article class="music-web-card"><span class="web-badge">GRABACIONES CON LICENCIA LIBRE</span><h3>Wikimedia Commons</h3><p>Busca grabaciones musicales y otros archivos de audio. Cada archivo indica su licencia y los créditos necesarios.</p><a data-external-search="commons" href="https://commons.wikimedia.org/w/index.php?title=Special:MediaSearch&amp;type=audio" target="_blank" rel="noopener noreferrer">Buscar grabaciones ↗<span class="sr-only"> en Wikimedia Commons, se abre en otra pestaña</span></a></article><article class="music-web-card"><span class="web-badge">RADIO EN DIRECTO</span><h3>Radio Garden</h3><p>Explora emisoras de todo el mundo. No es un catálogo a la carta; la disponibilidad depende de la emisora y del país.</p><a href="https://radio.garden/" target="_blank" rel="noopener noreferrer">Explorar emisoras ↗<span class="sr-only"> en Radio Garden, se abre en otra pestaña</span></a></article></div><p class="payment-note">Este directorio y sus enlaces externos se pueden consultar sin pagar Ol. La cuota de Ol corresponde a sus funciones propias; no compra suscripciones de terceros ni convierte en gratuita una pista de pago.</p></section>
-      <section class="maggy-section" id="momentos" aria-labelledby="moments-title">
+      <details id="ol-collection" class="collection-panel"><summary>Tu colección Ol ∞ <span>Tiempo, puntos y stickers</span></summary><p>Disfruta de Ol y completa tu álbum: 10 puntos por minuto activo. Cuenta el tiempo usando la página o reproduciendo música y directos; al dejar de usarla, la cuenta se pausa. Los puntos son recompensas digitales para tu colección.</p><div id="reward-access"><a class="button ghost-button" href="/account">Entrar a mi colección ↗</a></div><div id="reward-content" class="hidden"><div class="collection-stats"><div><strong id="reward-points">0</strong><span>Puntos Ol</span></div><div><strong id="reward-time">0 min</strong><span>Tiempo activo</span></div><div><strong id="reward-level">1</strong><span>Nivel</span></div><div><strong id="reward-count">0/12</strong><span>Stickers</span></div></div><label class="collection-progress">Tu próximo descubrimiento<progress id="reward-progress" value="0" max="60"></progress></label><p id="reward-next"></p><div id="reward-album" class="collection-album"></div></div><p id="reward-status" role="status" aria-live="polite">Preparando tu colección…</p><button id="refresh-rewards" class="ghost-button secondary" type="button">Actualizar colección</button></details><section class="maggy-section" id="momentos" aria-labelledby="moments-title">
         <span class="eyebrow">TU DÍA, A TU RITMO</span><h2 id="moments-title">Elige tu <em>estilo.</em></h2>
         <p>Elige un estilo y encuentra música para tu momento. Escucha los resultados con tu acceso activo.</p>
         <div class="moment-grid">

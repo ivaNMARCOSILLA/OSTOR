@@ -33,14 +33,19 @@ def comments(channel_id):
     with database() as conn:
         if not live_channel(conn,channel_id):return jsonify(error='Este canal no está en directo.'),404
         purge(conn)
-        rows=conn.execute("SELECT c.id,c.body,c.created_at,m.username FROM community_messages c JOIN members m ON m.id=c.member_id WHERE c.channel_id=? AND c.kind='comment' AND c.blocked=0 ORDER BY c.created_at DESC,c.id DESC LIMIT 50",(channel_id,)).fetchall()
-    return jsonify(comments=[dict(row) for row in reversed(rows)])
+        rows=conn.execute("SELECT c.id,c.body,c.kind,c.created_at,m.username FROM community_messages c JOIN members m ON m.id=c.member_id WHERE c.channel_id=? AND c.kind IN ('comment','sticker') AND c.blocked=0 ORDER BY c.created_at DESC,c.id DESC LIMIT 50",(channel_id,)).fetchall()
+    from rewards import catalog
+    designs={item['id']:item for item in catalog(0)}
+    comments=[dict(row) for row in reversed(rows)]
+    for comment in comments:
+        if comment['kind']=='sticker':comment['sticker']=designs.get(comment['body'])
+    return jsonify(comments=comments)
 
 
 @bp.post('/api/streamers/<channel_id>/comments')
 def post_text(channel_id):
     data=request.get_json(silent=True) or {};kind=data.get('kind','comment');body=data.get('text')
-    if kind not in {'comment','transcript','report'} or not isinstance(body,str) or not 1<=len(body.strip())<=1000:
+    if kind not in {'comment','transcript','report','sticker'} or not isinstance(body,str) or not 1<=len(body.strip())<=1000:
         return jsonify(error='Escribe un comentario o fragmento de hasta 1000 caracteres.'),400
     body=body.strip();user=get_user()
     with database() as conn:
@@ -49,6 +54,10 @@ def post_text(channel_id):
         if kind=='transcript':
             from streamers import publisher_allowed
             if channel['member_id']!=user['id'] or not publisher_allowed():return jsonify(error='Solo el creador puede enviar la transcripción de su micrófono.'),403
+        if kind=='sticker':
+            from rewards import owns_sticker
+            sticker=owns_sticker(conn,user['id'],body)
+            if not sticker:return jsonify(error='Este sticker todavía no está desbloqueado en tu colección.'),403
         purge(conn)
         recent=conn.execute('SELECT COUNT(*) AS n FROM community_messages WHERE member_id=? AND created_at>?',(user['id'],stamp(now_utc()-timedelta(seconds=60)))).fetchone()['n']
         if recent>=60:return jsonify(error='Demasiados mensajes. Espera un momento.'),429

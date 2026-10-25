@@ -1,6 +1,6 @@
 'use strict';
-import {StreamCommunity} from '/assets/community.js?v=9.1.0';
-import {StudioTools} from '/assets/studio-tools.js?v=9.1.0';
+import {StreamCommunity} from '/assets/community.js?v=9.2.0';
+import {StudioTools} from '/assets/studio-tools.js?v=9.2.0';
 const $=id=>document.getElementById(id);
 let info=null,room=null,selected=null,publishing=false,heartbeat=null,sdkPromise=null,connecting=false,connectionGeneration=0,giftRevision=0;
 const status=text=>{$('stream-status').textContent=text;};

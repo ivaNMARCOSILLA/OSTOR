@@ -27,7 +27,7 @@ class PostgresMembershipTests(unittest.TestCase):
     def setUp(self):
         self.app=application.app
         with self.app.app_context(),m.database() as connection:
-            for table in ['admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:
+            for table in ['sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:
                 connection.execute('DELETE FROM '+table)
         with self.app.app_context():
             m.create_admin('pg-admin','postgres-admin-password-123')
@@ -109,7 +109,7 @@ class PostgresMembershipTests(unittest.TestCase):
                 self.post(admin,'/api/admin/confirm-payment',{'member_id':ident,'plan':'welcome','reference':'SQLITE-MIGRATE-001'})
                 expected=client.get('/api/account/me').json['user']['access_until']
             with self.app.app_context(),m.database() as connection:
-                for table in ['admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:connection.execute('DELETE FROM '+table)
+                for table in ['sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:connection.execute('DELETE FROM '+table)
             counts=migrate(Path(folder)/'members.sqlite3',self.app)
             self.assertEqual(counts['members'],2);self.assertEqual(counts['payments'],1)
             migrated=self.app.test_client()
@@ -150,5 +150,34 @@ class PostgresMembershipTests(unittest.TestCase):
         self.post(self.admin,'/api/admin/friend-access',{'member_id':self.member['id'],'active':False})
         self.post(self.client,'/api/account/login',{'username':'pg-client','password':'postgres-client-password-123'})
         self.assertFalse(self.client.get('/api/account/me').json['user']['active'])
+
+    def test_simultaneous_reward_heartbeats_count_one_account_clock(self):
+        import rewards as rewards
+        from datetime import timedelta
+        start=datetime(2027,1,1,12,tzinfo=timezone.utc)
+        another=self.admin_client()
+        with patch.object(rewards,'now_utc',return_value=start):
+            self.post(self.admin,'/api/rewards/heartbeat',{})
+        with patch.object(rewards,'now_utc',return_value=start+timedelta(seconds=60)):
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                results=[pool.submit(self.post,client,'/api/rewards/heartbeat',{}) for client in [self.admin,another]]
+                self.assertEqual([future.result().json['points'] for future in results],[10,10])
+        self.assertEqual(self.admin.get('/api/rewards').json['active_seconds'],60)
+
+    def test_custom_sticker_image_survives_an_independent_app_instance(self):
+        import base64,io
+        from PIL import Image
+        import rewards
+        output=io.BytesIO();Image.new('RGBA',(16,16),(80,130,190,255)).save(output,format='PNG')
+        result=self.post(self.admin,'/api/admin/stickers',{'name':'Diseño persistente','points':10,'image':base64.b64encode(output.getvalue()).decode()})
+        self.assertEqual(result.status_code,200);ident=result.json['id']
+        fresh=Flask('sticker_persistence',static_folder=self.app.static_folder)
+        m.install(fresh);rewards.install(fresh)
+        device=fresh.test_client();device.set_cookie('session',self.admin.get_cookie('session').value)
+        with device.get('/api/stickers/'+ident+'/image') as image:
+            self.assertEqual(image.status_code,200);self.assertEqual(image.mimetype,'image/webp')
+        album=device.get('/api/rewards').json
+        self.assertTrue(any(item['id']==ident for item in album['stickers']))
+        self.assertEqual(album['stickers'][0]['id'],'hello');self.assertEqual(album['stickers'][0]['points'],0)
 
 if __name__=='__main__':unittest.main(verbosity=2)
