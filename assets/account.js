@@ -17,16 +17,22 @@ async function refresh() {
   $('credentials').classList.toggle('hidden', Boolean(current) || Boolean(inviteToken));
   $('member-panel').classList.toggle('hidden', !current);
   $('admin-panel').classList.toggle('hidden', current?.role !== 'admin');
+  const streamReady=Boolean(data.streamer_available);
+  $('streamer-availability').textContent=streamReady?'8 € por un mes de emisión y funciones de Maggy. Empieza al confirmar el pago; sin renovación automática.':'El plan Streamer todavía no está disponible para contratar. No se cobran los 8 € hasta activar las emisiones.';
+  $('pay-streamer').classList.toggle('hidden',!streamReady);
+  if(streamReady)$('pay-streamer').href='https://paypal.me/IMarcosIlla/8EUR';else $('pay-streamer').removeAttribute('href');
+  $('streamer-plan-option').disabled=!streamReady;
+  $('streamer-plan-option').textContent=streamReady?'8 € · Streamer · Un mes':'8 € · Streamer · pendiente de activar emisión';
   if (!current) return;
   $('member-title').textContent = `Tu cuenta · ${current.username}`;
   $('access-status').textContent = current.role === 'admin' ? 'Administrador: acceso de gestión activo en todos tus dispositivos.' : current.active ? `Acceso activo hasta ${date(current.access_until)}.` : 'Acceso musical bloqueado. Se requiere un pago comprobado para activar o renovar tu cuenta.';
   $('enter-maggy').classList.toggle('hidden', !current.active);
   $('welcome-plan').classList.toggle('hidden', Boolean(current.welcome_used));
-  $('next-payment').textContent = current.role === 'admin' ? 'Tu cuenta de gestión no tiene vencimiento de cliente.' : current.access_until ? `Vencimiento: ${date(current.access_until)}. Para continuar: 6 € por un mes; sin cargo automático.` : 'Primer acceso: 1 € por 14 días. Comienza cuando se confirme el pago.';
+  $('next-payment').textContent = current.role === 'admin' ? 'Tu cuenta de gestión no tiene vencimiento de cliente.' : current.access_until ? `Vencimiento de Maggy: ${date(current.access_until)}. ${current.streamer_until ? 'Streamer hasta '+date(current.streamer_until)+'. Renovación Streamer: 8 € por un mes; Maggy normal: 6 €.' : 'Para continuar: 6 € por un mes.'} Sin cargo automático.` : 'Primer acceso: 1 € por 14 días. Comienza cuando se confirme el pago.';
   $('my-payments').replaceChildren();
   for (const payment of data.payments) {
     const row = document.createElement('tr');
-    for (const value of [payment.plan === 'welcome' ? 'Bienvenida' : 'Mensual', `${(payment.amount_cents/100).toFixed(2)} €`, date(payment.starts_at), date(payment.ends_at), date(payment.verified_at)]) row.append(text('td', value));
+    for (const value of [payment.plan === 'welcome' ? 'Bienvenida' : payment.plan === 'streamer' ? 'Streamer' : 'Mensual', `${(payment.amount_cents/100).toFixed(2)} €`, date(payment.starts_at), date(payment.ends_at), date(payment.verified_at)]) row.append(text('td', value));
     $('my-payments').append(row);
   }
   if (current.role === 'admin') await loadAdmin();
@@ -37,7 +43,7 @@ async function loadAdmin() {
   for (const member of members) {
     if (member.role !== 'admin') { const option = text('option', member.username); option.value = member.id; $('payment-member').append(option); }
     const row = document.createElement('tr');
-    for (const value of [member.username, member.role === 'admin' ? 'Administrador' : 'Cliente', member.active ? 'Activo' : 'Sin acceso', date(member.access_until)]) row.append(text('td', value));
+    for (const value of [member.username, member.role === 'admin' ? 'Administrador' : member.streamer_active ? 'Streamer' : 'Cliente', member.active ? 'Activo' : 'Sin acceso', member.streamer_until ? `Maggy: ${date(member.access_until)} · Streamer: ${date(member.streamer_until)}` : date(member.access_until)]) row.append(text('td', value));
     const actions = document.createElement('td');
     if (member.role !== 'admin') {
       const revoke = text('button', 'Revocar acceso'); revoke.type='button';
@@ -48,7 +54,7 @@ async function loadAdmin() {
   $('admin-payments').replaceChildren();
   for (const payment of payments) {
     const row=document.createElement('tr');
-    for (const value of [payment.username, payment.plan==='welcome'?'Bienvenida':'Mensual',`${(payment.amount_cents/100).toFixed(2)} €`,payment.reference,date(payment.verified_at),date(payment.ends_at)]) row.append(text('td',value));
+    for (const value of [payment.username, payment.plan==='welcome'?'Bienvenida':payment.plan==='streamer'?'Streamer':'Mensual',`${(payment.amount_cents/100).toFixed(2)} €`,payment.reference,date(payment.verified_at),date(payment.ends_at)]) row.append(text('td',value));
     $('admin-payments').append(row);
   }
   renderCalendar();
@@ -64,6 +70,7 @@ function renderCalendar() {
     const cell=text('div',String(day)); cell.className='day';
     for(const member of members) {
       if (!member.access_until || member.role==='admin') continue;
+      if(member.streamer_until){const streamDue=new Date(member.streamer_until);if(streamDue.getFullYear()===year&&streamDue.getMonth()===month-1&&streamDue.getDate()===day){const label=text('span',`${member.username} · vence Streamer`);label.className='due';cell.append(label);}}
       const due=new Date(member.access_until);
       if(due.getFullYear()===year && due.getMonth()===month-1 && due.getDate()===day){const label=text('span',`${member.username} · vence`);label.className='due';cell.append(label);}
     }

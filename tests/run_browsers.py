@@ -30,7 +30,7 @@ def run():
         thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
         child_env=dict(os.environ,MAGGY_TEST_BASE_URL=f'http://127.0.0.1:{server.server_port}',MAGGY_TEST_USER='browser-admin',MAGGY_TEST_PASSWORD=password)
         try:
-            selected=sys.argv[1:] or ['test_preview_browser.py','test_audio_browser.py','test_membership_browser.py']
+            selected=sys.argv[1:] or ['test_preview_browser.py','test_audio_browser.py','test_membership_browser.py','test_streamers_browser.py']
             for name in selected:
                 subprocess.run([sys.executable,str(ROOT/'tests'/name)],cwd=ROOT,env=child_env,check=True)
         finally:

@@ -10,6 +10,8 @@ from urllib.parse import quote
 ROOT=Path(__file__).resolve().parents[1]
 TABLES={
     'members':['id','username','password_hash','role','created_at','access_until','welcome_used','session_version'],
+    'streamer_access':['member_id','until_at'],
+    'streamer_channels':['id','member_id','title','bio','paypal_url','room_name','live_until','updated_at'],
     'payments':['id','member_id','plan','amount_cents','starts_at','ends_at','verified_at','verified_by','reference'],
     'invitations':['token_hash','member_id','expires_at','used_at'],
     'login_attempts':['bucket','attempted_at'],
@@ -28,8 +30,13 @@ def migrate(source,app):
         rows={}
         for table,columns in TABLES.items():
             actual=[row['name'] for row in original.execute('PRAGMA table_info('+table+')')]
+            if not actual and table in {'streamer_access','streamer_channels'}:
+                rows[table]=[];continue
             if set(actual)!=set(columns):raise ValueError('La estructura SQLite no es compatible: '+table)
             rows[table]=[dict(row) for row in original.execute('SELECT '+','.join(columns)+' FROM '+table)]
+        with app.app_context():
+            from streamers import init_database as init_streamer_database
+            init_streamer_database()
         with app.app_context(),database() as connection:
             connection.execute('BEGIN IMMEDIATE')
             for table in TABLES:

@@ -27,7 +27,7 @@ class PostgresMembershipTests(unittest.TestCase):
     def setUp(self):
         self.app=application.app
         with self.app.app_context(),m.database() as connection:
-            for table in ['payments','invitations','login_attempts','members']:
+            for table in ['streamer_channels','streamer_access','payments','invitations','login_attempts','members']:
                 connection.execute('DELETE FROM '+table)
         with self.app.app_context():
             m.create_admin('pg-admin','postgres-admin-password-123')
@@ -47,6 +47,18 @@ class PostgresMembershipTests(unittest.TestCase):
 
     def grant(self,client,plan,reference):
         return self.post(client,'/api/admin/confirm-payment',{'member_id':self.member['id'],'plan':plan,'reference':reference})
+
+    def test_streamer_eight_euro_upgrade_and_revocation(self):
+        with patch.dict(os.environ,{'LIVEKIT_URL':'wss://test.example.org','LIVEKIT_API_KEY':'test-key','LIVEKIT_API_SECRET':'x'*40,'MAGGY_STREAMERS_ENABLED':'1'}):
+            self.assertEqual(self.grant(self.admin,'monthly','PG-NORMAL-STREAMER-001').status_code,200)
+            self.assertEqual(self.grant(self.admin,'streamer','PG-STREAMER-001').status_code,200)
+            data=self.client.get('/api/account/me').json
+            self.assertTrue(data['user']['streamer_active'])
+            self.assertEqual(next(x for x in data['payments'] if x['plan']=='streamer')['amount_cents'],800)
+            self.assertEqual(self.grant(self.admin,'streamer','PG-STREAMER-001').status_code,409)
+            self.assertEqual(self.post(self.admin,'/api/admin/revoke',{'member_id':self.member['id']}).status_code,200)
+            with self.app.app_context(),m.database() as connection:
+                self.assertEqual(connection.execute('SELECT COUNT(*) AS n FROM streamer_access').fetchone()['n'],0)
 
     def test_payment_activation_expiry_and_duplicate_reference(self):
         instant=datetime(2027,1,31,12,tzinfo=timezone.utc)
@@ -97,7 +109,7 @@ class PostgresMembershipTests(unittest.TestCase):
                 self.post(admin,'/api/admin/confirm-payment',{'member_id':ident,'plan':'welcome','reference':'SQLITE-MIGRATE-001'})
                 expected=client.get('/api/account/me').json['user']['access_until']
             with self.app.app_context(),m.database() as connection:
-                for table in ['payments','invitations','login_attempts','members']:connection.execute('DELETE FROM '+table)
+                for table in ['streamer_channels','streamer_access','payments','invitations','login_attempts','members']:connection.execute('DELETE FROM '+table)
             counts=migrate(Path(folder)/'members.sqlite3',self.app)
             self.assertEqual(counts['members'],2);self.assertEqual(counts['payments'],1)
             migrated=self.app.test_client()

@@ -20,7 +20,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 bp = Blueprint('membership', __name__)
 UTC = timezone.utc
-PLANS = {'welcome': {'cents': 100, 'days': 14}, 'monthly': {'cents': 600, 'months': 1}}
+PLANS = {'welcome': {'cents': 100, 'days': 14}, 'monthly': {'cents': 600, 'months': 1}, 'streamer': {'cents': 800, 'months': 1}}
 
 
 def now_utc():
@@ -53,6 +53,9 @@ def init_database():
           password_hash TEXT, role TEXT NOT NULL DEFAULT 'member',
           created_at TEXT NOT NULL, access_until TEXT,
           welcome_used INTEGER NOT NULL DEFAULT 0, session_version INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS streamer_access (
+          member_id TEXT PRIMARY KEY REFERENCES members(id), until_at TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS payments (
           id TEXT PRIMARY KEY, member_id TEXT NOT NULL REFERENCES members(id),
@@ -113,14 +116,16 @@ def validate_password(value):
 
 def user_public(user):
     active = user['role'] == 'admin' or bool(user['access_until'] and datetime.fromisoformat(user['access_until']) > now_utc())
-    return {key: user[key] for key in ('id', 'username', 'role', 'access_until', 'welcome_used')} | {'active': active}
+    streamer_until=user['streamer_until'] if 'streamer_until' in user.keys() else None
+    streamer_active=active and (user['role']=='admin' or bool(streamer_until and datetime.fromisoformat(streamer_until)>now_utc()))
+    return {key: user[key] for key in ('id', 'username', 'role', 'access_until', 'welcome_used')} | {'active': active, 'streamer_until':streamer_until, 'streamer_active':streamer_active}
 
 
 def get_user():
     if hasattr(g, 'member'):
         return g.member
     with database() as conn:
-        row = conn.execute('SELECT * FROM members WHERE id=?', (session.get('member_id', ''),)).fetchone()
+        row = conn.execute('SELECT m.*,s.until_at AS streamer_until FROM members m LEFT JOIN streamer_access s ON s.member_id=m.id WHERE m.id=?', (session.get('member_id', ''),)).fetchone()
     g.member = row if row and row['session_version'] == session.get('session_version') else None
     return g.member
 
@@ -187,7 +192,8 @@ def account_me():
     user = get_user()
     with database() as conn:
         payments = [dict(row) for row in conn.execute('SELECT plan,amount_cents,starts_at,ends_at,verified_at FROM payments WHERE member_id=? ORDER BY ends_at DESC', (user['id'] if user else '',))]
-    return jsonify(user=user_public(user) if user else None, csrf=csrf_token(), payments=payments, payment_mode='manual_verified')
+    from streamers import live_ready
+    return jsonify(user=user_public(user) if user else None, csrf=csrf_token(), payments=payments, payment_mode='manual_verified', streamer_available=live_ready())
 
 
 @bp.post('/api/account/register')
@@ -239,7 +245,7 @@ def logout():
 @require_admin
 def list_members():
     with database() as conn:
-        users = [user_public(row) for row in conn.execute('SELECT * FROM members ORDER BY created_at DESC')]
+        users = [user_public(row) for row in conn.execute('SELECT m.*,s.until_at AS streamer_until FROM members m LEFT JOIN streamer_access s ON s.member_id=m.id ORDER BY m.created_at DESC')]
         payments = [dict(row) for row in conn.execute('SELECT p.*,m.username FROM payments p JOIN members m ON m.id=p.member_id ORDER BY verified_at DESC LIMIT 300')]
     return jsonify(members=users, payments=payments)
 
@@ -294,6 +300,9 @@ def confirm_payment():
     reference = str(data.get('reference', '')).strip()
     if plan not in PLANS or not 4 <= len(reference) <= 120:
         return jsonify(error='Indica plan y referencia única del pago comprobado en PayPal.'), 400
+    if plan == 'streamer':
+        from streamers import live_ready
+        if not live_ready(): return jsonify(error='No se puede activar ni cobrar el plan Streamer hasta conectar las emisiones.'),409
     try:
         with database() as conn:
             conn.execute('BEGIN IMMEDIATE')
@@ -302,11 +311,18 @@ def confirm_payment():
                 return jsonify(error='Selecciona una cuenta de cliente.'), 400
             if plan == 'welcome' and user['welcome_used']:
                 return jsonify(error='La bienvenida de 14 días ya se utilizó en esta cuenta.'), 409
-            start = max(now_utc(), datetime.fromisoformat(user['access_until'])) if user['access_until'] else now_utc()
-            end = end_of_plan(start, plan)
-            conn.execute('INSERT INTO payments VALUES(?,?,?,?,?,?,?,?,?)', (secrets.token_hex(16), user['id'], plan, PLANS[plan]['cents'], stamp(start), stamp(end), stamp(now_utc()), get_user()['id'], reference))
-            conn.execute('UPDATE members SET access_until=?,welcome_used=MAX(welcome_used,?) WHERE id=?', (stamp(end), 1, user['id']))
-        return jsonify(ok=True, access_until=stamp(end))
+            if plan == 'streamer':
+                old=conn.execute('SELECT until_at FROM streamer_access WHERE member_id=?',(user['id'],)).fetchone()
+                start=max(now_utc(),datetime.fromisoformat(old['until_at'])) if old else now_utc()
+            else:
+                start=max(now_utc(),datetime.fromisoformat(user['access_until'])) if user['access_until'] else now_utc()
+            end=end_of_plan(start,plan)
+            conn.execute('INSERT INTO payments VALUES(?,?,?,?,?,?,?,?,?)',(secrets.token_hex(16),user['id'],plan,PLANS[plan]['cents'],stamp(start),stamp(end),stamp(now_utc()),get_user()['id'],reference))
+            access_end=max(end,datetime.fromisoformat(user['access_until'])) if user['access_until'] else end
+            conn.execute('UPDATE members SET access_until=?,welcome_used=MAX(welcome_used,?) WHERE id=?',(stamp(access_end),1,user['id']))
+            if plan == 'streamer':
+                conn.execute('INSERT INTO streamer_access(member_id,until_at) VALUES(?,?) ON CONFLICT(member_id) DO UPDATE SET until_at=excluded.until_at',(user['id'],stamp(end)))
+        return jsonify(ok=True, access_until=stamp(access_end))
     except INTEGRITY_ERRORS:
         return jsonify(error='Esta referencia de pago ya se ha utilizado.'), 409
 
@@ -318,6 +334,7 @@ def revoke():
         conn.execute('BEGIN IMMEDIATE')
         conn.execute('UPDATE members SET access_until=?,session_version=session_version+1 WHERE id=? AND role!=?',
                      (stamp(now_utc()), str(payload().get('member_id', '')), 'admin'))
+        conn.execute('DELETE FROM streamer_access WHERE member_id IN (SELECT id FROM members WHERE id=? AND role!=?)',(str(payload().get('member_id','')),'admin'))
     return jsonify(ok=True)
 
 
