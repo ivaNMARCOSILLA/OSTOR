@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- MAGGY PRO 8.3.0 · Edición y mantenimiento: Iván Marcos Illa · 2026-10-24 -->
+<!-- MAGGY PRO 8.4.0 · Edición y mantenimiento: Iván Marcos Illa · 2026-10-24 -->
 <html lang="es">
 <head>
   <meta charset="UTF-8">
@@ -9,18 +9,18 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="MAGGY">
   <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="apple-touch-icon" href="/assets/app-icon-192.png?v=8.3.0">
+  <link rel="apple-touch-icon" href="/assets/app-icon-192.png?v=8.4.0">
   <meta name="description" content="MAGGY: descubre y escucha música en Audius e Internet Archive. Guarda tus favoritos y consulta tu historial.">
   <link rel="canonical" href="https://electronicama.com/">
   <meta property="og:title" content="Maggy · Tu música, otra órbita">
   <meta property="og:description" content="Tu estación musical personal en electronicama.com">
   <meta name="author" content="Iván Marcos Illa">
   <title>MAGGY · Music Universe</title>
-  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg?v=8.3.0">
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg?v=8.4.0">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/assets/styles.css?v=8.3.0">
+  <link rel="stylesheet" href="/assets/styles.css?v=8.4.0">
   <!-- Vercel Web Analytics: habilitar en Project > Analytics para recibir datos. -->
   <script>
     // La ruta de Web Analytics existe solo en Vercel, no en localhost.
@@ -31,14 +31,14 @@
       document.head.appendChild(analytics);
     }
   </script>
-  <script defer src="/assets/session.js?v=8.3.0"></script>
-  <script type="module" src="/assets/app.js?v=8.3.0"></script>
-  <script type="module" src="/assets/maggy.js?v=8.3.0"></script>
+  <script defer src="/assets/session.js?v=8.4.0"></script>
+  <script type="module" src="/assets/app.js?v=8.4.0"></script>
+  <script type="module" src="/assets/maggy.js?v=8.4.0"></script>
 </head>
 <body>
   <div class="app-shell">
     <aside class="sidebar" aria-label="Navegación principal">
-      <a class="brand" href="#inicio" aria-label="MAGGY, ir a inicio">MAG<span>GY</span><small>ELECTRONICAMA.COM / 8.0</small></a>
+      <a class="brand" href="#inicio" aria-label="MAGGY, ir a inicio">MAG<span>GY</span><small>ELECTRONICAMA.COM / 8.4</small></a>
       <div class="sidebar-label">DESCUBRE TU FRECUENCIA</div>
       <nav class="nav" id="main-nav">
         <button class="nav-item active" data-view="discover" type="button"><span class="nav-icon">◈</span> Explorar <span class="nav-arrow">↗</span></button>
@@ -57,7 +57,7 @@
       <header class="topbar">
         <button type="button" class="mobile-brand" id="mobile-menu" aria-expanded="false" aria-controls="mobile-nav" aria-label="Abrir menú">☰ <strong>MAG<span>GY</span></strong></button>
         <span class="topbar-heading"><span class="pulse-dot"></span> ESTACIÓN MUSICAL PERSONAL</span>
-        <span class="topbar-right">HECHO PARA TU UNIVERSO <span class="version-chip">V8.3.0</span></span>
+        <span class="topbar-right">HECHO PARA TU UNIVERSO <span class="version-chip">V8.4.0</span></span>
       </header>
       <nav class="mobile-nav hidden" id="mobile-nav" aria-label="Navegación móvil">
         <button data-view="discover" type="button">Explorar</button><button data-view="favorites" type="button">♡ Favoritos</button><button data-view="history" type="button">◷ Historial</button>
@@ -102,6 +102,16 @@
         <div class="loadmore-container"><button class="load-more hidden" id="load-more" type="button">CARGAR MÁS RESULTADOS ↓</button></div>
       </section>
 
+      <section class="maggy-section" id="momentos" aria-labelledby="moments-title">
+        <span class="eyebrow">TU DÍA, A TU RITMO</span><h2 id="moments-title">ELIGE TU <em>MOMENTO.</em></h2>
+        <p>Descubre música para cada actividad. Elige un ambiente y reproduce sus resultados con tu acceso activo.</p>
+        <div class="moment-grid">
+          <button type="button" data-query="ambient chillout"><span>☀</span><strong>Desconectar</strong><small>Ambient y calma</small></button>
+          <button type="button" data-query="energetic electronic workout"><span>ϟ</span><strong>Entrenar</strong><small>Energía en movimiento</small></button>
+          <button type="button" data-query="instrumental focus"><span>◎</span><strong>Concentrarte</strong><small>Sonidos instrumentales</small></button>
+          <button type="button" data-query="synthwave night drive"><span>☾</span><strong>Viajar</strong><small>Tu ruta nocturna</small></button>
+        </div>
+      </section>
       <section class="mix-section" aria-label="Recomendaciones rápidas">
         <div><span class="eyebrow">⚡ THE NEXT WAVE</span><h2>ENCUENTRA TU <em>ENERGÍA.</em></h2><p>Deja que el ritmo te lleve a otro lugar.</p></div>
         <div class="mix-buttons"><button type="button" data-query="melodic techno">MELODIC TECHNO ↗</button><button type="button" data-query="deep house">DEEP HOUSE ↗</button><button type="button" data-query="synthwave">SYNTHWAVE ↗</button></div>
@@ -120,7 +130,7 @@
       <section class="maggy-section" id="planes" aria-labelledby="plans-title">
         <span class="eyebrow">02 / APOYA LA ESTACIÓN</span><h2 id="plans-title">ELIGE TU <em>ÓRBITA.</em></h2>
         <p>Tu música y tus canales permanecen en este navegador, sin sincronización con otros dispositivos. Elige cómo apoyar Maggy.</p>
-        <div class="plans-grid"><article class="plan featured"><span>BIENVENIDA · UNA VEZ POR CUENTA</span><h3>1 € <small>/ 14 días</small></h3><p>14 días de acceso desde la confirmación del pago.</p><a href="/account">Gestionar bienvenida ↗</a></article><article class="plan"><span>MENSUAL</span><h3>6 € <small>/ un mes</small></h3><p>Renueva por un mes. Si pagas antes de vencer, se añade al periodo vigente.</p><a href="/account">Renovar acceso ↗</a></article></div>
+        <div class="plans-grid"><article class="plan featured"><span>BIENVENIDA · UNA VEZ POR CUENTA</span><h3>1 € <small>/ 14 días</small></h3><p>14 días de acceso desde la confirmación del pago.</p><a href="/account">Gestionar bienvenida ↗</a></article><article class="plan"><span>MENSUAL</span><h3>6 € <small>/ un mes</small></h3><p>Música por momentos, favoritos, canales privados y temporizador. Un mes de acceso; renovar antes de vencer amplía tu periodo.</p><a href="/account">Renovar acceso ↗</a></article></div>
         <p class="payment-note">Vista previa del catálogo disponible. La reproducción y las funciones personales requieren acceso de pago. Los pagos PayPal se verifican manualmente desde administración antes de activar el acceso. Sin renovación automática. Consulta tus fechas y pagos en <a href="/account">Mi cuenta</a>.</p>
         <a class="paypal-direct" href="https://paypal.me/IMarcosIlla" target="_blank" rel="noopener noreferrer">Elegir otro importe en PayPal ↗</a>
       </section>
@@ -130,8 +140,14 @@
 
   <section class="player hidden" id="player" aria-label="Reproductor musical">
     <div class="player-info"><div id="player-art" class="player-art"><span>♫</span></div><div class="player-details"><strong id="player-title">Sin reproducción</strong><small id="player-artist">Selecciona una canción</small></div><button class="player-favorite" id="player-favorite" aria-label="Guardar en favoritos" title="Añadir a favoritos">♡</button></div>
-    <div class="player-middle"><div class="player-controls"><button id="previous-track" type="button" aria-label="Anterior">⏮</button><button id="toggle-play" type="button" aria-label="Reproducir o pausar">▶</button><button id="next-track" type="button" aria-label="Siguiente">⏭</button></div><span id="player-message" class="player-message" role="status" aria-live="polite"></span></div>
+    <button id="player-expand" class="player-expand" type="button" aria-expanded="false" aria-controls="player-extra">Ampliar reproductor ↑</button><div class="player-middle"><div class="player-controls"><button id="previous-track" type="button" aria-label="Anterior">⏮</button><button id="toggle-play" type="button" aria-label="Reproducir o pausar">▶</button><button id="next-track" type="button" aria-label="Siguiente">⏭</button></div><span id="player-message" class="player-message" role="status" aria-live="polite"></span></div>
     <div id="player-media" class="player-media"></div>
+    <div id="player-extra" class="player-extra">
+      <div class="seek-controls"><button id="seek-back" type="button" aria-label="Retroceder 15 segundos">−15 s</button><button id="seek-forward" type="button" aria-label="Avanzar 15 segundos">+15 s</button></div>
+      <label class="sleep-control">Temporizador <select id="sleep-timer"><option value="0">Desactivado</option><option value="15">15 minutos</option><option value="30">30 minutos</option><option value="60">60 minutos</option></select></label>
+      <p id="sleep-status" role="status" aria-live="polite"></p>
+      <p class="iphone-hint">En iPhone puedes usar los controles de audio de Safari y, cuando estén disponibles, la pantalla bloqueada y AirPlay. Si el audio no arranca, pulsa reproducir.</p>
+    </div>
     <button id="player-close" class="player-close" aria-label="Cerrar reproductor" title="Cerrar">✕</button>
   </section>
 

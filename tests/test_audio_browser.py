@@ -39,7 +39,20 @@ def run():
         assert page.locator('.channel-card').count()==2
         page.locator('.channel-card').last.locator('button').first.click()
         page.wait_for_function("document.querySelector('audio')?.currentTime > 0")
+        page.set_viewport_size({'width':390,'height':844})
+        page.locator('#player-expand').click()
+        assert page.locator('#player-expand').get_attribute('aria-expanded')=='true'
+        assert page.locator('#player-extra').is_visible()
+        assert page.locator('#toggle-play').bounding_box()['height']>=60
+        page.locator('#sleep-timer').select_option('15')
+        assert '15 min' in page.locator('#sleep-status').inner_text()
+        page.locator('#sleep-timer').select_option('0')
+        page.locator('#seek-back').click()
+        assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+2')
+        page.screenshot(path='/tmp/maggy-iphone-player.png')
+        page.locator('#player-expand').click()
         page.locator('#toggle-play').click();page.wait_for_function("document.querySelector('audio')?.paused")
+        page.set_viewport_size({'width':1440,'height':1000})
         page.locator('[data-view="history"]').first.click();assert page.locator('.track-card').count()==1
         page.locator('[data-view="favorites"]').first.click();assert page.locator('.track-card').count()==1
         page.reload();page.locator('.track-card').first.wait_for()

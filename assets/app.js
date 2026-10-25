@@ -8,7 +8,7 @@
 await window.MaggySession.ready;
 const storageKey = name => window.MaggySession ? window.MaggySession.key(name) : name;
 
-const VERSION = '8.3.0';
+const VERSION = '8.4.0';
 const KEY = Object.freeze({ favorites: storageKey('electronicama_v7_favorites'), history: storageKey('electronicama_v7_history'), ads: storageKey('electronicama_ads_consent_v1') });
 const MAX_FAVORITES = 160;
 const MAX_HISTORY = 75;
@@ -189,11 +189,34 @@ async function requestSearch(query, append = false) {
   }
 }
 
+let sleepDeadline = 0;
+function updateSleepTimer() {
+  if (!sleepDeadline) return;
+  const remaining = sleepDeadline - Date.now();
+  if (remaining <= 0) {
+    sleepDeadline = 0;
+    state.playSerial += 1; // Cancel a pending resolve so it cannot start after the deadline.
+    state.audio?.pause();
+    byId('sleep-timer').value = '0';
+    byId('sleep-status').textContent = 'Temporizador terminado. Reproducción pausada.';
+  } else byId('sleep-status').textContent = `Se pausará en ${Math.ceil(remaining / 60000)} min.`;
+}
+function seekAudio(offset, absolute = false) {
+  const audio = state.audio;
+  if (!audio || !Number.isFinite(audio.duration) || audio.duration <= 0) return;
+  audio.currentTime = Math.min(audio.duration, Math.max(0, absolute ? offset : audio.currentTime + offset));
+  updateMediaPosition();
+}
+function updateMediaPosition() {
+  const audio = state.audio;
+  if (!navigator.mediaSession?.setPositionState || !audio || !Number.isFinite(audio.duration) || audio.duration <= 0) return;
+  try { navigator.mediaSession.setPositionState({duration: audio.duration, playbackRate: audio.playbackRate, position: Math.min(audio.duration, Math.max(0, audio.currentTime))}); } catch { /* Optional browser support. */ }
+}
 function destroyMedia() {
   if (state.audio) { state.audio.pause(); state.audio.removeAttribute('src'); state.audio.load(); state.audio = null; }
   byId('player-media').replaceChildren();
   if ('mediaSession' in navigator) {
-    try { navigator.mediaSession.playbackState = 'none'; navigator.mediaSession.metadata = null; } catch { /* no compatible */ }
+    try { navigator.mediaSession.playbackState = 'none'; navigator.mediaSession.metadata = null; navigator.mediaSession.setPositionState?.(); } catch { /* no compatible */ }
   }
 }
 async function playTrack(track, queue = filteredTracks()) {
@@ -230,8 +253,10 @@ async function playTrack(track, queue = filteredTracks()) {
 function startAudio(url) {
   if (!safeImage(url)) { setStatus('Enlace de audio no válido.'); return; }
   const audio = document.createElement('audio');
-  audio.controls = true; audio.autoplay = true; audio.preload = 'metadata'; audio.src = url;
-  audio.addEventListener('ended', () => playNext());
+  audio.controls = true; audio.setAttribute('playsinline', ''); audio.autoplay = true; audio.preload = 'metadata'; audio.src = url;
+  audio.addEventListener('ended', () => { const expired = sleepDeadline && Date.now() >= sleepDeadline; updateSleepTimer(); if (!expired) playNext(); });
+  audio.addEventListener('timeupdate', updateSleepTimer);
+  for (const name of ['loadedmetadata', 'timeupdate', 'ratechange', 'seeked']) audio.addEventListener(name, updateMediaPosition);
   audio.addEventListener('play', () => {
     byId('toggle-play').textContent = 'Ⅱ'; byId('toggle-play').setAttribute('aria-label', 'Pausar');
     setStatus('Reproduciendo'); mediaSessionPlayback('playing');
@@ -254,13 +279,16 @@ function mediaSessionPlayback(value) {
 function setupAudioMediaSession(track) {
   if (!track || !('mediaSession' in navigator)) return;
   try {
-    const artwork = safeImage(track.thumbnail) ? [{src: safeImage(track.thumbnail), sizes: '512x512', type: 'image/jpeg'}] : [];
+    const artwork = safeImage(track.thumbnail) ? [{src: safeImage(track.thumbnail), }] : [];
     if ('MediaMetadata' in window) navigator.mediaSession.metadata = new MediaMetadata({
       title: track.title, artist: track.channel || 'Artista', album: 'MAGGY', artwork
     });
     for (const [name, fn] of [
-      ['play', () => state.audio?.play()], ['pause', () => state.audio?.pause()],
-      ['nexttrack', playNext], ['previoustrack', playPrevious]
+      ['play', togglePlayFromSystem], ['pause', () => state.audio?.pause()],
+      ['nexttrack', playNext], ['previoustrack', playPrevious],
+      ['seekbackward', details => seekAudio(-(details.seekOffset || 15))],
+      ['seekforward', details => seekAudio(details.seekOffset || 15)],
+      ['seekto', details => { if (Number.isFinite(details.seekTime)) seekAudio(details.seekTime, true); }]
     ]) {
       try { navigator.mediaSession.setActionHandler(name, fn); } catch { /* no compatible */ }
     }
@@ -268,6 +296,7 @@ function setupAudioMediaSession(track) {
 }
 function playNext() { if (state.currentIndex < state.queue.length - 1) playTrack(state.queue[state.currentIndex + 1], state.queue); else setStatus('Fin de la lista.'); }
 function playPrevious() { if (state.currentIndex > 0) playTrack(state.queue[state.currentIndex - 1], state.queue); }
+function togglePlayFromSystem() { state.audio?.play().catch(() => setStatus('Pulsa reproducir en Maggy para continuar.')); }
 function togglePlay() {
   if (state.audio) {
     if (state.audio.paused) state.audio.play().catch(() => setStatus('No se pudo iniciar el audio.'));
@@ -279,6 +308,7 @@ function closePlayer() {
   state.playSerial += 1;
   destroyMedia(); state.currentTrack = null; state.queue = []; state.currentIndex = -1;
   byId('player').classList.add('hidden'); setStatus('');
+  sleepDeadline = 0; byId('sleep-timer').value = '0'; byId('sleep-status').textContent = '';
 }
 
 function advertisingConsent(value) {
@@ -341,6 +371,19 @@ function init() {
     if (!window.confirm('¿Borrar el historial guardado en este navegador?')) return;
     state.history = []; writeList(KEY.history, []); render(); message('Historial borrado.');
   });
+  byId('player-expand').addEventListener('click', () => {
+    const expanded = byId('player').classList.toggle('expanded');
+    byId('player-expand').setAttribute('aria-expanded', String(expanded));
+    byId('player-expand').textContent = expanded ? 'Reducir reproductor ↓' : 'Ampliar reproductor ↑';
+  });
+  byId('seek-back').addEventListener('click', () => seekAudio(-15));
+  byId('seek-forward').addEventListener('click', () => seekAudio(15));
+  byId('sleep-timer').addEventListener('change', event => {
+    sleepDeadline = Number(event.target.value) ? Date.now() + Number(event.target.value) * 60000 : 0;
+    byId('sleep-status').textContent = ''; updateSleepTimer();
+  });
+  setInterval(updateSleepTimer, 1000);
+  document.addEventListener('visibilitychange', updateSleepTimer);
   byId('previous-track').addEventListener('click', playPrevious);
   byId('next-track').addEventListener('click', playNext);
   byId('toggle-play').addEventListener('click', togglePlay);
