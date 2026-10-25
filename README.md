@@ -33,3 +33,9 @@ Maggy se paga por PayPal desde la cuenta (1 EUR por 14 días de bienvenida, 6 EU
 ### Directorio musical 8.5
 
 La portada incorpora SoundCloud, YouTube, Free Music Archive, dig.ccMixter, Musopen, Wikimedia Commons y Radio Garden como enlaces externos con información sobre opciones gratuitas y límites. SoundCloud, YouTube, Spotify y Commons reciben la búsqueda actual (también al editarla antes de enviar). No se cargan SDK, iframes, APIs ni audio de estos servicios. El directorio es público, los pagos de Maggy y Spotify siguen separados y la reproducción propia de Maggy mantiene sus controles de acceso.
+
+### Mezcla 8.6
+
+Mezcla es un catálogo independiente de Audius/Archive: grabaciones de Wikimedia Commons con licencias CC0, dominio público, CC BY o CC BY-SA, y emisoras HTTPS MP3/AAC de Radio Browser. Incluye créditos, enlaces de licencia/fuente, indicación de radio en directo y logo de Maggy cuando falta la portada. Ambas API son públicas, sin claves privadas; no se extrae audio de SoundCloud, YouTube ni Spotify. El acceso propio de Maggy continúa siendo de pago. Las grabaciones dependen del formato que admita el navegador; las emisoras emiten en directo sin búsqueda por canción ni avance temporal.
+
+Validación 8.6.1: consultas reales desde Vercel a Commons y Radio Browser; descarga parcial de tres grabaciones Commons (206, audio/x-wav) y reproducción decodificada de una de ellas en Chromium con pantalla móvil. Los servidores de audio reciben un User-Agent identificable de Maggy; Commons lo requiere para servir estos archivos. Los datos de prueba, cookies y credenciales no se guardan en el repositorio.

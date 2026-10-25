@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""MAGGY PRO 8.5.0 — API musical y distribución web.
+"""MAGGY PRO 8.6.1 — API musical y distribución web.
 
 Proyecto y edición: Iván Marcos Illa.
 El código de servicios externos y sus marcas pertenece a sus titulares.
@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import ipaddress
+import html
 import logging
 import os
 import re
@@ -29,7 +30,7 @@ app = Flask(__name__, static_folder=os.path.join(ROOT, "assets"), static_url_pat
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 app.logger.setLevel(logging.INFO)
 
-VERSION = "8.5.0"
+VERSION = "8.6.1"
 AUDIUS_APP_NAME = os.getenv("AUDIUS_APP_NAME", "electronicama")
 SEARCH_CACHE_SECONDS = max(15, min(int(os.getenv("SEARCH_CACHE_SECONDS", "300")), 3600))
 ARCHIVE_CACHE_SECONDS = max(60, min(int(os.getenv("ARCHIVE_CACHE_SECONDS", "3600")), 86400))
@@ -44,6 +45,8 @@ MAX_SEARCH_LENGTH = 90
 _cache_lock = threading.RLock()
 _search_cache: OrderedDict[tuple, tuple[float, list]] = OrderedDict()
 _archive_cache: OrderedDict[str, tuple[float, str]] = OrderedDict()
+_commons_cache: OrderedDict[str, tuple] = OrderedDict()
+_radio_cache: OrderedDict[str, tuple] = OrderedDict()
 _rate_lock = threading.Lock()
 _request_buckets: dict[tuple[str, str], deque] = {}
 
@@ -142,7 +145,7 @@ def relevance(item: dict, query: str) -> float:
 
 
 def fetch_json(url, params=None, timeout=REQUEST_TIMEOUT):
-    response = requests.get(url, params=params, timeout=timeout)
+    response = requests.get(url, params=params, timeout=timeout, headers={"User-Agent": f"Maggy/{VERSION} (https://electronicama.com; music catalogue)"})
     response.raise_for_status()
     return response.json()
 
@@ -245,13 +248,128 @@ def search_audius(query: str, limit: int = 10) -> list:
 
 
 
+def commons_track(page):
+    info = (page.get("imageinfo") or [{}])[0]
+    metadata = info.get("extmetadata") or {}
+    def text(name):
+        return html.unescape(re.sub(r"<[^>]+>", " ", str((metadata.get(name) or {}).get("value", "")))).strip()
+    license_name = text("LicenseShortName")
+    if not re.fullmatch(r"(?:CC0|Public domain|PD|CC BY(?:-SA)? [1-4]\.\d)", license_name, re.I):
+        return None
+    url = info.get("url", "")
+    if urlparse(url).scheme != "https" or urlparse(url).hostname != "upload.wikimedia.org" or info.get("mime") not in {"audio/mpeg", "audio/ogg", "audio/flac", "audio/x-flac", "audio/wav", "audio/x-wav", "audio/mp4"}:
+        return None
+    ident = str(page.get("pageid", ""))
+    if not ident.isdigit(): return None
+    artist = text("Artist") or text("Credit") or "Autor indicado en Wikimedia Commons"
+    title = str(page.get("title", "Grabación musical")).removeprefix("File:")
+    title = re.sub(r"\.(ogg|oga|opus|mp3|wav|flac|m4a)$", "", title, flags=re.I).replace("_", " ")
+    page_url = "https://commons.wikimedia.org/?curid=" + ident
+    license_url = (metadata.get("LicenseUrl") or {}).get("value", "")
+    if not str(license_url).startswith("https://creativecommons.org/"):
+        license_url = page_url
+    track = {"id": "commons_" + ident, "title": title[:180], "channel": artist[:120], "source": "COMMONS", "thumbnail": "",
+             "mime": info["mime"], "license": license_name, "license_url": license_url,
+             "attribution": text("Attribution") or artist, "page_url": page_url, "url": page_url, "stream_url": url}
+    cached_put(_commons_cache, ident, track)
+    return track
+
+
+def search_commons(query, limit=16, page=1):
+    params = {"action": "query", "format": "json", "formatversion": 2, "generator": "search",
+              "gsrsearch": "filetype:audio " + query, "gsrnamespace": 6, "gsrlimit": limit,
+              "gsroffset": (page-1)*limit, "prop": "imageinfo", "iiprop": "url|mime|extmetadata"}
+    try:
+        response = fetch_json("https://commons.wikimedia.org/w/api.php", params)
+        pages = response.get("query", {}).get("pages", [])
+        return [track for page in sorted(pages, key=lambda p: p.get("index", 0)) if (track := commons_track(page))]
+    except (requests.RequestException, ValueError, TypeError) as exc:
+        app.logger.warning("Commons search failed: %s", type(exc).__name__)
+        return []
+
+
+def resolve_commons(ident):
+    if not re.fullmatch(r"[0-9]{1,12}", ident): raise ValueError("Identificador no válido")
+    track = cached_get(_commons_cache, ident, 3600)
+    if track: return track
+    result = fetch_json("https://commons.wikimedia.org/w/api.php", {"action":"query", "format":"json", "formatversion":2,
+                        "pageids": ident, "prop":"imageinfo", "iiprop":"url|mime|extmetadata"})
+    for page in result.get("query", {}).get("pages", []):
+        track = commons_track(page)
+        if track: return track
+    raise LookupError("No hay audio con licencia compatible")
+
+
+RADIO_API_HOSTS = ("de1.api.radio-browser.info", "nl1.api.radio-browser.info")
+
+
+def radio_track(station):
+    ident = str(station.get("stationuuid", ""))
+    if not re.fullmatch(r"[a-fA-F0-9-]{36}", ident): return None
+    stream = str(station.get("url_resolved") or station.get("url") or "")
+    try:
+        parsed = urlparse(stream)
+        host = (parsed.hostname or "").lower()
+        if parsed.scheme != "https" or parsed.username or parsed.password or not host or host in {"localhost", "localhost.localdomain"} or host.endswith((".local", ".internal")):
+            return None
+        try:
+            if not ipaddress.ip_address(host).is_global: return None
+        except ValueError: pass
+        if parsed.path.lower().endswith((".m3u", ".pls", ".m3u8")): return None
+    except ValueError: return None
+    if str(station.get("lastcheckok", "")) != "1" or str(station.get("codec", "")).upper() not in {"MP3", "AAC", "AAC+", "AAC-LC"}: return None
+    page_url = "https://www.radio-browser.info/history/" + ident
+    track = {"id":"radio_" + ident, "title":str(station.get("name") or "Radio en directo").strip()[:180],
+             "channel":"En directo · " + str(station.get("country") or "Radio internacional")[:90], "source":"RADIO",
+             "thumbnail":str(station.get("favicon") or ""), "stream_url":stream, "page_url":page_url, "url":page_url,
+             "attribution":"Emisora en directo. Catálogo de Radio Browser; los contenidos y condiciones dependen de la emisora."}
+    cached_put(_radio_cache, ident, track)
+    return track
+
+
+def search_radio(query, limit=12, page=1):
+    for host in RADIO_API_HOSTS:
+        try:
+            stations = fetch_json(f"https://{host}/json/stations/search", {"name":query, "limit":limit*2, "offset":(page-1)*limit*2,
+                                  "hidebroken":"true", "order":"clickcount", "reverse":"true"}, timeout=(2,3))
+            if not isinstance(stations, list): continue
+            return [track for station in stations if (track := radio_track(station))][:limit]
+        except (requests.RequestException, ValueError, TypeError): continue
+    return []
+
+
+def resolve_radio(ident):
+    if not re.fullmatch(r"[a-fA-F0-9-]{36}", ident): raise ValueError("Identificador no válido")
+    hit = cached_get(_radio_cache, ident, 1800)
+    if hit: return hit
+    for host in RADIO_API_HOSTS:
+        try:
+            stations = fetch_json(f"https://{host}/json/stations/byuuid/{ident}", timeout=(2,3))
+            for station in stations:
+                track = radio_track(station)
+                if track: return track
+        except (requests.RequestException, ValueError, TypeError): continue
+    raise LookupError("No hay una emisión HTTPS compatible")
+
+
 def multi_search(query: str, page: int = 1, source: str = "ALL") -> list:
     cache_key = (normalize(query), page, source)
     ranking_query = provider_query(query)
     hit = cached_get(_search_cache, cache_key, SEARCH_CACHE_SECONDS)
     if hit is not None:
         return hit
-    if source == "AUDIUS":
+    if source == "MIX":
+        candidates = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            jobs = [pool.submit(search_commons, query, page=page), pool.submit(search_radio, query, page=page)]
+            for job in concurrent.futures.as_completed(jobs):
+                try: candidates.extend(job.result())
+                except Exception: app.logger.warning("A mix provider failed")
+    elif source == "RADIO":
+        candidates = search_radio(query, page=page)
+    elif source == "COMMONS":
+        candidates = search_commons(query, page=page)
+    elif source == "AUDIUS":
         candidates = search_audius(query, limit=10) if page == 1 else []
     elif source == "ARCHIVE" or page > 1:
         candidates = search_archive(query, limit=15, page=page)
@@ -268,10 +386,10 @@ def multi_search(query: str, page: int = 1, source: str = "ALL") -> list:
     seen = set()
     scored = []
     for item in candidates:
-        if item.get("source") not in {"ARCHIVE", "AUDIUS"}:
+        if item.get("source") not in {"ARCHIVE", "AUDIUS", "COMMONS", "RADIO"}:
             continue
         ident = (item.get("source"), item.get("id"))
-        score = relevance(item, ranking_query)
+        score = 1 if item.get("source") in {"COMMONS", "RADIO"} else relevance(item, ranking_query)
         if score < 0 or ident in seen:
             continue
         seen.add(ident)
@@ -326,7 +444,7 @@ def pwa_service_worker():
 @app.get("/health")
 def health():
     return jsonify({"status": "ok", "version": VERSION,
-                    "providers": ["ARCHIVE", "AUDIUS"],
+                    "providers": ["ARCHIVE", "AUDIUS", "COMMONS", "RADIO"],
                     "search_cache": "instance-local"})
 
 
@@ -340,7 +458,7 @@ def catalogue_response(tracks):
     if user and user_public(user)["active"]:
         return tracks
     # A whitelist prevents cached/upstream playback links leaking into previews.
-    fields = {"id", "title", "channel", "source", "thumbnail"}
+    fields = {"id", "title", "channel", "source", "thumbnail", "mime", "license", "license_url", "attribution", "page_url"}
     return [{key: value for key, value in track.items() if key in fields} | {"locked": True} for track in tracks]
 
 
@@ -356,7 +474,7 @@ def api_search():
     except ValueError:
         page = 1
     source = request.args.get("source", "ALL").upper()
-    if source not in {"ALL", "ARCHIVE", "AUDIUS"}:
+    if source not in {"ALL", "ARCHIVE", "AUDIUS", "COMMONS", "RADIO", "MIX"}:
         return jsonify({"error": "Plataforma no válida"}), 400
     tracks = multi_search(query, page=page) if source == "ALL" else multi_search(query, page=page, source=source)
     return jsonify(catalogue_response(tracks))
@@ -391,12 +509,27 @@ def api_play(item_id):
     """Authorize native playback; Audius uses bounded, same-origin byte ranges."""
     if not rate_allowed("play", 90):
         return jsonify({"error": "Límite temporal de reproducción"}), 429
+    if item_id.startswith("radio_"):
+        try:
+            return redirect(resolve_radio(item_id[6:])["stream_url"], code=302)
+        except ValueError:
+            return jsonify({"error": "Identificador no válido"}), 400
+        except LookupError:
+            return jsonify({"error": "Emisora no disponible"}), 404
+    if item_id.startswith("commons_"):
+        try:
+            track = resolve_commons(item_id[8:])
+            return relay_audio(track["stream_url"], track["mime"])
+        except ValueError:
+            return jsonify({"error": "Identificador no válido"}), 400
+        except (requests.RequestException, LookupError, TypeError):
+            return jsonify({"error": "Grabación no disponible"}), 404
     if item_id.startswith("audius_"):
         ident = item_id[7:]
         if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", ident):
             return jsonify({"error": "Identificador no válido"}), 400
         host = "discoveryprovider2.audius.co" if request.args.get("retry") == "1" else "api.audius.co"
-        return relay_audius(f"https://{host}/v1/tracks/{quote(ident)}/stream?app_name={quote(AUDIUS_APP_NAME)}")
+        return relay_audio(f"https://{host}/v1/tracks/{quote(ident)}/stream?app_name={quote(AUDIUS_APP_NAME)}")
     if item_id.startswith("archive_"):
         try:
             ident = item_id[8:]
@@ -423,7 +556,7 @@ def allowed_stream_url(url: str) -> bool:
             return False
         except ValueError:
             pass
-        return (host == AUDIUS_STORAGE_HOST or host == "archive.org" or host.endswith(".archive.org")
+        return (host == AUDIUS_STORAGE_HOST or host == "upload.wikimedia.org" or host == "archive.org" or host.endswith(".archive.org")
                 or host == "audius.co" or host.endswith(".audius.co"))
     except ValueError:
         return False
@@ -433,7 +566,7 @@ def _safe_upstream(url: str, headers: dict):
     for _ in range(4):
         if not allowed_stream_url(url):
             raise ValueError("Destino no permitido")
-        response = requests.get(url, headers=headers, stream=True,
+        response = requests.get(url, headers={"User-Agent": f"Maggy/{VERSION} (https://electronicama.com; music catalogue)", **headers}, stream=True,
                                 allow_redirects=False, timeout=REQUEST_TIMEOUT)
         if response.status_code not in (301, 302, 303, 307, 308):
             return response
@@ -443,7 +576,7 @@ def _safe_upstream(url: str, headers: dict):
     raise ValueError("Demasiadas redirecciones")
 
 
-def relay_audius(url):
+def relay_audio(url, expected_mime="audio/mpeg"):
     """Small, bounded byte ranges: Safari can seek without cross-site redirects."""
     requested = request.headers.get("Range", "bytes=0-")
     match = re.fullmatch(r"bytes=(\d{0,12})-(\d{0,12})", requested)
@@ -466,14 +599,15 @@ def relay_audius(url):
             return Response(status=416, headers=headers)
         size = int(upstream.headers.get("Content-Length", "0") or 0)
         kind = upstream.headers.get("Content-Type", "application/octet-stream").split(";")[0].lower()
-        if upstream.status_code not in (200, 206) or kind not in {"audio/mpeg", "audio/mp3", "audio/aac", "audio/mp4", "audio/x-m4a", "application/octet-stream"}:
+        if upstream.status_code not in (200, 206) or not (kind.startswith("audio/") or kind in {"application/ogg", "application/octet-stream"}):
             upstream.close()
-            return jsonify({"error": "Audius no entregó audio reproducible", "code": "provider_unavailable"}), 502
+            return jsonify({"error": "La fuente no entregó audio reproducible", "code": "provider_unavailable", "provider_status": upstream.status_code, "provider_type": kind}), 502
         if size > AUDIO_CHUNK_BYTES or (upstream.status_code == 206 and not upstream.headers.get("Content-Range")):
             upstream.close()
-            return jsonify({"error": "Audius no admite la descarga parcial solicitada", "code": "provider_range_error"}), 502
+            return jsonify({"error": "La fuente no admite la descarga parcial solicitada", "code": "provider_range_error"}), 502
         forwarded = {key: upstream.headers[key] for key in ["Content-Type", "Content-Length", "Content-Range", "Accept-Ranges"] if key in upstream.headers}
-        if kind == "application/octet-stream": forwarded["Content-Type"] = "audio/mpeg"
+        if kind == "application/octet-stream": forwarded["Content-Type"] = expected_mime
+        elif kind == "application/ogg": forwarded["Content-Type"] = "audio/ogg"
         def chunks():
             total = 0
             try:
@@ -485,8 +619,8 @@ def relay_audius(url):
                 upstream.close()
         return Response(stream_with_context(chunks()), status=upstream.status_code, headers=forwarded)
     except (requests.RequestException, ValueError, OSError) as exc:
-        app.logger.warning("Audius relay failed: %s", type(exc).__name__)
-        return jsonify({"error": "No se pudo conectar con el audio de Audius", "code": "provider_connection_error"}), 502
+        app.logger.warning("Audio relay failed: %s", type(exc).__name__)
+        return jsonify({"error": "No se pudo conectar con el audio de la fuente", "code": "provider_connection_error"}), 502
 
 
 @app.get("/api/admin/audio-diagnostic/<track_id>")
@@ -501,7 +635,8 @@ def audio_diagnostic(track_id):
         return jsonify({"error": "Identificador no válido"}), 400
     start = time.monotonic()
     try:
-        upstream = _safe_upstream(f"https://api.audius.co/v1/tracks/{quote(track_id)}/stream?app_name={quote(AUDIUS_APP_NAME)}", {"Range": "bytes=0-2047", "Accept-Encoding": "identity"})
+        url = resolve_commons(track_id[8:])["stream_url"] if track_id.startswith("commons_") else f"https://api.audius.co/v1/tracks/{quote(track_id)}/stream?app_name={quote(AUDIUS_APP_NAME)}"
+        upstream = _safe_upstream(url, {"Range": "bytes=0-2047", "Accept-Encoding": "identity"})
         try:
             data = next(upstream.iter_content(2048), b"")
             return jsonify(authorization="ok", provider_status=upstream.status_code,
@@ -509,7 +644,7 @@ def audio_diagnostic(track_id):
                            elapsed_ms=round((time.monotonic()-start)*1000))
         finally:
             upstream.close()
-    except (requests.RequestException, ValueError, OSError) as exc:
+    except (requests.RequestException, ValueError, LookupError, OSError) as exc:
         return jsonify(authorization="ok", provider_error=type(exc).__name__, elapsed_ms=round((time.monotonic()-start)*1000)), 502
 
 

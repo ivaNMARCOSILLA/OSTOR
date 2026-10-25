@@ -31,7 +31,8 @@ def run():
             else:
                 route.fulfill(body=audio.getvalue(),content_type='audio/wav')
         page.route('**/api/play/*',serve_audio)
-        page.route('**/api/search?*',lambda route:route.fulfill(json=valid+removed))
+        mix=[{'id':'commons_123','title':'Libre one','channel':'Composer','source':'COMMONS','license':'CC BY 4.0','attribution':'Composer','page_url':'https://commons.wikimedia.org/?curid=123'}, {'id':'commons_456','title':'Libre two','channel':'Composer','source':'COMMONS','license':'Public domain','attribution':'Composer'}]
+        page.route('**/api/search?*',lambda route:route.fulfill(json=mix if 'source=MIX' in route.request.url else valid+removed))
         page.goto(BASE_URL+'/');page.locator('#consent-decline').click()
         page.locator('.track-card').first.wait_for()
         assert page.locator('.track-card').count()==2
@@ -71,6 +72,19 @@ def run():
         page.reload();page.locator('.track-card').first.wait_for()
         assert page.locator('#profile-name').input_value()=='Pilot'
         assert page.locator('.channel-card').count()==2
+        page.locator('[data-source="MIX"]').click()
+        page.wait_for_function("document.querySelectorAll('#track-grid .track-credit').length === 2")
+        assert page.locator('#track-grid').get_attribute('class').endswith('mix-list')
+        assert page.locator('.track-card .source-tag').all_text_contents()==['MEZCLA · COMMONS','MEZCLA · COMMONS']
+        page.locator('#play-mix').click()
+        page.wait_for_function("document.querySelector('audio')?.currentTime > 0")
+        assert page.locator('#player-title').inner_text()=='Libre one'
+        page.evaluate("document.querySelector('audio').currentTime = 9.9")
+        page.wait_for_function("document.querySelector('#player-title').textContent === 'Libre two'")
+        page.wait_for_function("document.querySelector('audio')?.currentTime > 0")
+        assert page.locator('video,iframe').count()==0
+        assert page.locator('#track-grid img[alt="Logo de Maggy"]').count()==2
+        page.locator('#player-close').click()
         for width in [1440,768,390,320]:
             page.set_viewport_size({'width':width,'height':900})
             assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+2'),width

@@ -8,18 +8,19 @@
 await window.MaggySession.ready;
 const storageKey = name => window.MaggySession ? window.MaggySession.key(name) : name;
 
-const VERSION = '8.5.0';
+const VERSION = '8.6.1';
 const KEY = Object.freeze({ favorites: storageKey('electronicama_v7_favorites'), history: storageKey('electronicama_v7_history'), ads: storageKey('electronicama_ads_consent_v1') });
 const MAX_FAVORITES = 160;
 const MAX_HISTORY = 75;
-const SOURCE_NAMES = { AUDIUS: 'AUDIUS', ARCHIVE: 'ARCHIVE' };
+const SOURCE_NAMES = { AUDIUS: 'AUDIUS', ARCHIVE: 'ARCHIVE', COMMONS: 'MEZCLA · COMMONS', RADIO: 'MEZCLA · RADIO EN DIRECTO' };
 const byId = id => document.getElementById(id);
 
-const supportedTrack = track => ['ARCHIVE', 'AUDIUS'].includes(track?.source);
+const supportedTrack = track => ['ARCHIVE', 'AUDIUS', 'COMMONS', 'RADIO'].includes(track?.source);
 
 const state = {
   view: 'discover', source: 'ALL', query: 'electronic music', page: 1,
   results: [], favorites: readList(KEY.favorites), history: readList(KEY.history),
+  mixResults: [], mixQuery: 'piano', mixPage: 1, mixLoading: false, mixRequest: null, mixLoaded: false,
   loading: false, request: null, currentTrack: null, queue: [], currentIndex: -1,
   audio: null, playSerial: 0
 };
@@ -36,6 +37,7 @@ function safeImage(src) { try { const url = new URL(src); return url.protocol ==
 function filteredTracks() {
   const base = state.view === 'favorites' ? state.favorites : state.view === 'history' ? state.history : state.results;
   const available = base.filter(supportedTrack);
+  if (state.source === 'MIX') return state.mixResults.filter(supportedTrack);
   return state.source === 'ALL' ? available : available.filter(track => track.source === state.source);
 }
 function isFavorite(id) { return state.favorites.some(track => track.id === id); }
@@ -44,7 +46,7 @@ function setStatus(text) { byId('player-message').textContent = text || ''; }
 function emptyNode(tag, className, text) { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = String(text); return node; }
 function compactTrack(track) {
   const result = {};
-  for (const key of ['id', 'title', 'channel', 'description', 'source', 'thumbnail', 'url', 'stream_url']) {
+  for (const key of ['id', 'title', 'channel', 'description', 'source', 'thumbnail', 'url', 'stream_url', 'mime', 'license', 'license_url', 'attribution', 'page_url']) {
     if (typeof track[key] === 'string') result[key] = track[key].slice(0, 1200);
   }
   return result;
@@ -68,12 +70,15 @@ function toggleFavorite(track) {
   }
   render();
 }
-function cover(src, alt, fallback = '♫') {
-  if (!safeImage(src)) return emptyNode('span', 'cover-fallback', fallback);
-  const img = document.createElement('img');
-  img.src = safeImage(src); img.alt = alt; img.loading = 'lazy'; img.decoding = 'async';
-  img.referrerPolicy = 'no-referrer';
-  img.addEventListener('error', () => img.replaceWith(emptyNode('span', 'cover-fallback', '♫')));
+function maggyCover() {
+  const img = document.createElement('img'); img.src = '/assets/app-icon-192.png?v=8.6.1'; img.alt = 'Logo de Maggy'; img.loading = 'lazy';
+  img.addEventListener('error', () => img.replaceWith(emptyNode('span', 'cover-fallback', 'MAGGY')), {once:true});
+  return img;
+}
+function cover(src, alt) {
+  if (!safeImage(src)) return maggyCover();
+  const img = document.createElement('img'); img.src = safeImage(src); img.alt = alt; img.loading = 'lazy'; img.decoding = 'async';
+  img.referrerPolicy = 'no-referrer'; img.addEventListener('error', () => img.replaceWith(maggyCover()), {once:true});
   return img;
 }
 function trackCard(track, list) {
@@ -95,7 +100,17 @@ function trackCard(track, list) {
   title.type = 'button'; title.title = track.title;
   title.addEventListener('click', () => playTrack(track, list));
   const artist = emptyNode('p', 'track-artist', track.channel || 'Artista desconocido');
-  details.append(top, title, artist); card.append(main, details);
+  details.append(top, title, artist);
+  if (['COMMONS', 'RADIO'].includes(track.source)) {
+    const credit = emptyNode('details', 'track-credit');
+    credit.append(emptyNode('summary', '', track.source === 'RADIO' ? 'Emisora y fuente' : `Autor y licencia · ${track.license || 'Ver fuente'}`), emptyNode('p', '', track.attribution || track.channel));
+    for (const [href, label] of [[track.page_url, 'Grabación original ↗'], [track.license_url, 'Licencia ↗']]) {
+      if (!safeImage(href)) continue;
+      const link = emptyNode('a', '', label); link.href = href; link.target = '_blank'; link.rel = 'noopener noreferrer'; credit.append(link);
+    }
+    details.append(credit);
+  }
+  card.append(main, details);
   return card;
 }
 function render() {
@@ -103,12 +118,15 @@ function render() {
   const list = filteredTracks();
   const grid = byId('track-grid');
   grid.replaceChildren();
+  grid.classList.toggle('mix-list', state.source === 'MIX');
+  byId('mix-intro').classList.toggle('hidden', state.source !== 'MIX');
+  byId('play-mix').disabled = list.length === 0;
   const titles = {
     discover: ['EXPLORA EL ', 'SONIDO', 'Explora los sonidos que marcan tu ritmo.'],
     favorites: ['TUS ', 'FAVORITOS', 'Guardados únicamente en este navegador.'],
     history: ['TU ', 'HISTORIAL', 'Tu música escuchada recientemente.']
   };
-  const [first, emph, subtitle] = titles[state.view];
+  const [first, emph, subtitle] = state.view === 'discover' && state.source === 'MIX' ? ['TU ', 'MEZCLA', 'Otras fuentes: grabaciones libres y radios en directo · solo audio.'] : titles[state.view];
   const heading = byId('section-title');
   heading.replaceChildren(document.createTextNode(first), emptyNode('em', '', emph));
   byId('section-subtitle').textContent = subtitle;
@@ -123,7 +141,8 @@ function render() {
     button.classList.toggle('active', button.dataset.source === state.source);
     button.setAttribute('aria-pressed', String(button.dataset.source === state.source));
   });
-  if (!list.length && !state.loading) {
+  byId('result-status').classList.toggle('hidden', state.source === 'MIX');
+  if (!list.length && !(state.source === 'MIX' ? state.mixLoading : state.loading)) {
     const empty = emptyNode('div', 'empty-state');
     const title = state.view === 'favorites' ? 'TODAVÍA NO HAY FAVORITOS' : state.view === 'history' ? 'TODAVÍA NO HAY HISTORIAL' : 'SIN RESULTADOS';
     empty.append(emptyNode('strong', '', title), emptyNode('p', '', state.view === 'discover' ? 'Prueba con otro artista, canción o estilo.' : 'Elige una canción y vuelve aquí.'));
@@ -133,12 +152,14 @@ function render() {
     for (const track of list) frag.append(trackCard(track, list));
     grid.append(frag);
   }
-  byId('load-more').classList.toggle('hidden', state.view !== 'discover' || state.source === 'AUDIUS' || state.results.length === 0 || state.page >= 10);
+  byId('load-more').classList.toggle('hidden', state.source === 'MIX' ? !list.length || state.mixPage >= 10 : state.view !== 'discover' || state.source === 'AUDIUS' || state.results.length === 0 || state.page >= 10);
+  if (state.source === 'MIX') byId('load-more').disabled = state.mixLoading;
 }
 function goView(view) {
   if (!['discover', 'favorites', 'history'].includes(view)) return;
   if (view !== 'discover' && window.MaggySession && !window.MaggySession.requireAccess()) return;
   state.view = view;
+  if (view !== 'discover' && state.source === 'MIX') state.source = 'ALL';
   byId('mobile-nav').classList.add('hidden');
   byId('mobile-menu').setAttribute('aria-expanded', 'false');
   message(view === 'favorites' ? 'Tus canciones guardadas en este dispositivo.' : view === 'history' ? 'Las últimas canciones que has escuchado.' : `Explorando: ${state.query}`);
@@ -161,12 +182,13 @@ function updateExternalSearch(query) {
 }
 const searchMemory = new Map();
 async function requestSearch(query, append = false) {
+  if (state.source === 'MIX') return requestMixSearch(query, append);
   query = String(query || '').trim().replace(/\s+/g, ' ').slice(0, 90);
   if (!query) { message('Escribe un artista o una canción.'); return; }
   state.request?.abort();
   const controller = new AbortController(); state.request = controller;
   state.view = 'discover';
-  if (!append) { state.query = query; state.page = 1; state.results = []; state.source = 'ALL'; }
+  if (!append) { state.query = query; state.page = 1; state.results = []; state.source = state.source === 'MIX' ? 'MIX' : 'ALL'; }
   const page = state.page;
   state.loading = true;
   byId('search-button').disabled = true; byId('load-more').disabled = true;
@@ -205,6 +227,36 @@ async function requestSearch(query, append = false) {
   if (append && !received && !failures) state.page = 10;
   message(`${state.results.length} resultados para «${query}»${failures ? '. Una plataforma no respondió; puedes volver a buscar.' : ''}`);
   render();
+}
+
+async function requestMixSearch(query = 'piano', append = false) {
+  query = String(query).trim().replace(/\s+/g, ' ').slice(0, 90);
+  if (!query) return;
+  state.mixRequest?.abort();
+  const controller = new AbortController(); state.mixRequest = controller;
+  if (!append) { state.mixResults = []; state.mixPage = 1; state.mixQuery = query; }
+  state.mixLoading = true; state.view = 'discover'; state.source = 'MIX';
+  byId('mix-query').value = query; byId('search-input').value = query; updateExternalSearch(query);
+  byId('mix-status').textContent = 'Buscando grabaciones libres y emisoras…';
+  render();
+  const deadline = setTimeout(() => controller.abort(), 14000);
+  try {
+    const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&page=${state.mixPage}&source=MIX`, {signal: controller.signal});
+    if (!response.ok) throw new Error('No se pudo consultar esta fuente. Inténtalo de nuevo.');
+    const data = await response.json();
+    if (!Array.isArray(data)) throw new Error('La fuente devolvió una respuesta no válida.');
+    if (state.mixRequest !== controller) return;
+    const seen = new Set(state.mixResults.map(track => track.id));
+    state.mixResults.push(...data.filter(track => ['COMMONS', 'RADIO'].includes(track.source) && !seen.has(track.id)));
+    state.mixLoaded = true;
+    if (append && !data.length) state.mixPage = 10;
+    byId('mix-status').textContent = state.mixResults.length ? `${state.mixResults.length} resultados para «${query}»: grabaciones y emisoras. Consulta la fuente de cada uno.` : 'No hay grabaciones compatibles para esta búsqueda. Prueba piano, Mozart o guitarra.';
+  } catch (error) {
+    if (state.mixRequest === controller) byId('mix-status').textContent = error.name === 'AbortError' ? 'La fuente tarda en responder. Vuelve a intentarlo.' : error.message;
+  } finally {
+    clearTimeout(deadline);
+    if (state.mixRequest === controller) { state.mixLoading = false; state.mixRequest = null; render(); }
+  }
 }
 
 let sleepDeadline = 0;
@@ -393,7 +445,7 @@ function consentInit() {
 function init() {
   byId('favorites-count').textContent = String(state.favorites.filter(supportedTrack).length);
   document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => goView(button.dataset.view)));
-  document.querySelectorAll('[data-source]').forEach(button => button.addEventListener('click', () => { state.source = button.dataset.source; render(); }));
+  document.querySelectorAll('[data-source]').forEach(button => button.addEventListener('click', () => { state.source = button.dataset.source; if (state.source === 'MIX') { state.view = 'discover'; if (!state.mixLoaded && !state.mixLoading) requestMixSearch(state.mixQuery); } render(); }));
   document.querySelectorAll('[data-query]').forEach(button => button.addEventListener('click', () => {
     byId('library').scrollIntoView({ behavior: 'smooth' });
     requestSearch(button.dataset.query);
@@ -404,7 +456,9 @@ function init() {
   });
   byId('search-input').addEventListener('input', event => updateExternalSearch(event.target.value));
   byId('search-form').addEventListener('submit', event => { event.preventDefault(); requestSearch(byId('search-input').value); });
-  byId('load-more').addEventListener('click', () => { if (!state.loading) { state.page += 1; requestSearch(state.query, true); } });
+  byId('mix-search-form').addEventListener('submit', event => { event.preventDefault(); requestMixSearch(byId('mix-query').value); });
+  document.querySelectorAll('[data-mix-query]').forEach(button => button.addEventListener('click', () => requestMixSearch(button.dataset.mixQuery)));
+  byId('load-more').addEventListener('click', () => { if (state.source === 'MIX') { if (!state.mixLoading) { state.mixPage += 1; requestMixSearch(state.mixQuery, true); } return; } if (!state.loading) { state.page += 1; requestSearch(state.query, true); } });
   byId('clear-history').addEventListener('click', () => {
     if (!window.confirm('¿Borrar el historial guardado en este navegador?')) return;
     state.history = []; writeList(KEY.history, []); render(); message('Historial borrado.');
@@ -422,6 +476,7 @@ function init() {
   });
   setInterval(updateSleepTimer, 1000);
   document.addEventListener('visibilitychange', updateSleepTimer);
+  byId('play-mix').addEventListener('click', () => { const list = filteredTracks(); if (list.length) playTrack(list[0], list); });
   byId('previous-track').addEventListener('click', playPrevious);
   byId('next-track').addEventListener('click', playNext);
   byId('toggle-play').addEventListener('click', togglePlay);
