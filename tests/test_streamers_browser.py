@@ -62,6 +62,7 @@ def run():
         assert page.locator('#stream-studio').is_visible()
         fresh=browser.new_context(viewport={'width':390,'height':844})
         login=fresh.new_page();login.goto(BASE_URL+'/streamers')
+        login.locator('.header-live').click()
         login.locator('#stream-access a').click()
         login.locator('#login-form [name=username]').fill(os.environ['MAGGY_TEST_USER'])
         login.locator('#login-form [name=password]').fill(os.environ['MAGGY_TEST_PASSWORD'])

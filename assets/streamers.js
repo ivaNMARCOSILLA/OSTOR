@@ -1,5 +1,5 @@
 'use strict';
-import {StudioTools} from '/assets/studio-tools.js?v=9.0.0';
+import {StudioTools} from '/assets/studio-tools.js?v=9.0.2';
 const $=id=>document.getElementById(id);
 let info=null,room=null,selected=null,publishing=false,heartbeat=null,sdkPromise=null,connecting=false,connectionGeneration=0,giftRevision=0;
 const status=text=>{$('stream-status').textContent=text;};
@@ -20,15 +20,51 @@ async function refresh(){
  $('video-setup').classList.toggle('hidden',!info.setup_checks);
  if(info.setup_checks){$('open-video-preview').classList.toggle('hidden',info.setup_environment!=='production');$('setup-environment').textContent=info.setup_environment==='production'?'Estás en electronicama.com. Las claves guardadas solo en Preview no activan el vídeo de esta web principal. Usa la vista previa para comprobarlas.':info.setup_environment==='preview'?'Estás en la vista previa de pruebas. Los cobros siguen bloqueados durante la comprobación.':'Estudio local de pruebas.';const list=$('video-checks');list.replaceChildren();for(const [name,ok] of Object.entries(info.setup_checks))list.append(node('li',`${name}: ${ok?'correcto':'pendiente de corregir'}`));}
  $('creator-panel').classList.toggle('hidden',!info.streamer_active);
- $('live-catalogue').classList.toggle('hidden',!info.video_ready);
+ renderCatalogue();
  renderStudio();
  if(room&&!publishing&&selected&&!info.channels.some(channel=>channel.id===selected.id)){await disconnect();status('El directo ha terminado.');}
  if(info.mine&&!$('creator-form').contains(document.activeElement)){
   $('channel-title').value=info.mine.title;$('channel-bio').value=info.mine.bio;$('creator-paypal').value=info.mine.paypal_url;
  }
- const list=$('live-channels');list.replaceChildren();$('live-empty').classList.toggle('hidden',Boolean(info.channels.length));
- for(const channel of info.channels){const card=node('article');card.className='live-channel';card.id='canal-'+channel.id;const image=node('img');image.src='/assets/app-icon-192.png';image.alt='Logo de Ol';const button=node('button','Ver directo');button.type='button';button.addEventListener('click',()=>connect(channel,false));card.append(image,node('h3',channel.title),node('p',channel.username),node('p',channel.bio),button);list.append(card);}
+
 }
+function renderCatalogue(){
+ const list=$('live-channels');list.replaceChildren();
+ const active=window.MaggySession.active;
+ const channels=active&&info?.video_ready?info.channels:[];
+ const query=$('channel-filter').value.trim().toLocaleLowerCase('es');
+ const matches=channels.filter(channel=>[channel.title,channel.username,channel.bio].join(' ').toLocaleLowerCase('es').includes(query));
+ $('channel-filter').disabled=!active||!info?.video_ready;
+ $('catalogue-status').textContent=!active?'Inicia sesión con acceso activo para consultar y ver las emisiones.':!info?'No se pudo comprobar la lista. Pulsa «Actualizar canales» para reintentar.':!info.video_ready?'Las emisiones aún no están activadas. Esta es la lista de canales; aparecerán aquí cuando esté disponible el servicio.':`${matches.length} de ${channels.length} canales emitiendo ahora · actualización automática cada 30 segundos.`;
+ $('live-empty').classList.toggle('hidden',matches.length>0);
+ $('live-empty').textContent=!active?'Entra en «Mi cuenta» para acceder a los directos.':!info?.video_ready?'Todavía no hay vídeos en directo disponibles.':query&&!matches.length?'No hay canales en directo que coincidan con ese nombre.':!channels.length?'Nadie está emitiendo ahora. Puedes actualizar la lista o volver más tarde.':'';
+ for(const channel of matches){
+  const card=node('article');card.className='live-channel';card.id='canal-'+channel.id;
+  const visual=node('div');visual.className='channel-video-cover';const image=node('img');image.src='/assets/ol-infinity.svg';image.alt='';const badge=node('span','EN DIRECTO · VÍDEO');badge.className='channel-live-badge';visual.append(image,badge);
+  const button=node('button','Ver vídeo en directo');button.type='button';button.setAttribute('aria-label',`Ver vídeo en directo de ${channel.title}`);button.addEventListener('click',()=>connect(channel,false));
+  card.append(visual,node('h3',channel.title),node('p',channel.username),node('p',channel.bio),button);list.append(card);
+ }
+}
+function focusSection(section,heading){section.classList.remove('hidden');section.scrollIntoView({behavior:'smooth',block:'start'});heading?.focus({preventScroll:true});}
+function navigateSection(hash){
+ if(hash==='#live-catalogue'){renderCatalogue();focusSection($('live-catalogue'),$('catalogue-title'));return;}
+ if(!['#creator-panel','#stream-studio'].includes(hash))return;
+ if(!window.MaggySession.active){$('stream-access').querySelector('a').href='/account?next='+encodeURIComponent('/streamers'+hash);focusSection($('stream-access'),$('stream-access').querySelector('h2'));return;}
+ if(!info){status('No se pudo comprobar el acceso al estudio. Pulsa «Actualizar canales» para reintentar.');focusSection($('live-catalogue'),$('catalogue-title'));return;}
+ if(!info.streamer_active){$('creator-access-message').textContent=info.streamer_sales_available?'Para crear un canal y emitir necesitas el plan Streamer de 8 € por un mes. Consulta tu cuenta para gestionar tu acceso.':'Puedes ver los directos con tu acceso habitual cuando estén disponibles. Crear y emitir requiere el plan Streamer; sus altas y cobros siguen bloqueados mientras se prepara el servicio.';focusSection($('creator-access'),$('creator-access-title'));return;}
+ if(hash==='#creator-panel'||!info.mine){focusSection($('creator-panel'),$('creator-form-title'));return;}
+ showStudio();
+}
+$('channel-filter').addEventListener('input',renderCatalogue);
+$('refresh-channels').addEventListener('click',async()=>{
+ const button=$('refresh-channels');button.disabled=true;
+ try{if(!window.MaggySession.active){renderCatalogue();focusSection($('stream-access'),$('stream-access').querySelector('h2'));return;}await refresh();}
+ catch(error){$('catalogue-status').textContent='No se pudo actualizar la lista. '+error.message;}
+ finally{button.disabled=false;}
+});
+document.addEventListener('click',event=>{const link=event.target.closest('a[href^="#"]');if(!link||!['#live-catalogue','#creator-panel','#stream-studio'].includes(link.hash))return;event.preventDefault();history.pushState(null,'',link.hash);navigateSection(link.hash);});
+window.addEventListener('hashchange',()=>navigateSection(location.hash));
+window.addEventListener('popstate',()=>navigateSection(location.hash));
 let previewStream=null,previewGeneration=0;
 function stopPreview(message='',all=false){
  tools.stopMeter();if(all)tools.stopScreen();
@@ -94,7 +130,7 @@ async function connect(channel,publish){
   $('toggle-camera').textContent='Apagar cámara';$('toggle-mic').textContent='Silenciar micrófono';
   $('gift-panel').classList.toggle('hidden',publish||!channel.paypal_url);$('gift-link').classList.add('hidden');$('gift-status').textContent='';
   renderStudio();status(publish?'Estás en directo.':'Conectado al directo. Pulsa «Activar sonido» si no lo escuchas.');$('live-stage').scrollIntoView({behavior:'smooth'});
- }catch(error){if(generation===undefined||generation===connectionGeneration){await disconnect();const message=error.name==='NotAllowedError'?'Autoriza la cámara y el micrófono para emitir.':error.message||'No se pudo iniciar el directo.';status(message);$('studio-status').textContent=message;if(info?.mine)showStudio();}}finally{connecting=false;$('start-camera').textContent='Iniciar directo';renderStudio();}
+ }catch(error){if(generation===undefined||generation===connectionGeneration){await disconnect();const message=error.name==='NotAllowedError'?'Autoriza la cámara y el micrófono para emitir.':error.message||'No se pudo iniciar el directo.';status(message);$('studio-status').textContent=message;if(publish&&info?.mine)showStudio();else{$('catalogue-status').textContent=message;focusSection($('live-catalogue'),$('catalogue-title'));}}}finally{connecting=false;$('start-camera').textContent='Iniciar directo';renderStudio();}
 }
 $('check-video').addEventListener('click',async()=>{const button=$('check-video');button.disabled=true;$('video-check-status').textContent='Comprobando conexión…';try{const r=await window.MaggySession.fetch('/api/streamers/admin/check-video',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});const data=await r.json();$('video-check-status').textContent=data.message||data.error||'No se pudo comprobar la conexión.';}catch{$('video-check-status').textContent='No se pudo conectar. Vuelve a intentarlo.';}finally{button.disabled=false;}});
 function creatorStatus(message,error=false){const el=$('creator-status');el.textContent=message;el.className='creator-status '+(error?'error':'success');if(error){el.focus({preventScroll:true});el.scrollIntoView({behavior:'smooth',block:'center'});}}
@@ -112,17 +148,18 @@ $('creator-form').addEventListener('submit',async event=>{
 $('preview-camera').addEventListener('click',privatePreview);
 $('close-preview').addEventListener('click',()=>stopPreview('Vista privada apagada. La cámara, el micrófono y la pantalla están cerrados.',true));
 $('start-camera').addEventListener('click',()=>{if(info?.mine)connect(info.mine,true);});
-$('leave-room').addEventListener('click',async()=>{await disconnect();status('Has salido del directo.');await refresh();if(info?.mine)showStudio();});
+$('leave-room').addEventListener('click',async()=>{const wasPublisher=publishing;await disconnect();status('Has salido del directo.');try{await refresh();}catch(error){status(error.message);}if(wasPublisher&&info?.mine)showStudio();else navigateSection('#live-catalogue');});
 $('enable-sound').addEventListener('click',()=>room?.startAudio().catch(()=>status('No se pudo activar el sonido.')));
 $('toggle-camera').addEventListener('click',async()=>{if(!publishing||!room)return;const enable=!room.localParticipant.isCameraEnabled;try{await room.localParticipant.setCameraEnabled(enable);$('toggle-camera').textContent=enable?'Apagar cámara':'Encender cámara';}catch{status('No se pudo cambiar la cámara.');}});
 $('toggle-mic').addEventListener('click',async()=>{if(!publishing||!room)return;const enable=!room.localParticipant.isMicrophoneEnabled;try{await room.localParticipant.setMicrophoneEnabled(enable);tools.syncRoomMic(room);$('toggle-mic').textContent=enable?'Silenciar micrófono':'Activar micrófono';}catch{status('No se pudo cambiar el micrófono.');}});
 $('gift-amount').addEventListener('input',()=>{giftRevision+=1;$('gift-link').classList.add('hidden');$('gift-status').textContent='';});
 $('gift-form').addEventListener('submit',async event=>{event.preventDefault();$('gift-link').classList.add('hidden');try{const channelId=selected?.id,generation=connectionGeneration,revision=giftRevision;if(!channelId)throw new Error('Elige un directo.');const amount=$('gift-amount').value;if(!/^\d+(?:[.,]\d{1,2})?$/.test(amount))throw new Error('Utiliza como máximo dos decimales.');const cents=Math.round(Number(amount.replace(',','.'))*100);const result=await api(`/api/streamers/${encodeURIComponent(channelId)}/gift-link`,{amount_cents:cents});if(channelId!==selected?.id||generation!==connectionGeneration||revision!==giftRevision)return;$('gift-link').href=result.url;$('gift-link').textContent=`Enviar ${(result.amount_cents/100).toFixed(2)} € en PayPal ↗`;$('gift-link').classList.remove('hidden');$('gift-status').textContent=`Para ${result.creator}. Comisión de Ol: 0 €. Revisa el destinatario en PayPal antes de confirmar.`;}catch(error){$('gift-status').textContent=error.message;}});
-window.addEventListener('maggy:access-changed',event=>{if(!event.detail.active){stopPreview('',true);$('stream-studio').classList.add('hidden');disconnect();$('creator-panel').classList.add('hidden');$('live-catalogue').classList.add('hidden');$('stream-access').classList.remove('hidden');}});
+window.addEventListener('maggy:access-changed',event=>{if(!event.detail.active){stopPreview('',true);$('stream-studio').classList.add('hidden');disconnect();$('creator-panel').classList.add('hidden');renderCatalogue();$('stream-access').classList.remove('hidden');}});
 window.addEventListener('pagehide',()=>{stopPreview('',true);if(publishing)window.MaggySession.fetch('/api/streamers/me/live',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({live:false}),keepalive:true}).catch(()=>{});room?.disconnect();});
 await window.MaggySession.ready;
 $('stream-access').classList.toggle('hidden',window.MaggySession.active);
-if(window.MaggySession.active){try{await refresh();status(info.video_ready?'Elige un directo o prepara tu canal.':'Zona preparada; las emisiones y las altas de streamer aún no están disponibles.');if(location.hash==='#stream-studio'&&info.mine)showStudio();}catch(error){status(error.message);}}
-else{status('Inicia sesión para acceder a los directos.');const hash=/^#canal-[a-f0-9]{32}$/.test(location.hash)?location.hash:'#stream-studio';$('stream-access').querySelector('a').href='/account?next='+encodeURIComponent('/streamers'+hash);}
+if(window.MaggySession.active){try{await refresh();status(info.video_ready?'Elige un directo o prepara tu canal.':'Zona preparada; las emisiones y las altas de streamer aún no están disponibles.');navigateSection(location.hash);}catch(error){status(error.message);}}
+else{status('Inicia sesión para acceder a los directos.');const hash=/^#canal-[a-f0-9]{32}$/.test(location.hash)||['#live-catalogue','#creator-panel','#stream-studio'].includes(location.hash)?location.hash:'#live-catalogue';$('stream-access').querySelector('a').href='/account?next='+encodeURIComponent('/streamers'+hash);}
 if(window.MaggySession.active&&/^#canal-[a-f0-9]{32}$/.test(location.hash)){const card=document.getElementById(location.hash.slice(1));if(card)card.scrollIntoView({behavior:'smooth'});else status('Este canal no está en directo ahora. Vuelve a abrir el enlace cuando comience la emisión.');}
+renderCatalogue();
 setInterval(()=>{if(window.MaggySession.active)refresh().catch(error=>status(error.message));},30000);

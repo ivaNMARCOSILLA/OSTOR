@@ -2,7 +2,7 @@
 const $ = id => document.getElementById(id);
 let csrf = '', current = null, members = [], payments = [];
 const requestedReturn=new URLSearchParams(location.search).get('next');
-const streamReturn=(['/streamers','/streamers#stream-studio'].includes(requestedReturn)||/^\/streamers#canal-[a-f0-9]{32}$/.test(requestedReturn||''))?requestedReturn:null;
+const streamReturn=(['/streamers','/streamers#stream-studio','/streamers#creator-panel','/streamers#live-catalogue'].includes(requestedReturn)||/^\/streamers#canal-[a-f0-9]{32}$/.test(requestedReturn||''))?requestedReturn:null;
 const inviteToken = new URLSearchParams(location.hash.slice(1)).get('invite');
 if (inviteToken) { history.replaceState(null, '', '/account'); $('invitation').classList.remove('hidden'); $('credentials').classList.add('hidden'); }
 const date = value => value ? new Date(value).toLocaleString('es-ES', {dateStyle:'medium',timeStyle:'short'}) : 'Sin activar';
@@ -31,6 +31,7 @@ async function refresh() {
   $('enter-maggy').classList.toggle('hidden', !current.active);
   $('enter-streamers').classList.toggle('hidden',!current.active);
   $('enter-streamers').textContent=current.streamer_active?'Entrar a mi estudio ↗':'Ver directos ↗';
+  $('enter-streamers').href=current.streamer_active?'/streamers#stream-studio':'/streamers#live-catalogue';
   $('welcome-plan').classList.toggle('hidden', Boolean(current.welcome_used));
   $('next-payment').textContent = current.role === 'admin' ? 'Tu cuenta de gestión no tiene vencimiento de cliente.' : current.access_until ? `Vencimiento de Ol: ${date(current.access_until)}. ${current.streamer_until ? 'Streamer hasta '+date(current.streamer_until)+'. Renovación Streamer: 8 € por un mes; Ol normal: 6 €.' : 'Para continuar: 6 € por un mes.'} Sin cargo automático.` : 'Primer acceso: 1 € por 14 días. Comienza cuando se confirme el pago.';
   $('my-payments').replaceChildren();

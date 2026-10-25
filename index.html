@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- Ol PRO 9.0.1 · Edición y mantenimiento: Iván Marcos Illa · 2026-10-24 -->
+<!-- Ol PRO 9.0.2 · Edición y mantenimiento: Iván Marcos Illa · 2026-10-24 -->
 <html lang="es">
 <head>
   <meta charset="UTF-8">
@@ -9,21 +9,21 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Ol">
   <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="apple-touch-icon" href="/assets/app-icon-192.png?v=9.0.1">
+  <link rel="apple-touch-icon" href="/assets/app-icon-192.png?v=9.0.2">
   <meta name="description" content="Ol: descubre y escucha música en Audius e Internet Archive. Guarda tus favoritos y consulta tu historial.">
   <link rel="canonical" href="https://electronicama.com/">
   <meta property="og:title" content="Ol · Tu música, otra órbita">
   <meta property="og:description" content="Tu estación musical personal en electronicama.com">
   <meta name="author" content="Iván Marcos Illa">
   <title>Ol · Music Universe</title>
-  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg?v=9.0.1">
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg?v=9.0.2">
   <link rel="preconnect" href="https://api.audius.co">
   <link rel="preconnect" href="https://creatornode.audius.co">
   <link rel="preconnect" href="https://archive.org">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/assets/styles.css?v=9.0.1">
+  <link rel="stylesheet" href="/assets/styles.css?v=9.0.2">
   <!-- Vercel Web Analytics: habilitar en Project > Analytics para recibir datos. -->
   <script>
     // La ruta de Web Analytics existe solo en Vercel, no en localhost.
@@ -34,10 +34,10 @@
       document.head.appendChild(analytics);
     }
   </script>
-  <script defer src="/assets/session.js?v=9.0.1"></script>
-  <script type="module" src="/assets/app.js?v=9.0.1"></script>
-  <script type="module" src="/assets/maggy.js?v=9.0.1"></script>
-<link rel="stylesheet" href="/assets/ol-theme.css?v=9.0.1"></head>
+  <script defer src="/assets/session.js?v=9.0.2"></script>
+  <script type="module" src="/assets/app.js?v=9.0.2"></script>
+  <script type="module" src="/assets/maggy.js?v=9.0.2"></script>
+<link rel="stylesheet" href="/assets/ol-theme.css?v=9.0.2"></head>
 <body>
   <div class="app-shell">
     <aside class="sidebar" aria-label="Navegación principal">
@@ -48,7 +48,7 @@
         <button class="nav-item" data-view="favorites" type="button"><span class="nav-icon">♡</span> Favoritos <span id="favorites-count" class="nav-count">0</span></button>
         <a class="nav-item" href="/account">◇ Mi cuenta y pagos</a>
         <button class="nav-item" data-view="history" type="button"><span class="nav-icon">◷</span> Historial</button>
-      <a class="nav-item" href="/streamers">◉ Directos</a><a class="nav-item" href="#mas-musica">↗ Más música</a><a class="nav-item" href="#mi-espacio">✦ Mi espacio</a><a class="nav-item" href="#planes">◇ Planes</a></nav>
+      <a class="nav-item" href="/streamers#live-catalogue">◉ Directos</a><a class="nav-item" href="#mas-musica">↗ Más música</a><a class="nav-item" href="#mi-espacio">✦ Mi espacio</a><a class="nav-item" href="#planes">◇ Planes</a></nav>
       <div class="sidebar-bottom">
         <div class="live-status"><span class="pulse-dot"></span> UNIVERSO EN LÍNEA</div>
         <p>Tu música, tu espacio.<br>Tu acceso, tus canales.</p>
@@ -64,7 +64,7 @@
       </header>
       <nav class="mobile-nav hidden" id="mobile-nav" aria-label="Navegación móvil">
         <button data-view="discover" type="button">Explorar</button><button data-view="favorites" type="button">♡ Favoritos</button><button data-view="history" type="button">◷ Historial</button>
-        <a href="/streamers">Directos</a><a href="#mas-musica">Más música</a><a href="#mi-espacio">Mi espacio</a><a href="#planes">Planes</a>
+        <a href="/streamers#live-catalogue">Directos</a><a href="#mas-musica">Más música</a><a href="#mi-espacio">Mi espacio</a><a href="#planes">Planes</a>
       </nav>
 
       <section id="preview-banner" class="preview-banner" aria-label="Vista previa de Ol"><div><strong>EXPLORA Ol · VISTA PREVIA</strong><p>Descubre el catálogo. Para escuchar y guardar tu música, desbloquea tu acceso.</p></div><button type="button" data-unlock>DESBLOQUEAR · 1 € / 14 DÍAS ↗</button></section>
@@ -140,7 +140,7 @@
         <div class="plans-grid"><article class="plan featured"><span>BIENVENIDA · UNA VEZ POR CUENTA</span><h3>1 € <small>/ 14 días</small></h3><p>14 días de acceso desde la confirmación del pago.</p><a href="/account">Gestionar bienvenida ↗</a></article><article class="plan"><span>MENSUAL</span><h3>6 € <small>/ un mes</small></h3><p>Música por momentos, favoritos, canales privados y temporizador. Un mes de acceso; renovar antes de vencer amplía tu periodo.</p><a href="/account">Renovar acceso ↗</a></article></div>
 
         <p class="payment-note">Vista previa del catálogo disponible. La reproducción y las funciones personales requieren acceso de pago. Los pagos PayPal se verifican manualmente desde administración antes de activar el acceso. Sin renovación automática. Consulta tus fechas y pagos en <a href="/account">Mi cuenta</a>.</p>
-        <p class="payment-note">Ol Streamer: 8 € por un mes, con emisión de vídeo y regalos sin comisión de Ol. La contratación se habilitará cuando estén activadas las emisiones. <a href="/streamers">Conoce la zona de directos ↗</a></p>
+        <p class="payment-note">Ol Streamer: 8 € por un mes, con emisión de vídeo y regalos sin comisión de Ol. La contratación se habilitará cuando estén activadas las emisiones. <a href="/streamers#live-catalogue">Conoce la zona de directos ↗</a></p>
         <a class="paypal-direct" href="/account">Pagar Ol en PayPal desde mi cuenta ↗</a>
       </section>
       <section class="maggy-section" id="spotify-premium" aria-labelledby="spotify-premium-title"><span class="eyebrow">03 / SERVICIO EXTERNO · CONTRATACIÓN SEPARADA</span><h2 id="spotify-premium-title">Spotify <em>Premium.</em></h2><p>Consulta el precio vigente y contrata directamente con Spotify. Cada cliente utiliza su propia cuenta y paga a Spotify según sus condiciones. Su música se escucha en Spotify.</p><p><strong>La cuota de Ol no incluye Spotify Premium.</strong> Pagar a Spotify no activa ni renueva Ol; pagar Ol por PayPal no activa Spotify. Ol es independiente y no está afiliado ni patrocinado por Spotify.</p><a class="ghost-button" href="https://www.spotify.com/es/premium/" target="_blank" rel="noopener noreferrer">Ver planes y contratar en Spotify ↗</a></section>
