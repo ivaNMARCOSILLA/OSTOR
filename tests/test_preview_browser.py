@@ -15,6 +15,9 @@ def run():
         page.goto(BASE_URL+'/');page.locator('#consent-decline').click()
         page.locator('.track-card').wait_for()
         assert page.locator('#preview-banner').is_visible()
+        assert page.locator('#spotify-premium a').get_attribute('href') == 'https://www.spotify.com/es/premium/'
+        assert 'no incluye Spotify Premium' in page.locator('#spotify-premium').inner_text()
+        assert page.locator('#spotify-premium a[href*="paypal"]').count() == 0
         page.locator('.cover-button').click();page.locator('#unlock-dialog').wait_for(state='visible')
         assert '14 días' in page.locator('#unlock-dialog').inner_text()
         assert page.locator('audio').count()==0

@@ -15,7 +15,7 @@ SOURCE = Path(__file__).resolve().parents[1] / 'app.py'
 TREE = ast.parse(SOURCE.read_text(encoding='utf-8'))
 NAMES = {'normalize', 'sanitize_query', 'relevance', 'allowed_stream_url'}
 FUNCTIONS = [node for node in TREE.body if isinstance(node, ast.FunctionDef) and node.name in NAMES]
-namespace = {'re': re, 'unicodedata': unicodedata, 'urlparse': urlparse, 'ipaddress': ipaddress, 'MAX_SEARCH_LENGTH': 90}
+namespace = {'re': re, 'unicodedata': unicodedata, 'urlparse': urlparse, 'ipaddress': ipaddress, 'MAX_SEARCH_LENGTH': 90, 'AUDIUS_STORAGE_HOST': 'validator.eeba4a6ca56a0d87af802270217c2a51.r2.cloudflarestorage.com'}
 exec(compile(ast.Module(body=FUNCTIONS, type_ignores=[]), str(SOURCE), 'exec'), namespace)
 
 

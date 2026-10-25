@@ -23,3 +23,9 @@ Reproductor vertical ampliable con zonas seguras para iPhone, controles táctile
 El elemento de audio reutilizable inicia `/api/play/<id>` en el propio gesto del usuario. Esta ruta comprueba el acceso vigente y redirige al proveedor, conservando la descarga parcial y los controles nativos; no espera a `/api/account/me` y `/api/resolve` antes de sonar. Si falla, intenta una conexión alternativa una vez.
 
 La búsqueda consulta las dos fuentes en paralelo y muestra cada respuesta al llegar. Archive se filtra por formatos compatibles y elementos públicos, sin descargar metadatos por cada resultado; el archivo seleccionado se resuelve y guarda en caché al reproducir. Prioriza MP3 y excluye archivos privados/elementos restringidos. Audius usa su API oficial, excluye pistas marcadas no disponibles o con acceso restringido y dispone de un segundo proveedor. Esto reduce esperas, pero no garantiza disponibilidad de contenido externo ni reproducción instantánea.
+
+### Audius y servicios separados 8.4.2
+
+Audius se entrega mediante rangos limitados de 512 KiB desde el mismo origen, comprobando el acceso en cada solicitud. El servidor valida cada redirección y admite únicamente los dominios Archive/Audius y el hostname exacto del almacenamiento del validador observado; no permite otros buckets R2. El diagnóstico de audio está restringido a administradores y nunca devuelve URLs firmadas.
+
+Maggy se paga por PayPal desde la cuenta (1 EUR por 14 días de bienvenida, 6 EUR por un mes posterior). Spotify Premium se contrata externamente mediante su web oficial; no hay SDK ni cobros Spotify en Maggy, ni un precio Spotify fijado sin verificación.

@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- MAGGY PRO 8.4.1 · Edición y mantenimiento: Iván Marcos Illa · 2026-10-24 -->
+<!-- MAGGY PRO 8.4.2 · Edición y mantenimiento: Iván Marcos Illa · 2026-10-24 -->
 <html lang="es">
 <head>
   <meta charset="UTF-8">
@@ -9,21 +9,21 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="MAGGY">
   <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="apple-touch-icon" href="/assets/app-icon-192.png?v=8.4.1">
+  <link rel="apple-touch-icon" href="/assets/app-icon-192.png?v=8.4.2">
   <meta name="description" content="MAGGY: descubre y escucha música en Audius e Internet Archive. Guarda tus favoritos y consulta tu historial.">
   <link rel="canonical" href="https://electronicama.com/">
   <meta property="og:title" content="Maggy · Tu música, otra órbita">
   <meta property="og:description" content="Tu estación musical personal en electronicama.com">
   <meta name="author" content="Iván Marcos Illa">
   <title>MAGGY · Music Universe</title>
-  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg?v=8.4.1">
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg?v=8.4.2">
   <link rel="preconnect" href="https://api.audius.co">
   <link rel="preconnect" href="https://creatornode.audius.co">
   <link rel="preconnect" href="https://archive.org">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/assets/styles.css?v=8.4.1">
+  <link rel="stylesheet" href="/assets/styles.css?v=8.4.2">
   <!-- Vercel Web Analytics: habilitar en Project > Analytics para recibir datos. -->
   <script>
     // La ruta de Web Analytics existe solo en Vercel, no en localhost.
@@ -34,9 +34,9 @@
       document.head.appendChild(analytics);
     }
   </script>
-  <script defer src="/assets/session.js?v=8.4.1"></script>
-  <script type="module" src="/assets/app.js?v=8.4.1"></script>
-  <script type="module" src="/assets/maggy.js?v=8.4.1"></script>
+  <script defer src="/assets/session.js?v=8.4.2"></script>
+  <script type="module" src="/assets/app.js?v=8.4.2"></script>
+  <script type="module" src="/assets/maggy.js?v=8.4.2"></script>
 </head>
 <body>
   <div class="app-shell">
@@ -60,7 +60,7 @@
       <header class="topbar">
         <button type="button" class="mobile-brand" id="mobile-menu" aria-expanded="false" aria-controls="mobile-nav" aria-label="Abrir menú">☰ <strong>MAG<span>GY</span></strong></button>
         <span class="topbar-heading"><span class="pulse-dot"></span> ESTACIÓN MUSICAL PERSONAL</span>
-        <span class="topbar-right">HECHO PARA TU UNIVERSO <span class="version-chip">V8.4.1</span></span>
+        <span class="topbar-right">HECHO PARA TU UNIVERSO <span class="version-chip">V8.4.2</span></span>
       </header>
       <nav class="mobile-nav hidden" id="mobile-nav" aria-label="Navegación móvil">
         <button data-view="discover" type="button">Explorar</button><button data-view="favorites" type="button">♡ Favoritos</button><button data-view="history" type="button">◷ Historial</button>
@@ -132,12 +132,14 @@
         <p id="provider-status" class="provider-status" role="status"></p>
       </section>
       <section class="maggy-section" id="planes" aria-labelledby="plans-title">
-        <span class="eyebrow">02 / APOYA LA ESTACIÓN</span><h2 id="plans-title">ELIGE TU <em>ÓRBITA.</em></h2>
-        <p>Tu música y tus canales permanecen en este navegador, sin sincronización con otros dispositivos. Elige cómo apoyar Maggy.</p>
+        <span class="eyebrow">02 / APOYA LA ESTACIÓN</span><h2 id="plans-title">PRECIOS DE <em>MAGGY.</em></h2>
+        <p>Tu música y tus canales permanecen en este navegador, sin sincronización con otros dispositivos. Maggy cuesta 1 € por los primeros 14 días y, después, 6 € por un mes.</p>
         <div class="plans-grid"><article class="plan featured"><span>BIENVENIDA · UNA VEZ POR CUENTA</span><h3>1 € <small>/ 14 días</small></h3><p>14 días de acceso desde la confirmación del pago.</p><a href="/account">Gestionar bienvenida ↗</a></article><article class="plan"><span>MENSUAL</span><h3>6 € <small>/ un mes</small></h3><p>Música por momentos, favoritos, canales privados y temporizador. Un mes de acceso; renovar antes de vencer amplía tu periodo.</p><a href="/account">Renovar acceso ↗</a></article></div>
+
         <p class="payment-note">Vista previa del catálogo disponible. La reproducción y las funciones personales requieren acceso de pago. Los pagos PayPal se verifican manualmente desde administración antes de activar el acceso. Sin renovación automática. Consulta tus fechas y pagos en <a href="/account">Mi cuenta</a>.</p>
-        <a class="paypal-direct" href="https://paypal.me/IMarcosIlla" target="_blank" rel="noopener noreferrer">Elegir otro importe en PayPal ↗</a>
+        <a class="paypal-direct" href="/account">Pagar Maggy en PayPal desde mi cuenta ↗</a>
       </section>
+      <section class="maggy-section" id="spotify-premium" aria-labelledby="spotify-premium-title"><span class="eyebrow">03 / SERVICIO EXTERNO · CONTRATACIÓN SEPARADA</span><h2 id="spotify-premium-title">SPOTIFY <em>PREMIUM.</em></h2><p>Consulta el precio vigente y contrata directamente con Spotify. Cada cliente utiliza su propia cuenta y paga a Spotify según sus condiciones. Su música se escucha en Spotify.</p><p><strong>La cuota de Maggy no incluye Spotify Premium.</strong> Pagar a Spotify no activa ni renueva Maggy; pagar Maggy por PayPal no activa Spotify. Maggy es independiente y no está afiliado ni patrocinado por Spotify.</p><a class="ghost-button" href="https://www.spotify.com/es/premium/" target="_blank" rel="noopener noreferrer">Ver planes y contratar en Spotify ↗</a></section>
       <footer class="site-footer"><span>MAGGY <b>✦</b> electronicama.com · Edición © 2026 Iván Marcos Illa</span><nav class="legal-links" aria-label="Información legal"><button type="button" id="privacy-button">Preferencias de cookies</button><a href="/legal/cookies.html">Política de cookies</a><a href="/legal/privacidad.html">Privacidad</a><a href="/legal/aviso-legal.html">Aviso legal</a></nav></footer>
     </main>
   </div>

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""MAGGY PRO 8.4.1 — API musical y distribución web.
+"""MAGGY PRO 8.4.2 — API musical y distribución web.
 
 Proyecto y edición: Iván Marcos Illa.
 El código de servicios externos y sus marcas pertenece a sus titulares.
@@ -29,12 +29,15 @@ app = Flask(__name__, static_folder=os.path.join(ROOT, "assets"), static_url_pat
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 app.logger.setLevel(logging.INFO)
 
-VERSION = "8.4.1"
+VERSION = "8.4.2"
 AUDIUS_APP_NAME = os.getenv("AUDIUS_APP_NAME", "electronicama")
 SEARCH_CACHE_SECONDS = max(15, min(int(os.getenv("SEARCH_CACHE_SECONDS", "300")), 3600))
 ARCHIVE_CACHE_SECONDS = max(60, min(int(os.getenv("ARCHIVE_CACHE_SECONDS", "3600")), 86400))
 REQUEST_TIMEOUT = (2.5, 6)
 MAX_PROXY_BYTES = 32 * 1024 * 1024
+AUDIO_CHUNK_BYTES = 512 * 1024
+# Exact Audius validator storage observed in its official signed redirects.
+AUDIUS_STORAGE_HOST = "validator.eeba4a6ca56a0d87af802270217c2a51.r2.cloudflarestorage.com"
 MAX_SEARCH_LENGTH = 90
 
 # Cachés pequeñas, con bloqueo. En Vercel son por instancia: no persistentes ni compartidas.
@@ -385,7 +388,7 @@ def api_resolve(item_id):
 
 @app.get("/api/play/<path:item_id>")
 def api_play(item_id):
-    """One paid request from the native audio element; Range stays with the origin."""
+    """Authorize native playback; Audius uses bounded, same-origin byte ranges."""
     if not rate_allowed("play", 90):
         return jsonify({"error": "Límite temporal de reproducción"}), 429
     if item_id.startswith("audius_"):
@@ -393,7 +396,7 @@ def api_play(item_id):
         if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", ident):
             return jsonify({"error": "Identificador no válido"}), 400
         host = "discoveryprovider2.audius.co" if request.args.get("retry") == "1" else "api.audius.co"
-        return redirect(f"https://{host}/v1/tracks/{quote(ident)}/stream?app_name={quote(AUDIUS_APP_NAME)}", code=302)
+        return relay_audius(f"https://{host}/v1/tracks/{quote(ident)}/stream?app_name={quote(AUDIUS_APP_NAME)}")
     if item_id.startswith("archive_"):
         try:
             ident = item_id[8:]
@@ -420,7 +423,7 @@ def allowed_stream_url(url: str) -> bool:
             return False
         except ValueError:
             pass
-        return (host == "archive.org" or host.endswith(".archive.org")
+        return (host == AUDIUS_STORAGE_HOST or host == "archive.org" or host.endswith(".archive.org")
                 or host == "audius.co" or host.endswith(".audius.co"))
     except ValueError:
         return False
@@ -438,6 +441,76 @@ def _safe_upstream(url: str, headers: dict):
         response.close()
         url = next_url
     raise ValueError("Demasiadas redirecciones")
+
+
+def relay_audius(url):
+    """Small, bounded byte ranges: Safari can seek without cross-site redirects."""
+    requested = request.headers.get("Range", "bytes=0-")
+    match = re.fullmatch(r"bytes=(\d{0,12})-(\d{0,12})", requested)
+    if not match or not any(match.groups()):
+        return jsonify({"error": "Rango no válido"}), 416
+    first, last = match.groups()
+    if first:
+        start = int(first)
+        end = min(int(last), start + AUDIO_CHUNK_BYTES - 1) if last else start + AUDIO_CHUNK_BYTES - 1
+        if end < start:
+            return jsonify({"error": "Rango no válido"}), 416
+        byte_range = f"bytes={start}-{end}"
+    else:
+        byte_range = f"bytes=-{min(int(last), AUDIO_CHUNK_BYTES)}"
+    try:
+        upstream = _safe_upstream(url, {"Range": byte_range, "Accept": "audio/*,application/octet-stream", "Accept-Encoding": "identity"})
+        if upstream.status_code == 416:
+            headers = {"Content-Range": upstream.headers.get("Content-Range", "bytes */*")}
+            upstream.close()
+            return Response(status=416, headers=headers)
+        size = int(upstream.headers.get("Content-Length", "0") or 0)
+        kind = upstream.headers.get("Content-Type", "application/octet-stream").split(";")[0].lower()
+        if upstream.status_code not in (200, 206) or kind not in {"audio/mpeg", "audio/mp3", "audio/aac", "audio/mp4", "audio/x-m4a", "application/octet-stream"}:
+            upstream.close()
+            return jsonify({"error": "Audius no entregó audio reproducible", "code": "provider_unavailable"}), 502
+        if size > AUDIO_CHUNK_BYTES or (upstream.status_code == 206 and not upstream.headers.get("Content-Range")):
+            upstream.close()
+            return jsonify({"error": "Audius no admite la descarga parcial solicitada", "code": "provider_range_error"}), 502
+        forwarded = {key: upstream.headers[key] for key in ["Content-Type", "Content-Length", "Content-Range", "Accept-Ranges"] if key in upstream.headers}
+        if kind == "application/octet-stream": forwarded["Content-Type"] = "audio/mpeg"
+        def chunks():
+            total = 0
+            try:
+                for chunk in upstream.iter_content(64 * 1024):
+                    total += len(chunk)
+                    if total > AUDIO_CHUNK_BYTES: break
+                    if chunk: yield chunk
+            finally:
+                upstream.close()
+        return Response(stream_with_context(chunks()), status=upstream.status_code, headers=forwarded)
+    except (requests.RequestException, ValueError, OSError) as exc:
+        app.logger.warning("Audius relay failed: %s", type(exc).__name__)
+        return jsonify({"error": "No se pudo conectar con el audio de Audius", "code": "provider_connection_error"}), 502
+
+
+@app.get("/api/admin/audio-diagnostic/<track_id>")
+def audio_diagnostic(track_id):
+    from membership import get_user
+    user = get_user()
+    if not user or user["role"] != "admin":
+        return jsonify({"error": "Se requiere administración"}), 403
+    if not rate_allowed("audio-diagnostic", 6):
+        return jsonify({"error": "Espera un minuto"}), 429
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", track_id):
+        return jsonify({"error": "Identificador no válido"}), 400
+    start = time.monotonic()
+    try:
+        upstream = _safe_upstream(f"https://api.audius.co/v1/tracks/{quote(track_id)}/stream?app_name={quote(AUDIUS_APP_NAME)}", {"Range": "bytes=0-2047", "Accept-Encoding": "identity"})
+        try:
+            data = next(upstream.iter_content(2048), b"")
+            return jsonify(authorization="ok", provider_status=upstream.status_code,
+                           content_type=upstream.headers.get("Content-Type"), bytes_received=len(data),
+                           elapsed_ms=round((time.monotonic()-start)*1000))
+        finally:
+            upstream.close()
+    except (requests.RequestException, ValueError, OSError) as exc:
+        return jsonify(authorization="ok", provider_error=type(exc).__name__, elapsed_ms=round((time.monotonic()-start)*1000)), 502
 
 
 @app.get("/api/proxy")

@@ -1,6 +1,6 @@
 """Provider compatibility and paid, low-latency native media redirects."""
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 import app
 from auth_support import authenticated_client
 
@@ -18,13 +18,33 @@ class PlaybackTests(unittest.TestCase):
         guest.post('/api/account/register', json={'username':'no-audio-plan','password':'password-test-123'}, headers={'X-CSRF-Token':csrf})
         self.assertEqual(guest.get('/api/play/archive_test').status_code, 402)
 
-    def test_audius_native_redirect_and_retry_use_fixed_origins(self):
-        response = self.client.get('/api/play/audius_test', headers={'Range':'bytes=0-1023'})
-        self.assertEqual(response.status_code, 302)
-        self.assertTrue(response.location.startswith('https://api.audius.co/v1/tracks/test/stream?'))
+    @patch.object(app, '_safe_upstream')
+    def test_audius_relay_preserves_range_and_checks_fixed_origins(self, fetch):
+        upstream = Mock(status_code=206, headers={'Content-Type':'audio/mpeg','Content-Length':'2','Content-Range':'bytes 0-1/1000000','Accept-Ranges':'bytes'})
+        upstream.iter_content.return_value = iter([b'ab'])
+        fetch.return_value = upstream
+        response = self.client.get('/api/play/audius_test', headers={'Range':'bytes=0-1'})
+        self.assertEqual(response.status_code, 206)
+        self.assertEqual(response.data, b'ab')
+        self.assertEqual(response.headers['Content-Range'], 'bytes 0-1/1000000')
         self.assertEqual(response.headers['Cache-Control'], 'no-store')
-        self.assertIn('https://discoveryprovider2.audius.co/', self.client.get('/api/play/audius_test?retry=1').location)
+        self.assertTrue(fetch.call_args.args[0].startswith('https://api.audius.co/v1/tracks/test/stream?'))
+        self.assertEqual(fetch.call_args.args[1]['Range'], 'bytes=0-1')
         self.assertEqual(self.client.get('/api/play/audius_https://evil.test').status_code, 400)
+
+    @patch.object(app, '_safe_upstream')
+    def test_audius_relay_caps_large_requests_and_uses_alternate_provider(self, fetch):
+        fetch.return_value = Mock(status_code=502, headers={})
+        self.assertEqual(self.client.get('/api/play/audius_test?retry=1',headers={'Range':'bytes=100-'}).status_code,502)
+        self.assertIn('https://discoveryprovider2.audius.co/', fetch.call_args.args[0])
+        self.assertEqual(fetch.call_args.args[1]['Range'], f'bytes=100-{100+app.AUDIO_CHUNK_BYTES-1}')
+        self.assertEqual(self.client.get('/api/play/audius_test',headers={'Range':'bytes=2-1'}).status_code,416)
+
+    def test_diagnostic_is_not_public_and_storage_allowlist_is_exact(self):
+        self.assertEqual(app.app.test_client().get('/api/admin/audio-diagnostic/test').status_code,403)
+        self.assertTrue(app.allowed_stream_url('https://'+app.AUDIUS_STORAGE_HOST+'/audio'))
+        self.assertFalse(app.allowed_stream_url('https://'+app.AUDIUS_STORAGE_HOST+'.evil.test/audio'))
+        self.assertFalse(app.allowed_stream_url('https://other.r2.cloudflarestorage.com/audio'))
 
     @patch.object(app, 'fetch_json')
     def test_archive_prefers_mp3_over_largest_ogg_and_ignores_private(self, fetch):
