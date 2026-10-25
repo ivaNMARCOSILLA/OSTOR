@@ -84,14 +84,17 @@ class MembershipTests(unittest.TestCase):
         self.assertEqual(device.get('/api/admin/members').status_code,200)
         self.assertEqual(self.admin.get('/api/admin/members').status_code,200)
 
-    def test_invite_single_use_does_not_grant_free_music(self):
+    def test_invite_single_use_grants_free_friend_access(self):
         result=self.post(self.admin,'/api/admin/invite',{'username':'friend-test'})
         token=result.json['path'].split('=',1)[1]
         friend=self.app.test_client()
         result=self.post(friend,'/api/account/accept-invite',{'token':token,'password':'friend-password-123'})
         self.assertEqual(result.status_code,200)
         self.assertEqual(friend.get('/api/account/me').json['user']['role'],'member')
-        self.assertEqual(friend.get('/api/resolve/archive_test').status_code,402)
+        self.assertTrue(friend.get('/api/account/me').json['user']['active'])
+        self.assertTrue(friend.get('/api/account/me').json['user']['complimentary'])
+        self.assertEqual(friend.get('/api/account/me').json['payments'],[])
+        self.assertEqual(friend.get('/api/admin/members').status_code,403)
         self.assertEqual(self.post(friend,'/api/account/accept-invite',{'token':token,'password':'friend-password-123'}).status_code,400)
 
     def test_csrf_login_checks_and_private_cache(self):
@@ -108,3 +111,41 @@ class MembershipTests(unittest.TestCase):
         result=self.post(self.admin,'/api/admin/confirm-payment',{'member_id':ident,'plan':'monthly','reference':'PAYPAL-TEST-001'})
         self.assertEqual(result.status_code,409)
         self.assertFalse(other.get('/api/account/me').json['user']['active'])
+
+    def test_free_friend_grant_revoke_and_history_are_independent(self):
+        result=self.post(self.admin,'/api/admin/invite',{'username':'friend-history'})
+        token=result.json['path'].split('=',1)[1];friend=self.app.test_client()
+        self.post(friend,'/api/account/accept-invite',{'token':token,'password':'friend-password-123'})
+        ident=friend.get('/api/account/me').json['user']['id']
+        history=self.admin.get('/api/admin/invitations').json
+        self.assertEqual(history['total'],1)
+        self.assertNotIn('token_hash',history['invitations'][0])
+        self.assertEqual(self.post(self.admin,'/api/admin/invitations/clear',{'completed':True}).status_code,200)
+        self.assertTrue(friend.get('/api/account/me').json['user']['complimentary'])
+        self.assertEqual(self.post(friend,'/api/admin/friend-access',{'member_id':ident,'active':True}).status_code,403)
+        self.assertEqual(self.post(self.admin,'/api/admin/friend-access',{'member_id':ident,'active':False}).status_code,200)
+        with self.app.app_context():m.init_database()
+        self.post(friend,'/api/account/login',{'username':'friend-history','password':'friend-password-123'})
+        self.assertFalse(friend.get('/api/account/me').json['user']['active'])
+        self.assertEqual(friend.get('/api/account/me').json['payments'],[])
+
+    def test_legacy_friend_invites_gain_access_but_revoked_accounts_do_not(self):
+        self.post(self.client,'/api/account/register',{'username':'legacy-friend','password':'legacy-friend-password-123'})
+        ident=self.client.get('/api/account/me').json['user']['id']
+        with self.app.app_context(),m.database() as conn:
+            conn.execute('INSERT INTO invitations(token_hash,member_id,expires_at,used_at) VALUES(?,?,?,?)',('legacy-token-hash',ident,'2000-01-01','2000-01-01'))
+        with self.app.app_context():m.init_database()
+        self.assertTrue(self.client.get('/api/account/me').json['user']['complimentary'])
+        self.post(self.admin,'/api/admin/revoke',{'member_id':ident})
+        with self.app.app_context():m.init_database()
+        self.post(self.client,'/api/account/login',{'username':'legacy-friend','password':'legacy-friend-password-123'})
+        self.assertFalse(self.client.get('/api/account/me').json['user']['active'])
+
+    def test_pending_friend_invitation_can_be_reissued_without_resetting_active_accounts(self):
+        first=self.post(self.admin,'/api/admin/invite',{'username':'reissued-friend'}).json['path'].split('=',1)[1]
+        second=self.post(self.admin,'/api/admin/invite',{'username':'reissued-friend'}).json['path'].split('=',1)[1]
+        client=self.app.test_client()
+        self.assertEqual(self.post(client,'/api/account/accept-invite',{'token':first,'password':'reissued-password-123'}).status_code,400)
+        self.assertEqual(self.post(client,'/api/account/accept-invite',{'token':second,'password':'reissued-password-123'}).status_code,200)
+        self.assertTrue(client.get('/api/account/me').json['user']['complimentary'])
+        self.assertEqual(self.post(self.admin,'/api/admin/invite',{'username':'reissued-friend'}).status_code,409)

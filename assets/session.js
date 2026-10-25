@@ -1,9 +1,9 @@
 /* Public catalogue, paid playback. Server authorization remains authoritative. */
 (() => {
-  let token='',memberId='',active=false,initialized=false,welcomeEligible=true;
+  let token='',memberId='',active=false,initialized=false,welcomeEligible=true,complimentary=false;
   const nativeFetch=window.fetch.bind(window);
   function stopMedia(){document.querySelectorAll('audio,video').forEach(media=>{media.pause();media.removeAttribute('src');media.load();});}
-  function notify(){const welcome=document.getElementById('unlock-welcome-plan');if(welcome)welcome.classList.toggle('hidden',!welcomeEligible);const button=document.querySelector('#preview-banner [data-unlock]');if(button)button.textContent=welcomeEligible?'DESBLOQUEAR · 1 € / 14 DÍAS ↗':'RENOVAR · 6 € / UN MES ↗';const banner=document.getElementById('preview-banner');if(banner)banner.classList.toggle('hidden',active);window.dispatchEvent(new CustomEvent('maggy:access-changed',{detail:{active}}));}
+  function notify(){document.documentElement.classList.toggle('friend-access',active&&complimentary);const welcome=document.getElementById('unlock-welcome-plan');if(welcome)welcome.classList.toggle('hidden',!welcomeEligible);const button=document.querySelector('#preview-banner [data-unlock]');if(button)button.textContent=welcomeEligible?'DESBLOQUEAR · 1 € / 14 DÍAS ↗':'RENOVAR · 6 € / UN MES ↗';const banner=document.getElementById('preview-banner');if(banner)banner.classList.toggle('hidden',active);window.dispatchEvent(new CustomEvent('maggy:access-changed',{detail:{active}}));}
   function unlock(){if(active)return true;const dialog=document.getElementById('unlock-dialog');if(dialog&&!dialog.open){if(dialog.showModal)dialog.showModal();else dialog.setAttribute('open','');}return false;}
   function lock(){active=false;stopMedia();notify();}
   async function inspect(){
@@ -13,7 +13,7 @@
       const data=await response.json(),nextId=data.user?.id||'visitor',nextActive=Boolean(data.user?.active);
       if(initialized&&nextId!==memberId){lock();location.reload();return {user:null};}
       const changed=!initialized||nextActive!==active;
-      token=data.csrf;memberId=nextId;active=nextActive;welcomeEligible=!data.user?.welcome_used;initialized=true;
+      token=data.csrf;memberId=nextId;active=nextActive;complimentary=Boolean(data.user?.complimentary);welcomeEligible=!data.user?.welcome_used;initialized=true;
       if(!active)stopMedia();if(changed)notify();return data;
     }catch{if(!initialized){memberId='visitor';initialized=true;}lock();return {user:null};}
   }

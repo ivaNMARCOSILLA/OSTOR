@@ -1,5 +1,6 @@
 'use strict';
-import {StudioTools} from '/assets/studio-tools.js?v=9.0.2';
+import {StreamCommunity} from '/assets/community.js?v=9.1.0';
+import {StudioTools} from '/assets/studio-tools.js?v=9.1.0';
 const $=id=>document.getElementById(id);
 let info=null,room=null,selected=null,publishing=false,heartbeat=null,sdkPromise=null,connecting=false,connectionGeneration=0,giftRevision=0;
 const status=text=>{$('stream-status').textContent=text;};
@@ -65,6 +66,7 @@ $('refresh-channels').addEventListener('click',async()=>{
 document.addEventListener('click',event=>{const link=event.target.closest('a[href^="#"]');if(!link||!['#live-catalogue','#creator-panel','#stream-studio'].includes(link.hash))return;event.preventDefault();history.pushState(null,'',link.hash);navigateSection(link.hash);});
 window.addEventListener('hashchange',()=>navigateSection(location.hash));
 window.addEventListener('popstate',()=>navigateSection(location.hash));
+const community=new StreamCommunity();
 let previewStream=null,previewGeneration=0;
 function stopPreview(message='',all=false){
  tools.stopMeter();if(all)tools.stopScreen();
@@ -102,7 +104,7 @@ async function privatePreview(){
  finally{if(generation===previewGeneration)$('preview-camera').disabled=false;}
 }
 async function disconnect(){
- connectionGeneration+=1;
+ connectionGeneration+=1;community.stop();
  const wasPublisher=publishing;publishing=false;clearInterval(heartbeat);heartbeat=null;
  tools.liveEnded();const previous=room;room=null;selected=null;if(previous)await previous.disconnect();
  $('live-media').replaceChildren();$('live-stage').classList.add('hidden');$('gift-link').classList.add('hidden');
@@ -119,13 +121,13 @@ async function connect(channel,publish){
   const LK=await sdk();if(generation!==connectionGeneration||!window.MaggySession.active)return;room=new LK.Room({adaptiveStream:true,dynacast:true,...tools.roomOptions()});const current=room;
   room.on(LK.RoomEvent.TrackSubscribed,track=>{if(room===current)attach(track);});
   room.on(LK.RoomEvent.TrackUnsubscribed,track=>track.detach().forEach(element=>element.remove()));
-  room.on(LK.RoomEvent.Disconnected,()=>{if(room===current){publishing=false;clearInterval(heartbeat);tools.liveEnded();$('live-stage').classList.add('hidden');status('La emisión ha terminado.');}});
+  room.on(LK.RoomEvent.Disconnected,()=>{if(room===current){publishing=false;clearInterval(heartbeat);tools.liveEnded();community.stop();$('live-stage').classList.add('hidden');status('La emisión ha terminado.');}});
   room.on(LK.RoomEvent.ConnectionStateChanged,state=>{if(room===current)tools.connectionState(state);});
   for(const event of [LK.RoomEvent.ParticipantConnected,LK.RoomEvent.ParticipantDisconnected])room.on(event,()=>{if(room===current)tools.participants(current);});
   if(publish){room.on(LK.RoomEvent.LocalTrackPublished,pub=>{if(pub.track&&room===current){attach(pub.track,true);if(pub.source===LK.Track.Source.Microphone&&pub.track.mediaStreamTrack)tools.monitor(new MediaStream([pub.track.mediaStreamTrack]));if(pub.source===LK.Track.Source.ScreenShare)tools.screenState(true);}});room.on(LK.RoomEvent.LocalTrackUnpublished,pub=>{pub.track?.detach().forEach(element=>element.remove());if(pub.source===LK.Track.Source.ScreenShare)tools.screenState(false);});}
   await current.connect(data.url,data.token);if(generation!==connectionGeneration||!window.MaggySession.active){await current.disconnect();return;}selected=channel;publishing=publish;
   if(publish){await current.localParticipant.enableCameraAndMicrophone();if(generation!==connectionGeneration||!window.MaggySession.active){for(const pub of current.localParticipant.trackPublications.values())pub.track?.stop();await current.disconnect();return;}await api('/api/streamers/me/live',{live:true});heartbeat=setInterval(()=>api('/api/streamers/me/live',{live:true}).catch(async error=>{await disconnect();status(error.message);}),25000);}
-  tools.liveConnected(current);$('leave-room').textContent=publish?'Finalizar directo':'Salir del directo';$('stage-title').textContent=channel.title;$('live-stage').classList.remove('hidden');
+  tools.liveConnected(current);community.start(channel,publish);$('leave-room').textContent=publish?'Finalizar directo':'Salir del directo';$('stage-title').textContent=channel.title;$('live-stage').classList.remove('hidden');
   $('toggle-camera').classList.toggle('hidden',!publish);$('toggle-mic').classList.toggle('hidden',!publish);
   $('toggle-camera').textContent='Apagar cámara';$('toggle-mic').textContent='Silenciar micrófono';
   $('gift-panel').classList.toggle('hidden',publish||!channel.paypal_url);$('gift-link').classList.add('hidden');$('gift-status').textContent='';
@@ -151,11 +153,11 @@ $('start-camera').addEventListener('click',()=>{if(info?.mine)connect(info.mine,
 $('leave-room').addEventListener('click',async()=>{const wasPublisher=publishing;await disconnect();status('Has salido del directo.');try{await refresh();}catch(error){status(error.message);}if(wasPublisher&&info?.mine)showStudio();else navigateSection('#live-catalogue');});
 $('enable-sound').addEventListener('click',()=>room?.startAudio().catch(()=>status('No se pudo activar el sonido.')));
 $('toggle-camera').addEventListener('click',async()=>{if(!publishing||!room)return;const enable=!room.localParticipant.isCameraEnabled;try{await room.localParticipant.setCameraEnabled(enable);$('toggle-camera').textContent=enable?'Apagar cámara':'Encender cámara';}catch{status('No se pudo cambiar la cámara.');}});
-$('toggle-mic').addEventListener('click',async()=>{if(!publishing||!room)return;const enable=!room.localParticipant.isMicrophoneEnabled;try{await room.localParticipant.setMicrophoneEnabled(enable);tools.syncRoomMic(room);$('toggle-mic').textContent=enable?'Silenciar micrófono':'Activar micrófono';}catch{status('No se pudo cambiar el micrófono.');}});
+$('toggle-mic').addEventListener('click',async()=>{if(!publishing||!room)return;const enable=!room.localParticipant.isMicrophoneEnabled;try{await room.localParticipant.setMicrophoneEnabled(enable);tools.syncRoomMic(room);community.syncMicrophone(enable);$('toggle-mic').textContent=enable?'Silenciar micrófono':'Activar micrófono';}catch{status('No se pudo cambiar el micrófono.');}});
 $('gift-amount').addEventListener('input',()=>{giftRevision+=1;$('gift-link').classList.add('hidden');$('gift-status').textContent='';});
 $('gift-form').addEventListener('submit',async event=>{event.preventDefault();$('gift-link').classList.add('hidden');try{const channelId=selected?.id,generation=connectionGeneration,revision=giftRevision;if(!channelId)throw new Error('Elige un directo.');const amount=$('gift-amount').value;if(!/^\d+(?:[.,]\d{1,2})?$/.test(amount))throw new Error('Utiliza como máximo dos decimales.');const cents=Math.round(Number(amount.replace(',','.'))*100);const result=await api(`/api/streamers/${encodeURIComponent(channelId)}/gift-link`,{amount_cents:cents});if(channelId!==selected?.id||generation!==connectionGeneration||revision!==giftRevision)return;$('gift-link').href=result.url;$('gift-link').textContent=`Enviar ${(result.amount_cents/100).toFixed(2)} € en PayPal ↗`;$('gift-link').classList.remove('hidden');$('gift-status').textContent=`Para ${result.creator}. Comisión de Ol: 0 €. Revisa el destinatario en PayPal antes de confirmar.`;}catch(error){$('gift-status').textContent=error.message;}});
 window.addEventListener('maggy:access-changed',event=>{if(!event.detail.active){stopPreview('',true);$('stream-studio').classList.add('hidden');disconnect();$('creator-panel').classList.add('hidden');renderCatalogue();$('stream-access').classList.remove('hidden');}});
-window.addEventListener('pagehide',()=>{stopPreview('',true);if(publishing)window.MaggySession.fetch('/api/streamers/me/live',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({live:false}),keepalive:true}).catch(()=>{});room?.disconnect();});
+window.addEventListener('pagehide',()=>{community.stop();stopPreview('',true);if(publishing)window.MaggySession.fetch('/api/streamers/me/live',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({live:false}),keepalive:true}).catch(()=>{});room?.disconnect();});
 await window.MaggySession.ready;
 $('stream-access').classList.toggle('hidden',window.MaggySession.active);
 if(window.MaggySession.active){try{await refresh();status(info.video_ready?'Elige un directo o prepara tu canal.':'Zona preparada; las emisiones y las altas de streamer aún no están disponibles.');navigateSection(location.hash);}catch(error){status(error.message);}}

@@ -15,6 +15,8 @@ from pathlib import Path
 
 from flask import Blueprint, current_app, g, jsonify, redirect, request, session
 from storage import open_database, INTEGRITY_ERRORS
+from moderation import validate_public_text
+from notifications import notify
 
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -54,6 +56,10 @@ def init_database():
           created_at TEXT NOT NULL, access_until TEXT,
           welcome_used INTEGER NOT NULL DEFAULT 0, session_version INTEGER NOT NULL DEFAULT 0
         );
+        CREATE TABLE IF NOT EXISTS friend_access (
+          member_id TEXT PRIMARY KEY REFERENCES members(id), granted_at TEXT NOT NULL,
+          granted_by TEXT REFERENCES members(id), revoked_at TEXT
+        );
         CREATE TABLE IF NOT EXISTS streamer_access (
           member_id TEXT PRIMARY KEY REFERENCES members(id), until_at TEXT NOT NULL
         );
@@ -68,12 +74,24 @@ def init_database():
           token_hash TEXT PRIMARY KEY, member_id TEXT NOT NULL REFERENCES members(id),
           expires_at TEXT NOT NULL, used_at TEXT
         );
+        CREATE TABLE IF NOT EXISTS admin_notifications (
+          id TEXT PRIMARY KEY,kind TEXT NOT NULL,title TEXT NOT NULL,detail TEXT NOT NULL,event_key TEXT UNIQUE,
+          created_at TEXT NOT NULL,status TEXT NOT NULL,attempts INTEGER NOT NULL DEFAULT 0,last_attempt TEXT,sent_at TEXT
+        );
         CREATE TABLE IF NOT EXISTS login_attempts (
           bucket TEXT NOT NULL, attempted_at TEXT NOT NULL
         );
         CREATE INDEX IF NOT EXISTS payment_member ON payments(member_id);
         CREATE INDEX IF NOT EXISTS login_attempt_time ON login_attempts(attempted_at);
         ''')
+        # Earlier administrative invitations were explicitly for friends. Restore
+        # those grants without changing paid periods or re-enabling revoked users.
+        conn.execute('''INSERT INTO friend_access(member_id,granted_at)
+          SELECT m.id,MIN(COALESCE(i.used_at,m.created_at)) FROM members m
+          JOIN invitations i ON i.member_id=m.id
+          WHERE m.role='member' AND m.session_version=0
+          AND NOT EXISTS (SELECT 1 FROM friend_access f WHERE f.member_id=m.id)
+          GROUP BY m.id ON CONFLICT(member_id) DO NOTHING''')
 
 
 def create_admin(username, password):
@@ -106,6 +124,7 @@ def clean_username(value):
     name = str(value or '').strip().lower()
     if not re.fullmatch(r'[a-z0-9_.-]{3,60}', name):
         raise ValueError('Usa entre 3 y 60 letras, números, puntos o guiones para el usuario.')
+    validate_public_text(name)
     return name
 
 
@@ -115,17 +134,18 @@ def validate_password(value):
 
 
 def user_public(user):
-    active = user['role'] == 'admin' or bool(user['access_until'] and datetime.fromisoformat(user['access_until']) > now_utc())
+    complimentary = bool('friend_granted_at' in user.keys() and user['friend_granted_at'] and not user['friend_revoked_at'])
+    active = user['role'] == 'admin' or complimentary or bool(user['access_until'] and datetime.fromisoformat(user['access_until']) > now_utc())
     streamer_until=user['streamer_until'] if 'streamer_until' in user.keys() else None
     streamer_active=active and (user['role']=='admin' or bool(streamer_until and datetime.fromisoformat(streamer_until)>now_utc()))
-    return {key: user[key] for key in ('id', 'username', 'role', 'access_until', 'welcome_used')} | {'active': active, 'streamer_until':streamer_until, 'streamer_active':streamer_active}
+    return {key: user[key] for key in ('id', 'username', 'role', 'access_until', 'welcome_used')} | {'active': active, 'complimentary':complimentary, 'streamer_until':streamer_until, 'streamer_active':streamer_active}
 
 
 def get_user():
     if hasattr(g, 'member'):
         return g.member
     with database() as conn:
-        row = conn.execute('SELECT m.*,s.until_at AS streamer_until FROM members m LEFT JOIN streamer_access s ON s.member_id=m.id WHERE m.id=?', (session.get('member_id', ''),)).fetchone()
+        row = conn.execute('SELECT m.*,s.until_at AS streamer_until,f.granted_at AS friend_granted_at,f.revoked_at AS friend_revoked_at FROM members m LEFT JOIN streamer_access s ON s.member_id=m.id LEFT JOIN friend_access f ON f.member_id=m.id WHERE m.id=?', (session.get('member_id', ''),)).fetchone()
     g.member = row if row and row['session_version'] == session.get('session_version') else None
     return g.member
 
@@ -211,6 +231,7 @@ def register():
         session.clear()
         session.update(member_id=ident, session_version=0)
         session.permanent = True
+        notify('registration','Nueva cuenta registrada','Se ha registrado una cuenta de cliente. El registro no activa acceso de pago.',event_key='registration:'+ident)
         return jsonify(ok=True), 201
     except (ValueError,) + INTEGRITY_ERRORS as exc:
         return jsonify(error=str(exc) if isinstance(exc, ValueError) else 'Ese usuario no está disponible.'), 400
@@ -245,9 +266,35 @@ def logout():
 @require_admin
 def list_members():
     with database() as conn:
-        users = [user_public(row) for row in conn.execute('SELECT m.*,s.until_at AS streamer_until FROM members m LEFT JOIN streamer_access s ON s.member_id=m.id ORDER BY m.created_at DESC')]
+        users = [user_public(row) for row in conn.execute('SELECT m.*,s.until_at AS streamer_until,f.granted_at AS friend_granted_at,f.revoked_at AS friend_revoked_at FROM members m LEFT JOIN streamer_access s ON s.member_id=m.id LEFT JOIN friend_access f ON f.member_id=m.id ORDER BY m.created_at DESC')]
         payments = [dict(row) for row in conn.execute('SELECT p.*,m.username FROM payments p JOIN members m ON m.id=p.member_id ORDER BY verified_at DESC LIMIT 300')]
     return jsonify(members=users, payments=payments)
+
+
+@bp.get('/api/admin/invitations')
+@require_admin
+def invitation_history():
+    try: page=max(1,int(request.args.get('page','1')))
+    except ValueError: page=1
+    with database() as conn:
+        total=conn.execute("SELECT COUNT(*) AS n FROM invitations i JOIN members m ON m.id=i.member_id WHERE m.role='member'").fetchone()['n']
+        pages=max(1,(total+24)//25);page=min(page,pages)
+        rows=conn.execute("SELECT i.member_id,m.username,i.expires_at,i.used_at FROM invitations i JOIN members m ON m.id=i.member_id WHERE m.role='member' ORDER BY i.expires_at DESC LIMIT 25 OFFSET ?",((page-1)*25,)).fetchall()
+    return jsonify(invitations=[dict(row) for row in rows],total=total,page=page,pages=pages)
+
+
+@bp.post('/api/admin/invitations/clear')
+@require_admin
+def clear_invitation_history():
+    data=payload()
+    with database() as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        if data.get('member_id'):
+            conn.execute("DELETE FROM invitations WHERE member_id IN (SELECT id FROM members WHERE id=? AND role='member')",(str(data['member_id']),))
+        elif data.get('completed') is True:
+            conn.execute("DELETE FROM invitations WHERE (used_at IS NOT NULL OR expires_at<=?) AND member_id IN (SELECT id FROM members WHERE role='member')",(stamp(now_utc()),))
+        else: return jsonify(error='Selecciona una invitación o el historial usado y caducado.'),400
+    return jsonify(ok=True)
 
 
 @bp.post('/api/admin/invite')
@@ -256,15 +303,40 @@ def invite():
     try:
         name = clean_username(payload().get('username'))
         with database() as conn:
-            ident = secrets.token_hex(16)
-            conn.execute('INSERT INTO members(id,username,created_at) VALUES(?,?,?)', (ident, name, stamp(now_utc())))
+            conn.execute('BEGIN IMMEDIATE')
+            existing=conn.execute('SELECT id,role,password_hash FROM members WHERE username=?',(name,)).fetchone()
+            if existing and (existing['role']!='member' or existing['password_hash']):
+                return jsonify(error='Esta cuenta ya está activada. Usa «Dar acceso gratuito» en el listado de clientes.'),409
+            ident=existing['id'] if existing else secrets.token_hex(16)
+            if not existing:conn.execute('INSERT INTO members(id,username,created_at) VALUES(?,?,?)',(ident,name,stamp(now_utc())))
+            conn.execute('DELETE FROM invitations WHERE member_id=?',(ident,))
             token = secrets.token_urlsafe(32)
             conn.execute('INSERT INTO invitations(token_hash,member_id,expires_at) VALUES(?,?,?)',
                          (hashlib.sha256(token.encode()).hexdigest(), ident, stamp(now_utc() + timedelta(hours=48))))
+            conn.execute('INSERT INTO friend_access(member_id,granted_at,granted_by) VALUES(?,?,?) ON CONFLICT(member_id) DO UPDATE SET granted_at=excluded.granted_at,granted_by=excluded.granted_by,revoked_at=NULL',(ident,stamp(now_utc()),get_user()['id']))
         # Token returned only to the authenticated admin, not logs or a repository.
-        return jsonify(path='/account#invite=' + token, username=name), 201
+        return jsonify(path='/account#invite=' + token, username=name, complimentary=True), 201
     except (ValueError,) + INTEGRITY_ERRORS:
         return jsonify(error='Usuario inválido o ya existente.'), 400
+
+
+@bp.post('/api/admin/friend-access')
+@require_admin
+def friend_access():
+    data=payload()
+    if not isinstance(data.get('active'),bool):
+        return jsonify(error='Indica si deseas dar o retirar el acceso gratuito.'),400
+    with database() as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        user=conn.execute('SELECT id,role FROM members WHERE id=?',(str(data.get('member_id','')),)).fetchone()
+        if not user or user['role']=='admin':
+            return jsonify(error='Selecciona una cuenta de cliente.'),400
+        if data['active']:
+            conn.execute('INSERT INTO friend_access(member_id,granted_at,granted_by,revoked_at) VALUES(?,?,?,NULL) ON CONFLICT(member_id) DO UPDATE SET granted_at=excluded.granted_at,granted_by=excluded.granted_by,revoked_at=NULL',(user['id'],stamp(now_utc()),get_user()['id']))
+        else:
+            conn.execute('UPDATE friend_access SET revoked_at=? WHERE member_id=?',(stamp(now_utc()),user['id']))
+            conn.execute('UPDATE members SET session_version=session_version+1 WHERE id=?',(user['id'],))
+    return jsonify(ok=True,complimentary=data['active'])
 
 
 @bp.post('/api/account/accept-invite')
@@ -287,6 +359,7 @@ def accept_invite():
         session.clear()
         session.update(member_id=invitation['member_id'], session_version=0)
         session.permanent = True
+        notify('invitation','Invitación aceptada','Un invitado ha activado su cuenta. Revisa su acceso gratuito en administración.',event_key='invite:'+invitation['member_id'])
         return jsonify(ok=True)
     except ValueError as exc:
         return jsonify(error=str(exc)), 400
@@ -322,6 +395,7 @@ def confirm_payment():
             conn.execute('UPDATE members SET access_until=?,welcome_used=MAX(welcome_used,?) WHERE id=?',(stamp(access_end),1,user['id']))
             if plan == 'streamer':
                 conn.execute('INSERT INTO streamer_access(member_id,until_at) VALUES(?,?) ON CONFLICT(member_id) DO UPDATE SET until_at=excluded.until_at',(user['id'],stamp(end)))
+        notify('payment','Pago registrado',f'Se ha registrado un pago comprobado de {PLANS[plan]["cents"]/100:.2f} € para el plan {plan}. Consulta usuario, referencia y fechas en el panel privado.',event_key='payment:'+reference)
         return jsonify(ok=True, access_until=stamp(access_end))
     except INTEGRITY_ERRORS:
         return jsonify(error='Esta referencia de pago ya se ha utilizado.'), 409
@@ -334,6 +408,7 @@ def revoke():
         conn.execute('BEGIN IMMEDIATE')
         conn.execute('UPDATE members SET access_until=?,session_version=session_version+1 WHERE id=? AND role!=?',
                      (stamp(now_utc()), str(payload().get('member_id', '')), 'admin'))
+        conn.execute('UPDATE friend_access SET revoked_at=? WHERE member_id=?',(stamp(now_utc()),str(payload().get('member_id',''))))
         conn.execute('DELETE FROM streamer_access WHERE member_id IN (SELECT id FROM members WHERE id=? AND role!=?)',(str(payload().get('member_id','')),'admin'))
     return jsonify(ok=True)
 

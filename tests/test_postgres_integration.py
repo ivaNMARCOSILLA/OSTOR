@@ -27,7 +27,7 @@ class PostgresMembershipTests(unittest.TestCase):
     def setUp(self):
         self.app=application.app
         with self.app.app_context(),m.database() as connection:
-            for table in ['streamer_channels','streamer_access','payments','invitations','login_attempts','members']:
+            for table in ['admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:
                 connection.execute('DELETE FROM '+table)
         with self.app.app_context():
             m.create_admin('pg-admin','postgres-admin-password-123')
@@ -109,7 +109,7 @@ class PostgresMembershipTests(unittest.TestCase):
                 self.post(admin,'/api/admin/confirm-payment',{'member_id':ident,'plan':'welcome','reference':'SQLITE-MIGRATE-001'})
                 expected=client.get('/api/account/me').json['user']['access_until']
             with self.app.app_context(),m.database() as connection:
-                for table in ['streamer_channels','streamer_access','payments','invitations','login_attempts','members']:connection.execute('DELETE FROM '+table)
+                for table in ['admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:connection.execute('DELETE FROM '+table)
             counts=migrate(Path(folder)/'members.sqlite3',self.app)
             self.assertEqual(counts['members'],2);self.assertEqual(counts['payments'],1)
             migrated=self.app.test_client()
@@ -138,5 +138,17 @@ class PostgresMembershipTests(unittest.TestCase):
         self.assertIsNone(self.client.get('/api/account/me').json['user'])
         self.assertEqual(self.client.get('/api/resolve/archive_test').status_code,401)
 
+
+    def test_friend_access_is_free_persistent_and_independently_revocable(self):
+        result=self.post(self.admin,'/api/admin/friend-access',{'member_id':self.member['id'],'active':True})
+        self.assertEqual(result.status_code,200)
+        data=self.client.get('/api/account/me').json
+        self.assertTrue(data['user']['active']);self.assertTrue(data['user']['complimentary'])
+        self.assertEqual(data['payments'],[])
+        with self.app.app_context():m.init_database()
+        self.assertTrue(self.client.get('/api/account/me').json['user']['complimentary'])
+        self.post(self.admin,'/api/admin/friend-access',{'member_id':self.member['id'],'active':False})
+        self.post(self.client,'/api/account/login',{'username':'pg-client','password':'postgres-client-password-123'})
+        self.assertFalse(self.client.get('/api/account/me').json['user']['active'])
 
 if __name__=='__main__':unittest.main(verbosity=2)

@@ -1,5 +1,6 @@
 """Native live video and direct, external gifts. No custody or gift commissions."""
 from __future__ import annotations
+from moderation import is_abusive, validate_public_text
 import base64
 import hashlib
 import hmac
@@ -48,6 +49,8 @@ def init_database():
             title TEXT NOT NULL, bio TEXT NOT NULL DEFAULT '', paypal_url TEXT NOT NULL DEFAULT '',
             room_name TEXT NOT NULL UNIQUE, live_until TEXT, updated_at TEXT NOT NULL
         )''')
+    from community import init_database as init_community_database
+    init_community_database()
 
 
 def paypal_link(value):
@@ -136,7 +139,7 @@ def channels():
         rows=conn.execute('SELECT c.*,m.username FROM streamer_channels c JOIN members m ON m.id=c.member_id WHERE c.live_until>? ORDER BY c.updated_at DESC LIMIT 60',(stamp(now_utc()),)).fetchall()
     own=own_channel()
     return jsonify(video_ready=live_ready(),streamer_active=publisher_allowed(),streamer_monthly_cents=800,gift_commission_bps=0,
-                   channels=[channel_public(row) for row in rows],mine=channel_public(own) if own else None,
+                   channels=[channel_public(row) for row in rows if not is_abusive(row['title']+' '+row['bio']+' '+row['username'])],mine=channel_public(own) if own else None,
                    user={'id':user['id'],'username':user['username']},
                    setup_checks=video_configuration_checks() if user['role']=='admin' else None,
                    streamer_sales_available=streamer_sales_ready(),
@@ -149,6 +152,8 @@ def save_channel():
     data=request.get_json(silent=True) or {}
     title=str(data.get('title','')).strip();bio=str(data.get('bio','')).strip()
     if not 3<=len(title)<=80 or len(bio)>400: return jsonify(error='Indica un título de 3 a 80 caracteres y una presentación de hasta 400.'),400
+    try: validate_public_text(title+' '+bio)
+    except ValueError as exc: return jsonify(error=str(exc)),400
     try: paypal=paypal_link(data.get('paypal_url',''))
     except (ValueError,TypeError): return jsonify(error='El enlace PayPal.me no es válido.'),400
     if paypal and data.get('owns_paypal') is not True: return jsonify(error='Confirma que el enlace de PayPal te pertenece.'),400
@@ -170,6 +175,7 @@ def token(channel_id):
     if not live_ready(): return jsonify(error='Las emisiones todavía no están activadas. No se ha cobrado ningún alta de streamer.',code='live_not_configured'),503
     with database() as conn:
         channel=conn.execute('SELECT * FROM streamer_channels WHERE id=?',(channel_id,)).fetchone()
+    if channel and is_abusive(channel['title']+' '+channel['bio']): return jsonify(error='El canal debe corregir su título o presentación antes de emitir.'),409
     if not channel: return jsonify(error='Este canal no existe.'),404
     publish=(request.get_json(silent=True) or {}).get('publish') is True
     user=get_user()

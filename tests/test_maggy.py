@@ -26,5 +26,5 @@ class MaggyTests(unittest.TestCase):
         for path in ['/','/manifest.webmanifest','/sw.js','/assets/maggy.js']:
             with self.client.get(path) as response:self.assertEqual(response.status_code,200)
         data=self.client.get('/health').json
-        self.assertEqual(data['version'],'9.0.2')
+        self.assertEqual(data['version'],'9.1.0')
         self.assertEqual(data['providers'],['ARCHIVE','AUDIUS','COMMONS','RADIO'])

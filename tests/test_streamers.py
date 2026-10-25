@@ -152,3 +152,32 @@ class StreamerTests(unittest.TestCase):
         user=creator.get('/api/account/me').json['user']
         self.assertTrue(user['active']);self.assertFalse(user['streamer_active'])
         self.assertEqual(self.post(creator,f'/api/streamers/{channel}/token',{'publish':True}).status_code,403)
+
+    def test_moderated_comments_transcripts_and_reports_are_private_and_role_bound(self):
+        creator,ident,channel=self.creator()
+        self.post(creator,'/api/streamers/me/live',{'live':True})
+        viewer,viewer_id=self.member('comment-viewer')
+        self.pay(viewer_id,'monthly','CHAT-VIEWER-001')
+        endpoint='/api/streamers/'+channel+'/comments'
+        self.assertTrue(self.post(viewer,endpoint,{'text':'Buen directo, gracias'}).json['accepted'])
+        blocked=self.post(viewer,endpoint,{'text':'eres un gilipollas'}).json
+        self.assertTrue(blocked['blocked']);self.assertIn('suspensión',blocked['warning'])
+        self.assertEqual(len(viewer.get(endpoint).json['comments']),1)
+        self.assertEqual(self.post(viewer,endpoint,{'kind':'transcript','text':'voz inventada'}).status_code,403)
+        self.post(creator,endpoint,{'kind':'transcript','text':'Una frase privada de la voz'})
+        self.assertEqual(len(viewer.get(endpoint).json['comments']),1)
+        self.assertTrue(self.post(viewer,endpoint,{'kind':'report','text':'Posible actividad ilegal'}).json['reported'])
+        self.assertEqual(viewer.get('/api/admin/moderation').status_code,403)
+        log=self.admin.get('/api/admin/moderation').json
+        self.assertEqual(log['total'],2)
+        all_log=self.admin.get('/api/admin/moderation?flagged=0').json
+        self.assertEqual(all_log['total'],4)
+        self.assertTrue(any(r['kind']=='transcript' for r in all_log['records']))
+
+    def test_toxic_profile_is_blocked_but_respectful_criticism_is_allowed(self):
+        creator,ident,channel=self.creator()
+        result=self.post(creator,'/api/streamers/me',{'title':'Los médicos de mi barrio','bio':'La sanidad pública debe mejorar sus tiempos de espera.'})
+        self.assertEqual(result.status_code,200)
+        result=self.post(creator,'/api/streamers/me',{'title':'Mi canal','bio':'Te voy a matar'})
+        self.assertEqual(result.status_code,400)
+        self.assertIn('amenazas',result.json['error'])
