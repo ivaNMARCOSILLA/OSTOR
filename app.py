@@ -30,7 +30,7 @@ app = Flask(__name__, static_folder=os.path.join(ROOT, "assets"), static_url_pat
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 app.logger.setLevel(logging.INFO)
 
-VERSION = "9.0.0"
+VERSION = "9.0.1"
 AUDIUS_APP_NAME = os.getenv("AUDIUS_APP_NAME", "electronicama")
 SEARCH_CACHE_SECONDS = max(15, min(int(os.getenv("SEARCH_CACHE_SECONDS", "300")), 3600))
 ARCHIVE_CACHE_SECONDS = max(60, min(int(os.getenv("ARCHIVE_CACHE_SECONDS", "3600")), 86400))
@@ -180,7 +180,7 @@ def search_archive(query: str, limit: int = 8, page: int = 1) -> list:
         safe = re.sub(r'[^\w\s\-áéíóúüñÁÉÍÓÚÜÑ]', ' ', query)
         params = {"q": f'({" ".join(safe.split())}) AND mediatype:audio AND (format:"VBR MP3" OR format:MP3 OR format:MPEG4) AND NOT access-restricted-item:true',
                   "fl[]": ["identifier", "title", "creator", "access-restricted-item"], "sort[]": "downloads desc",
-                  "rows": min(40, limit * 3), "page": page, "output": "json"}
+                  "rows": limit, "page": page, "output": "json"}
         docs = fetch_json("https://archive.org/advancedsearch.php", params).get("response", {}).get("docs", [])
         results = []
         for d in docs:
@@ -211,14 +211,14 @@ AUDIUS_ENDPOINTS = (
 )
 
 
-def search_audius(query: str, limit: int = 10) -> list:
+def search_audius(query: str, limit: int = 10, page: int = 1) -> list:
     for endpoint in AUDIUS_ENDPOINTS:
         try:
-            tracks = fetch_json(endpoint, {"query": query, "app_name": AUDIUS_APP_NAME, "limit": limit * 2}, timeout=(2, 3)).get("data", [])
+            tracks = fetch_json(endpoint, {"query": query, "app_name": AUDIUS_APP_NAME, "limit": limit, "offset": (page - 1) * limit}, timeout=(2, 3)).get("data", [])
             if not tracks:
                 continue
             results = []
-            for track in tracks[:limit * 2]:
+            for track in tracks[:limit]:
                 ident = str(track.get("id", ""))
                 if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", ident):
                     continue
@@ -275,7 +275,7 @@ def commons_track(page):
     return track
 
 
-def search_commons(query, limit=16, page=1):
+def search_commons(query, limit=50, page=1):
     params = {"action": "query", "format": "json", "formatversion": 2, "generator": "search",
               "gsrsearch": "filetype:audio " + query, "gsrnamespace": 6, "gsrlimit": limit,
               "gsroffset": (page-1)*limit, "prop": "imageinfo", "iiprop": "url|mime|extmetadata"}
@@ -370,14 +370,14 @@ def multi_search(query: str, page: int = 1, source: str = "ALL") -> list:
     elif source == "COMMONS":
         candidates = search_commons(query, page=page)
     elif source == "AUDIUS":
-        candidates = search_audius(query, limit=10) if page == 1 else []
-    elif source == "ARCHIVE" or page > 1:
-        candidates = search_archive(query, limit=15, page=page)
+        candidates = search_audius(query, limit=60, page=page)
+    elif source == "ARCHIVE":
+        candidates = search_archive(query, limit=60, page=page)
     else:
-        workers = [(search_archive, 8), (search_audius, 10)]
+        workers = [(search_archive, 60), (search_audius, 60)]
         candidates = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(workers)) as pool:
-            futures = [pool.submit(fn, query, n) for fn, n in workers]
+            futures = [pool.submit(fn, query, n, page=page) for fn, n in workers]
             for future in concurrent.futures.as_completed(futures):
                 try:
                     candidates.extend(future.result() or [])

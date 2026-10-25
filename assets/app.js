@@ -8,10 +8,12 @@
 await window.MaggySession.ready;
 const storageKey = name => window.MaggySession ? window.MaggySession.key(name) : name;
 
-const VERSION = '9.0.0';
+const VERSION = '9.0.1';
 const KEY = Object.freeze({ favorites: storageKey('electronicama_v7_favorites'), history: storageKey('electronicama_v7_history'), ads: storageKey('electronicama_ads_consent_v1') });
 const MAX_FAVORITES = 160;
 const MAX_HISTORY = 75;
+const SEARCH_TARGET = 120;
+const AUTO_SEARCH_PAGES = 4;
 const SOURCE_NAMES = { AUDIUS: 'AUDIUS', ARCHIVE: 'ARCHIVE', COMMONS: 'MEZCLA · COMMONS', RADIO: 'MEZCLA · RADIO EN DIRECTO' };
 const byId = id => document.getElementById(id);
 
@@ -71,7 +73,7 @@ function toggleFavorite(track) {
   render();
 }
 function maggyCover() {
-  const img = document.createElement('img'); img.src = '/assets/app-icon-192.png?v=9.0.0'; img.alt = 'Logo de Ol'; img.loading = 'lazy';
+  const img = document.createElement('img'); img.src = '/assets/app-icon-192.png?v=9.0.1'; img.alt = 'Logo de Ol'; img.loading = 'lazy';
   img.addEventListener('error', () => img.replaceWith(emptyNode('span', 'cover-fallback', 'Ol')), {once:true});
   return img;
 }
@@ -152,7 +154,7 @@ function render() {
     for (const track of list) frag.append(trackCard(track, list));
     grid.append(frag);
   }
-  byId('load-more').classList.toggle('hidden', state.source === 'MIX' ? !list.length || state.mixPage >= 10 : state.view !== 'discover' || state.source === 'AUDIUS' || state.results.length === 0 || state.page >= 10);
+  byId('load-more').classList.toggle('hidden', state.source === 'MIX' ? !list.length || state.mixPage >= 10 : state.view !== 'discover' || state.results.length === 0 || state.page >= 10);
   if (state.source === 'MIX') byId('load-more').disabled = state.mixLoading;
 }
 function goView(view) {
@@ -194,8 +196,8 @@ async function requestSearch(query, append = false) {
   byId('search-button').disabled = true; byId('load-more').disabled = true;
   byId('search-input').value = query;
   updateExternalSearch(query);
-  message(`Buscando «${query}»…`); render();
-  const sources = page > 1 ? ['ARCHIVE'] : ['AUDIUS', 'ARCHIVE'];
+  message(`Buscando «${query}»… Objetivo: al menos 120 coincidencias disponibles.`); render();
+  const sources = ['AUDIUS', 'ARCHIVE'];
   let failures = 0, received = 0;
   const deadline = setTimeout(() => controller.abort(), 14000);
   await Promise.allSettled(sources.map(async source => {
@@ -214,9 +216,10 @@ async function requestSearch(query, append = false) {
       if (state.request !== controller || controller.signal.aborted) return;
       const seen = new Set(state.results.map(item => item.id));
       const tracks = data.tracks.filter(item => typeof item.id === 'string' && typeof item.title === 'string');
-      state.results.push(...tracks.filter(item => !seen.has(item.id)));
-      received += tracks.length;
-      message(`${state.results.length} resultados para «${query}» · completando búsqueda…`);
+      const fresh = tracks.filter(item => { if (seen.has(item.id)) return false; seen.add(item.id); return true; });
+      state.results.push(...fresh);
+      received += fresh.length;
+      message(`${state.results.length} resultados para «${query}» · buscando al menos 120 coincidencias…`);
       render(); // The first available provider is visible immediately.
     } catch { failures += 1; }
   }));
@@ -225,7 +228,10 @@ async function requestSearch(query, append = false) {
   state.loading = false; state.request = null;
   byId('search-button').disabled = false; byId('load-more').disabled = false;
   if (append && !received && !failures) state.page = 10;
-  message(`${state.results.length} resultados para «${query}»${failures ? '. Una plataforma no respondió; puedes volver a buscar.' : ''}`);
+  if (state.results.length < SEARCH_TARGET && received > 0 && !failures && state.page < AUTO_SEARCH_PAGES) {
+    state.page += 1; return requestSearch(query, true);
+  }
+  message(`${state.results.length} resultados para «${query}»${failures ? '. Una plataforma no respondió; puedes volver a buscar.' : state.results.length < SEARCH_TARGET ? '. No se han encontrado 120 resultados disponibles; puedes ampliar la búsqueda.' : ''}`);
   render();
 }
 
@@ -247,9 +253,13 @@ async function requestMixSearch(query = 'piano', append = false) {
     if (!Array.isArray(data)) throw new Error('La fuente devolvió una respuesta no válida.');
     if (state.mixRequest !== controller) return;
     const seen = new Set(state.mixResults.map(track => track.id));
-    state.mixResults.push(...data.filter(track => ['COMMONS', 'RADIO'].includes(track.source) && !seen.has(track.id)));
+    const fresh = data.filter(track => { if (!['COMMONS', 'RADIO'].includes(track.source) || seen.has(track.id)) return false; seen.add(track.id); return true; });
+    state.mixResults.push(...fresh);
     state.mixLoaded = true;
     if (append && !data.length) state.mixPage = 10;
+    if (state.mixResults.filter(track => track.source === 'COMMONS').length < SEARCH_TARGET && fresh.some(track => track.source === 'COMMONS') && state.mixPage < AUTO_SEARCH_PAGES) {
+      clearTimeout(deadline); state.mixPage += 1; return requestMixSearch(query, true);
+    }
     byId('mix-status').textContent = state.mixResults.length ? `${state.mixResults.length} resultados para «${query}»: grabaciones y emisoras. Consulta la fuente de cada uno.` : 'No hay grabaciones compatibles para esta búsqueda. Prueba piano, Mozart o guitarra.';
   } catch (error) {
     if (state.mixRequest === controller) byId('mix-status').textContent = error.name === 'AbortError' ? 'La fuente tarda en responder. Vuelve a intentarlo.' : error.message;
