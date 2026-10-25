@@ -15,6 +15,14 @@ def run():
         page.goto(BASE_URL+'/');page.locator('#consent-decline').click()
         page.locator('.track-card').wait_for()
         assert page.locator('#preview-banner').is_visible()
+        assert page.locator('#mas-musica .music-web-card').count() == 7
+        page.locator('#search-input').fill('Björk & jazz')
+        for selector, host, parameter in [('#soundcloud-search','soundcloud.com','q'),('#youtube-search','www.youtube.com','search_query')]:
+            from urllib.parse import urlparse,parse_qs
+            link=urlparse(page.locator(selector).get_attribute('href'))
+            assert link.hostname == host and parse_qs(link.query)[parameter] == ['Björk & jazz']
+        assert not any('soundcloud.com' in url or 'youtube.com' in url for url in requests)
+        assert page.locator('iframe').count() == 0
         assert page.locator('#spotify-premium a').get_attribute('href') == 'https://www.spotify.com/es/premium/'
         assert 'no incluye Spotify Premium' in page.locator('#spotify-premium').inner_text()
         assert page.locator('#spotify-premium a[href*="paypal"]').count() == 0

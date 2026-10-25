@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""MAGGY PRO 8.4.2 — API musical y distribución web.
+"""MAGGY PRO 8.5.0 — API musical y distribución web.
 
 Proyecto y edición: Iván Marcos Illa.
 El código de servicios externos y sus marcas pertenece a sus titulares.
@@ -29,7 +29,7 @@ app = Flask(__name__, static_folder=os.path.join(ROOT, "assets"), static_url_pat
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 app.logger.setLevel(logging.INFO)
 
-VERSION = "8.4.2"
+VERSION = "8.5.0"
 AUDIUS_APP_NAME = os.getenv("AUDIUS_APP_NAME", "electronicama")
 SEARCH_CACHE_SECONDS = max(15, min(int(os.getenv("SEARCH_CACHE_SECONDS", "300")), 3600))
 ARCHIVE_CACHE_SECONDS = max(60, min(int(os.getenv("ARCHIVE_CACHE_SECONDS", "3600")), 86400))

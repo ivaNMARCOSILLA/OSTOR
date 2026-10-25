@@ -29,3 +29,7 @@ La búsqueda consulta las dos fuentes en paralelo y muestra cada respuesta al ll
 Audius se entrega mediante rangos limitados de 512 KiB desde el mismo origen, comprobando el acceso en cada solicitud. El servidor valida cada redirección y admite únicamente los dominios Archive/Audius y el hostname exacto del almacenamiento del validador observado; no permite otros buckets R2. El diagnóstico de audio está restringido a administradores y nunca devuelve URLs firmadas.
 
 Maggy se paga por PayPal desde la cuenta (1 EUR por 14 días de bienvenida, 6 EUR por un mes posterior). Spotify Premium se contrata externamente mediante su web oficial; no hay SDK ni cobros Spotify en Maggy, ni un precio Spotify fijado sin verificación.
+
+### Directorio musical 8.5
+
+La portada incorpora SoundCloud, YouTube, Free Music Archive, dig.ccMixter, Musopen, Wikimedia Commons y Radio Garden como enlaces externos con información sobre opciones gratuitas y límites. SoundCloud, YouTube, Spotify y Commons reciben la búsqueda actual (también al editarla antes de enviar). No se cargan SDK, iframes, APIs ni audio de estos servicios. El directorio es público, los pagos de Maggy y Spotify siguen separados y la reproducción propia de Maggy mantiene sus controles de acceso.

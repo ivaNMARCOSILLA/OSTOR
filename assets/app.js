@@ -8,7 +8,7 @@
 await window.MaggySession.ready;
 const storageKey = name => window.MaggySession ? window.MaggySession.key(name) : name;
 
-const VERSION = '8.4.2';
+const VERSION = '8.5.0';
 const KEY = Object.freeze({ favorites: storageKey('electronicama_v7_favorites'), history: storageKey('electronicama_v7_history'), ads: storageKey('electronicama_ads_consent_v1') });
 const MAX_FAVORITES = 160;
 const MAX_HISTORY = 75;
@@ -145,6 +145,20 @@ function goView(view) {
   render();
   byId('library').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
+function updateExternalSearch(query) {
+  query = String(query || '').trim().replace(/\s+/g, ' ').slice(0, 90);
+  const encoded = encodeURIComponent(query);
+  const urls = {
+    soundcloud: `https://soundcloud.com/search/sounds?q=${encoded}`,
+    youtube: `https://www.youtube.com/results?search_query=${encoded}`,
+    spotify: `https://open.spotify.com/search/${encoded}`,
+    commons: `https://commons.wikimedia.org/w/index.php?title=Special:MediaSearch&type=audio&search=${encoded}`
+  };
+  document.querySelectorAll('[data-external-search]').forEach(link => {
+    if (urls[link.dataset.externalSearch]) link.href = urls[link.dataset.externalSearch];
+  });
+  byId('directory-query').textContent = query ? `Búsqueda externa: «${query}». SoundCloud, YouTube, Spotify y Commons usarán estas palabras.` : 'Escribe un artista o canción para buscarlo en otras plataformas.';
+}
 const searchMemory = new Map();
 async function requestSearch(query, append = false) {
   query = String(query || '').trim().replace(/\s+/g, ' ').slice(0, 90);
@@ -157,7 +171,7 @@ async function requestSearch(query, append = false) {
   state.loading = true;
   byId('search-button').disabled = true; byId('load-more').disabled = true;
   byId('search-input').value = query;
-  byId('spotify-search').href = `https://open.spotify.com/search/${encodeURIComponent(query)}`;
+  updateExternalSearch(query);
   message(`Buscando «${query}»…`); render();
   const sources = page > 1 ? ['ARCHIVE'] : ['AUDIUS', 'ARCHIVE'];
   let failures = 0, received = 0;
@@ -388,6 +402,7 @@ function init() {
     const hidden = byId('mobile-nav').classList.toggle('hidden');
     byId('mobile-menu').setAttribute('aria-expanded', String(!hidden));
   });
+  byId('search-input').addEventListener('input', event => updateExternalSearch(event.target.value));
   byId('search-form').addEventListener('submit', event => { event.preventDefault(); requestSearch(byId('search-input').value); });
   byId('load-more').addEventListener('click', () => { if (!state.loading) { state.page += 1; requestSearch(state.query, true); } });
   byId('clear-history').addEventListener('click', () => {
