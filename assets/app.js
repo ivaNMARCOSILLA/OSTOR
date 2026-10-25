@@ -1,5 +1,5 @@
 /**
- * MAGGY PRO 8.3.0 · Frontend modular sin compilación ni dependencias.
+ * Ol PRO 8.3.0 · Frontend modular sin compilación ni dependencias.
  * Edición y mantenimiento: Iván Marcos Illa · 2026-10-24.
  * © 2026 Iván Marcos Illa sobre las aportaciones originales de esta edición.
  * Audius, Internet Archive y sus contenidos pertenecen a sus titulares.
@@ -8,7 +8,7 @@
 await window.MaggySession.ready;
 const storageKey = name => window.MaggySession ? window.MaggySession.key(name) : name;
 
-const VERSION = '8.8.0';
+const VERSION = '9.0.0';
 const KEY = Object.freeze({ favorites: storageKey('electronicama_v7_favorites'), history: storageKey('electronicama_v7_history'), ads: storageKey('electronicama_ads_consent_v1') });
 const MAX_FAVORITES = 160;
 const MAX_HISTORY = 75;
@@ -71,8 +71,8 @@ function toggleFavorite(track) {
   render();
 }
 function maggyCover() {
-  const img = document.createElement('img'); img.src = '/assets/app-icon-192.png?v=8.8.0'; img.alt = 'Logo de Maggy'; img.loading = 'lazy';
-  img.addEventListener('error', () => img.replaceWith(emptyNode('span', 'cover-fallback', 'MAGGY')), {once:true});
+  const img = document.createElement('img'); img.src = '/assets/app-icon-192.png?v=9.0.0'; img.alt = 'Logo de Ol'; img.loading = 'lazy';
+  img.addEventListener('error', () => img.replaceWith(emptyNode('span', 'cover-fallback', 'Ol')), {once:true});
   return img;
 }
 function cover(src, alt) {
@@ -122,9 +122,9 @@ function render() {
   byId('mix-intro').classList.toggle('hidden', state.source !== 'MIX');
   byId('play-mix').disabled = list.length === 0;
   const titles = {
-    discover: ['EXPLORA EL ', 'SONIDO', 'Explora los sonidos que marcan tu ritmo.'],
-    favorites: ['TUS ', 'FAVORITOS', 'Guardados únicamente en este navegador.'],
-    history: ['TU ', 'HISTORIAL', 'Tu música escuchada recientemente.']
+    discover: ['Explora el ', 'sonido', 'Explora los sonidos que marcan tu ritmo.'],
+    favorites: ['Tus ', 'favoritos', 'Guardados únicamente en este navegador.'],
+    history: ['Tu ', 'historial', 'Tu música escuchada recientemente.']
   };
   const [first, emph, subtitle] = state.view === 'discover' && state.source === 'MIX' ? ['TU ', 'MEZCLA', 'Otras fuentes: grabaciones libres y radios en directo · solo audio.'] : titles[state.view];
   const heading = byId('section-title');
@@ -369,7 +369,7 @@ function setupAudioMediaSession(track) {
   try {
     const artwork = safeImage(track.thumbnail) ? [{src: safeImage(track.thumbnail), }] : [];
     if ('MediaMetadata' in window) navigator.mediaSession.metadata = new MediaMetadata({
-      title: track.title, artist: track.channel || 'Artista', album: 'MAGGY', artwork
+      title: track.title, artist: track.channel || 'Artista', album: 'Ol', artwork
     });
     for (const [name, fn] of [
       ['play', togglePlayFromSystem], ['pause', () => state.audio?.pause()],
@@ -384,7 +384,7 @@ function setupAudioMediaSession(track) {
 }
 function playNext() { if (state.currentIndex < state.queue.length - 1) playTrack(state.queue[state.currentIndex + 1], state.queue); else setStatus('Fin de la lista.'); }
 function playPrevious() { if (state.currentIndex > 0) playTrack(state.queue[state.currentIndex - 1], state.queue); }
-function togglePlayFromSystem() { state.audio?.play().catch(() => setStatus('Pulsa reproducir en Maggy para continuar.')); }
+function togglePlayFromSystem() { state.audio?.play().catch(() => setStatus('Pulsa reproducir en Ol para continuar.')); }
 function togglePlay() {
   if (state.audio) {
     if (state.audio.error && state.currentTrack) startAudio(`/api/play/${encodeURIComponent(state.currentTrack.id)}?retry=1`);
@@ -494,7 +494,7 @@ function init() {
   window.addEventListener('maggy:access-changed', event => { if (!event.detail.active) closePlayer(); render(); });
   render();
   requestSearch(state.query);
-  console.info(`MAGGY PRO ${VERSION} · Edición Iván Marcos Illa`);
+  console.info(`Ol PRO ${VERSION} · Edición Iván Marcos Illa`);
 }
 window.addEventListener('maggy:play', event => { const list = Array.isArray(event.detail) ? event.detail : [event.detail]; if (list[0]?.id && list[0]?.source) playTrack(list[0], list); });
 init();

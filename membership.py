@@ -159,7 +159,7 @@ def restrict_music():
         return None
     user = get_user()
     if not user or not user_public(user)['active']:
-        return jsonify(error='Desbloquea Maggy para escuchar música.', code='membership_required'), 402 if user else 401
+        return jsonify(error='Desbloquea Ol para escuchar música.', code='membership_required'), 402 if user else 401
 
 
 def payload():

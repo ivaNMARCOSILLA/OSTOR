@@ -1,5 +1,5 @@
 'use strict';
-import {StudioTools} from '/assets/studio-tools.js?v=8.8.0';
+import {StudioTools} from '/assets/studio-tools.js?v=9.0.0';
 const $=id=>document.getElementById(id);
 let info=null,room=null,selected=null,publishing=false,heartbeat=null,sdkPromise=null,connecting=false,connectionGeneration=0,giftRevision=0;
 const status=text=>{$('stream-status').textContent=text;};
@@ -27,7 +27,7 @@ async function refresh(){
   $('channel-title').value=info.mine.title;$('channel-bio').value=info.mine.bio;$('creator-paypal').value=info.mine.paypal_url;
  }
  const list=$('live-channels');list.replaceChildren();$('live-empty').classList.toggle('hidden',Boolean(info.channels.length));
- for(const channel of info.channels){const card=node('article');card.className='live-channel';card.id='canal-'+channel.id;const image=node('img');image.src='/assets/app-icon-192.png';image.alt='Logo de Maggy';const button=node('button','Ver directo');button.type='button';button.addEventListener('click',()=>connect(channel,false));card.append(image,node('h3',channel.title),node('p',channel.username),node('p',channel.bio),button);list.append(card);}
+ for(const channel of info.channels){const card=node('article');card.className='live-channel';card.id='canal-'+channel.id;const image=node('img');image.src='/assets/app-icon-192.png';image.alt='Logo de Ol';const button=node('button','Ver directo');button.type='button';button.addEventListener('click',()=>connect(channel,false));card.append(image,node('h3',channel.title),node('p',channel.username),node('p',channel.bio),button);list.append(card);}
 }
 let previewStream=null,previewGeneration=0;
 function stopPreview(message='',all=false){
@@ -56,7 +56,7 @@ async function privatePreview(){
  stopPreview();const generation=previewGeneration;$('preview-camera').disabled=true;$('preview-camera').textContent='Activando cámara…';$('close-preview').classList.remove('hidden');
  $('studio-status').textContent='Autoriza la cámara y el micrófono en el navegador. Esta vista es privada.';
  try{
-  if(!navigator.mediaDevices?.getUserMedia)throw new Error('Abre Maggy mediante HTTPS en Safari, Chrome o Edge para usar la cámara.');
+  if(!navigator.mediaDevices?.getUserMedia)throw new Error('Abre Ol mediante HTTPS en Safari, Chrome o Edge para usar la cámara.');
   const media=await navigator.mediaDevices.getUserMedia(tools.captureOptions());
   if(generation!==previewGeneration||!window.MaggySession.active||!info.streamer_active){media.getTracks().forEach(track=>track.stop());return;}
   previewStream=media;$('preview-video').srcObject=media;await $('preview-video').play();if(generation!==previewGeneration)return;
@@ -117,7 +117,7 @@ $('enable-sound').addEventListener('click',()=>room?.startAudio().catch(()=>stat
 $('toggle-camera').addEventListener('click',async()=>{if(!publishing||!room)return;const enable=!room.localParticipant.isCameraEnabled;try{await room.localParticipant.setCameraEnabled(enable);$('toggle-camera').textContent=enable?'Apagar cámara':'Encender cámara';}catch{status('No se pudo cambiar la cámara.');}});
 $('toggle-mic').addEventListener('click',async()=>{if(!publishing||!room)return;const enable=!room.localParticipant.isMicrophoneEnabled;try{await room.localParticipant.setMicrophoneEnabled(enable);tools.syncRoomMic(room);$('toggle-mic').textContent=enable?'Silenciar micrófono':'Activar micrófono';}catch{status('No se pudo cambiar el micrófono.');}});
 $('gift-amount').addEventListener('input',()=>{giftRevision+=1;$('gift-link').classList.add('hidden');$('gift-status').textContent='';});
-$('gift-form').addEventListener('submit',async event=>{event.preventDefault();$('gift-link').classList.add('hidden');try{const channelId=selected?.id,generation=connectionGeneration,revision=giftRevision;if(!channelId)throw new Error('Elige un directo.');const amount=$('gift-amount').value;if(!/^\d+(?:[.,]\d{1,2})?$/.test(amount))throw new Error('Utiliza como máximo dos decimales.');const cents=Math.round(Number(amount.replace(',','.'))*100);const result=await api(`/api/streamers/${encodeURIComponent(channelId)}/gift-link`,{amount_cents:cents});if(channelId!==selected?.id||generation!==connectionGeneration||revision!==giftRevision)return;$('gift-link').href=result.url;$('gift-link').textContent=`Enviar ${(result.amount_cents/100).toFixed(2)} € en PayPal ↗`;$('gift-link').classList.remove('hidden');$('gift-status').textContent=`Para ${result.creator}. Comisión de Maggy: 0 €. Revisa el destinatario en PayPal antes de confirmar.`;}catch(error){$('gift-status').textContent=error.message;}});
+$('gift-form').addEventListener('submit',async event=>{event.preventDefault();$('gift-link').classList.add('hidden');try{const channelId=selected?.id,generation=connectionGeneration,revision=giftRevision;if(!channelId)throw new Error('Elige un directo.');const amount=$('gift-amount').value;if(!/^\d+(?:[.,]\d{1,2})?$/.test(amount))throw new Error('Utiliza como máximo dos decimales.');const cents=Math.round(Number(amount.replace(',','.'))*100);const result=await api(`/api/streamers/${encodeURIComponent(channelId)}/gift-link`,{amount_cents:cents});if(channelId!==selected?.id||generation!==connectionGeneration||revision!==giftRevision)return;$('gift-link').href=result.url;$('gift-link').textContent=`Enviar ${(result.amount_cents/100).toFixed(2)} € en PayPal ↗`;$('gift-link').classList.remove('hidden');$('gift-status').textContent=`Para ${result.creator}. Comisión de Ol: 0 €. Revisa el destinatario en PayPal antes de confirmar.`;}catch(error){$('gift-status').textContent=error.message;}});
 window.addEventListener('maggy:access-changed',event=>{if(!event.detail.active){stopPreview('',true);$('stream-studio').classList.add('hidden');disconnect();$('creator-panel').classList.add('hidden');$('live-catalogue').classList.add('hidden');$('stream-access').classList.remove('hidden');}});
 window.addEventListener('pagehide',()=>{stopPreview('',true);if(publishing)window.MaggySession.fetch('/api/streamers/me/live',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({live:false}),keepalive:true}).catch(()=>{});room?.disconnect();});
 await window.MaggySession.ready;

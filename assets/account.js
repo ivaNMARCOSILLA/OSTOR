@@ -20,7 +20,7 @@ async function refresh() {
   $('member-panel').classList.toggle('hidden', !current);
   $('admin-panel').classList.toggle('hidden', current?.role !== 'admin');
   const streamReady=Boolean(data.streamer_available);
-  $('streamer-availability').textContent=streamReady?'8 € por un mes de emisión y funciones de Maggy. Empieza al confirmar el pago; sin renovación automática.':'El plan Streamer todavía no está disponible para contratar. No se cobran los 8 € hasta activar las emisiones.';
+  $('streamer-availability').textContent=streamReady?'8 € por un mes de emisión y funciones de Ol. Empieza al confirmar el pago; sin renovación automática.':'El plan Streamer todavía no está disponible para contratar. No se cobran los 8 € hasta activar las emisiones.';
   $('pay-streamer').classList.toggle('hidden',!streamReady);
   if(streamReady)$('pay-streamer').href='https://paypal.me/IMarcosIlla/8EUR';else $('pay-streamer').removeAttribute('href');
   $('streamer-plan-option').disabled=!streamReady;
@@ -32,7 +32,7 @@ async function refresh() {
   $('enter-streamers').classList.toggle('hidden',!current.active);
   $('enter-streamers').textContent=current.streamer_active?'Entrar a mi estudio ↗':'Ver directos ↗';
   $('welcome-plan').classList.toggle('hidden', Boolean(current.welcome_used));
-  $('next-payment').textContent = current.role === 'admin' ? 'Tu cuenta de gestión no tiene vencimiento de cliente.' : current.access_until ? `Vencimiento de Maggy: ${date(current.access_until)}. ${current.streamer_until ? 'Streamer hasta '+date(current.streamer_until)+'. Renovación Streamer: 8 € por un mes; Maggy normal: 6 €.' : 'Para continuar: 6 € por un mes.'} Sin cargo automático.` : 'Primer acceso: 1 € por 14 días. Comienza cuando se confirme el pago.';
+  $('next-payment').textContent = current.role === 'admin' ? 'Tu cuenta de gestión no tiene vencimiento de cliente.' : current.access_until ? `Vencimiento de Ol: ${date(current.access_until)}. ${current.streamer_until ? 'Streamer hasta '+date(current.streamer_until)+'. Renovación Streamer: 8 € por un mes; Ol normal: 6 €.' : 'Para continuar: 6 € por un mes.'} Sin cargo automático.` : 'Primer acceso: 1 € por 14 días. Comienza cuando se confirme el pago.';
   $('my-payments').replaceChildren();
   for (const payment of data.payments) {
     const row = document.createElement('tr');
@@ -47,7 +47,7 @@ async function loadAdmin() {
   for (const member of members) {
     if (member.role !== 'admin') { const option = text('option', member.username); option.value = member.id; $('payment-member').append(option); }
     const row = document.createElement('tr');
-    for (const value of [member.username, member.role === 'admin' ? 'Administrador' : member.streamer_active ? 'Streamer' : 'Cliente', member.active ? 'Activo' : 'Sin acceso', member.streamer_until ? `Maggy: ${date(member.access_until)} · Streamer: ${date(member.streamer_until)}` : date(member.access_until)]) row.append(text('td', value));
+    for (const value of [member.username, member.role === 'admin' ? 'Administrador' : member.streamer_active ? 'Streamer' : 'Cliente', member.active ? 'Activo' : 'Sin acceso', member.streamer_until ? `Ol: ${date(member.access_until)} · Streamer: ${date(member.streamer_until)}` : date(member.access_until)]) row.append(text('td', value));
     const actions = document.createElement('td');
     if (member.role !== 'admin') {
       const revoke = text('button', 'Revocar acceso'); revoke.type='button';

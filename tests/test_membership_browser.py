@@ -45,7 +45,7 @@ def run():
         page.wait_for_function('navigator.serviceWorker.controller !== null')
         member_context.set_offline(True)
         page.reload()
-        assert page.locator('h1').inner_text()=='Maggy necesita conexión'
+        assert page.locator('h1').inner_text()=='Ol necesita conexión'
         assert page.locator('#hero-title').count()==0, 'Paid interface must not be available through an old offline cache'
         member_context.set_offline(False)
         page.goto(BASE_URL+'/');page.locator('#hero-title').wait_for()
