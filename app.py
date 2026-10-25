@@ -1,352 +1,467 @@
-from flask import Flask, request, jsonify, send_from_directory, session, redirect, render_template_string, Response, stream_with_context
-from flask_cors import CORS
-from werkzeug.middleware.proxy_fix import ProxyFix
-from urllib.parse import quote, urlparse
-import os
-import functools
-import requests
+# -*- coding: utf-8 -*-
+"""MAGGY PRO 8.3.0 — API musical y distribución web.
+
+Proyecto y edición: Iván Marcos Illa.
+El código de servicios externos y sus marcas pertenece a sus titulares.
+Firma de edición: MAGGY / Iván Marcos Illa / 2026-10-24.
+"""
+
+from __future__ import annotations
+
 import concurrent.futures
+import ipaddress
+import logging
+import os
+import re
+import threading
 import time
-import secrets
-import hashlib
+import unicodedata
+from collections import OrderedDict, deque
+from urllib.parse import quote, urljoin, urlparse
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-app = Flask(__name__, static_folder=BASE_DIR, static_url_path="")
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
-CORS(app, supports_credentials=True)
+import requests
+from flask import Flask, Response, jsonify, request, send_from_directory, stream_with_context
+from werkzeug.middleware.proxy_fix import ProxyFix
 
-# Configuración: no se guardan credenciales reales en el código.
-OSTO_PASSWORD = os.environ.get("OSTO_PASSWORD", "")
-SECRET_KEY = os.environ.get("SECRET_KEY", "")
-JAMENDO_CLIENT_ID = os.environ.get("JAMENDO_CLIENT_ID", "")
-YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY", "")
-AUDIUS_APP_NAME = os.environ.get("AUDIUS_APP_NAME", "osto")
+ROOT = os.path.dirname(os.path.abspath(__file__))
+app = Flask(__name__, static_folder=os.path.join(ROOT, "assets"), static_url_path="/assets")
+# Un solo salto de proxy controlado por Vercel. No se aceptan cabeceras CORS globales.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
+app.logger.setLevel(logging.INFO)
 
-if not SECRET_KEY:
-    SECRET_KEY = secrets.token_hex(32)
-app.secret_key = SECRET_KEY
+VERSION = "8.3.0"
+AUDIUS_APP_NAME = os.getenv("AUDIUS_APP_NAME", "electronicama")
+SEARCH_CACHE_SECONDS = max(15, min(int(os.getenv("SEARCH_CACHE_SECONDS", "300")), 3600))
+ARCHIVE_CACHE_SECONDS = max(60, min(int(os.getenv("ARCHIVE_CACHE_SECONDS", "3600")), 86400))
+REQUEST_TIMEOUT = (3.5, 9)
+MAX_PROXY_BYTES = 32 * 1024 * 1024
+MAX_SEARCH_LENGTH = 90
 
-ARCHIVE_TTL = int(os.environ.get("ARCHIVE_CACHE_TTL", "3600"))
-REQUEST_TIMEOUT = (5, 15)
+# Cachés pequeñas, con bloqueo. En Vercel son por instancia: no persistentes ni compartidas.
+_cache_lock = threading.RLock()
+_search_cache: OrderedDict[tuple, tuple[float, list]] = OrderedDict()
+_archive_cache: OrderedDict[str, tuple[float, str]] = OrderedDict()
+_rate_lock = threading.Lock()
+_request_buckets: dict[tuple[str, str], deque] = {}
 
-_archive_cache = {}
-_cache_time = {}
 
-LOGIN_HTML = """<!doctype html>
-<html lang="es">
-<head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#07100c"><title>OSTO · Acceso</title>
-<style>
-:root{color-scheme:dark;--bg:#050807;--card:#0c1310;--line:#1c3027;--text:#effff7;--muted:#719286;--accent:#00e5a0}
-*{box-sizing:border-box}body{margin:0;min-height:100svh;display:grid;place-items:center;background:radial-gradient(circle at 20% 10%,#0c3b2b 0,transparent 35%),var(--bg);color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:20px}
-.box{width:min(420px,100%);padding:32px;border:1px solid var(--line);border-radius:28px;background:linear-gradient(180deg,#0e1713,#080d0b);box-shadow:0 24px 80px #0009}
-.logo{text-align:center;font-size:32px;font-weight:850;letter-spacing:-1.5px}.logo b{color:var(--accent)}.sub{text-align:center;color:var(--muted);font-size:12px;margin:8px 0 28px}
-input{width:100%;padding:15px 16px;border:1px solid var(--line);border-radius:15px;background:#060a08;color:#fff;font-size:16px;outline:0}input:focus{border-color:var(--accent);box-shadow:0 0 0 4px #00e5a022}
-button{width:100%;margin-top:12px;padding:15px;border:0;border-radius:15px;background:var(--accent);color:#00150e;font-weight:850;font-size:15px;cursor:pointer}
-.err{margin-top:12px;text-align:center;color:#ff6684;font-size:13px}
-</style></head>
-<body><main class="box"><div class="logo">OSTO<b>·</b>MULTI</div><div class="sub">Acceso privado</div>
-<form method="post" action="/login" autocomplete="on">
-<input type="password" name="password" placeholder="Contraseña" autocomplete="current-password" required autofocus>
-<button type="submit">Entrar</button>
-{% if error %}<div class="err">{{ error }}</div>{% endif %}
-</form></main></body></html>"""
+def cached_get(store: OrderedDict, key, ttl):
+    with _cache_lock:
+        value = store.get(key)
+        if value is None:
+            return None
+        created, payload = value
+        if time.monotonic() - created > ttl:
+            store.pop(key, None)
+            return None
+        store.move_to_end(key)
+        return payload
 
-def login_required(fn):
-    @functools.wraps(fn)
-    def wrapper(*args, **kwargs):
-        if not session.get("osto_auth"):
-            if request.path.startswith("/api/"):
-                return jsonify({"error": "No autorizado"}), 401
-            return redirect("/login")
-        return fn(*args, **kwargs)
-    return wrapper
 
-@app.after_request
-def security_headers(resp):
-    resp.headers["X-Content-Type-Options"] = "nosniff"
-    resp.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    resp.headers["Permissions-Policy"] = "microphone=(), camera=(), geolocation=()"
-    if request.path.endswith((".html", "/")):
-        resp.headers["Cache-Control"] = "no-store"
-    return resp
+def cached_put(store: OrderedDict, key, payload):
+    with _cache_lock:
+        store[key] = (time.monotonic(), payload)
+        store.move_to_end(key)
+        while len(store) > 128:
+            store.popitem(last=False)
 
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    error = None
-    if request.method == "POST":
-        if OSTO_PASSWORD and secrets.compare_digest(request.form.get("password", ""), OSTO_PASSWORD):
-            session.clear()
-            session["osto_auth"] = True
-            session.permanent = True
-            return redirect("/")
-        error = "Contraseña incorrecta"
-    return render_template_string(LOGIN_HTML, error=error)
 
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect("/login")
+def rate_allowed(kind: str, limit: int, window: int = 60) -> bool:
+    # Límite de mejor esfuerzo por instancia, no protección distribuida.
+    key = (kind, request.remote_addr or "unknown")
+    now = time.monotonic()
+    with _rate_lock:
+        bucket = _request_buckets.setdefault(key, deque())
+        while bucket and now - bucket[0] >= window:
+            bucket.popleft()
+        if len(bucket) >= limit:
+            return False
+        bucket.append(now)
+        if len(_request_buckets) > 1000:
+            for old in list(_request_buckets)[:200]:
+                if not _request_buckets[old] or now - _request_buckets[old][-1] > window:
+                    del _request_buckets[old]
+        return True
 
-@app.route("/")
-@login_required
-def index():
-    return send_from_directory(BASE_DIR, "index.html")
 
-@app.route("/manifest.webmanifest")
-@login_required
-def manifest():
-    return send_from_directory(BASE_DIR, "manifest.webmanifest", mimetype="application/manifest+json")
+def sanitize_query(value: str) -> str:
+    value = " ".join((value or "").split())
+    return value[:MAX_SEARCH_LENGTH]
 
-@app.route("/sw.js")
-@login_required
-def service_worker():
-    return send_from_directory(BASE_DIR, "sw.js", mimetype="application/javascript")
 
-@app.route("/health")
-def health():
-    return jsonify({
-        "status": "ok",
-        "version": "6.0",
-        "audio": "direct-stream-with-range-proxy",
-        "configured": {
-            "password": bool(OSTO_PASSWORD),
-            "jamendo": bool(JAMENDO_CLIENT_ID),
-            "youtube": bool(YOUTUBE_API_KEY)
-        }
-    })
+def normalize(value) -> str:
+    value = unicodedata.normalize("NFKD", str(value or "").casefold())
+    value = "".join(c for c in value if not unicodedata.combining(c))
+    return re.sub(r"[^a-z0-9]+", " ", value).strip()
 
-def _archive_file_url(identifier):
-    now = time.time()
-    if identifier in _archive_cache and now - _cache_time.get(identifier, 0) < ARCHIVE_TTL:
-        return _archive_cache[identifier]
-    r = requests.get(f"https://archive.org/metadata/{quote(identifier, safe='')}", timeout=REQUEST_TIMEOUT)
-    r.raise_for_status()
-    files = r.json().get("files", [])
-    audio = [
-        f for f in files
-        if f.get("name", "").lower().endswith((".mp3", ".m4a", ".ogg", ".opus"))
-        and "spectrogram" not in f.get("name", "").lower()
-        and "waveform" not in f.get("name", "").lower()
-    ]
-    audio.sort(key=lambda f: int(f.get("size", 0) or 0), reverse=True)
-    if not audio:
-        raise RuntimeError("El elemento no contiene un audio compatible")
-    name = quote(audio[0]["name"], safe="/")
-    url = f"https://archive.org/download/{quote(identifier, safe='')}/{name}"
-    _archive_cache[identifier] = url
-    _cache_time[identifier] = now
+
+# Palabras de intención frecuentes: no son parte del título ni del artista.
+# Se eliminan solo cuando la búsqueda conserva al menos una palabra útil.
+_SEARCH_FILLERS = frozenset({
+    "cancion", "canciones", "musica", "music", "video", "videos",
+    "escuchar", "busca", "buscar", "quiero", "dame", "listen",
+    "oficiales", "oficial", "official", "de", "del", "la", "el",
+    "las", "los", "the", "por", "para", "un", "una",
+})
+
+
+def provider_query(query: str) -> str:
+    """Retira palabras genéricas para que el ranking halle al artista."""
+    words = str(query or "").split()
+    useful = [word for word in words if normalize(word) not in _SEARCH_FILLERS]
+    return " ".join(useful or words)[:MAX_SEARCH_LENGTH]
+
+
+def relevance(item: dict, query: str) -> float:
+    words = [w for w in normalize(query).split() if len(w) > 1]
+    if not words:
+        return 0.0
+    title = normalize(item.get("title"))
+    artist = normalize(item.get("channel"))
+    text = f"{title} {artist}"
+    hits = sum(1 for w in words if w in text.split() or any(p.startswith(w) for p in text.split()))
+    coverage = hits / len(words)
+    if coverage < 0.5:
+        return -1.0
+    score = coverage * 10
+    q = normalize(query)
+    if q == title:
+        score += 5
+    elif q in title:
+        score += 3
+    if q in artist:
+        score += 2
+    if "official" in title or "oficial" in title:
+        score += 0.4
+    if "karaoke" in title or "reaction" in title:
+        score -= 2
+    return score
+
+
+def fetch_json(url, params=None):
+    response = requests.get(url, params=params, timeout=REQUEST_TIMEOUT)
+    response.raise_for_status()
+    return response.json()
+
+
+def archive_stream_url(identifier: str) -> str:
+    if not re.fullmatch(r"[A-Za-z0-9_.-]{1,160}", identifier):
+        raise ValueError("Identificador no válido")
+    cached = cached_get(_archive_cache, identifier, ARCHIVE_CACHE_SECONDS)
+    if cached:
+        return cached
+    data = fetch_json(f"https://archive.org/metadata/{quote(identifier, safe='')}")
+    extensions = (".mp3", ".m4a", ".ogg", ".opus")
+    files = [f for f in data.get("files", []) if
+             str(f.get("name", "")).lower().endswith(extensions)
+             and not any(x in str(f.get("name", "")).lower() for x in ("spectrogram", "waveform"))]
+    files.sort(key=lambda f: int(f.get("size", 0) or 0), reverse=True)
+    if not files:
+        raise LookupError("No contiene audio compatible")
+    url = f"https://archive.org/download/{quote(identifier, safe='')}/{quote(files[0]['name'], safe='/')}"
+    cached_put(_archive_cache, identifier, url)
     return url
 
-def search_archive(query, limit=7):
+
+def search_archive(query: str, limit: int = 8, page: int = 1) -> list:
     try:
-        params = {
-            "q": f"({query}) AND mediatype:audio",
-            "fl[]": ["identifier", "title", "creator", "description"],
-            "sort[]": ["downloads desc"],
-            "rows": limit * 2,
-            "page": 1,
-            "output": "json",
-        }
-        data = requests.get("https://archive.org/advancedsearch.php", params=params, timeout=REQUEST_TIMEOUT).json()
-        docs = [d for d in data.get("response", {}).get("docs", []) if d.get("identifier")][:limit]
-        out = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=min(5, len(docs) or 1)) as pool:
-            futures = {pool.submit(_archive_file_url, d["identifier"]): d for d in docs}
-            for f in concurrent.futures.as_completed(futures):
-                d = futures[f]
+        # Escapar caracteres especiales de la sintaxis Lucene.
+        safe = re.sub(r'[^\w\s\-áéíóúüñÁÉÍÓÚÜÑ]', ' ', query)
+        params = {"q": f'({" ".join(safe.split())}) AND mediatype:audio',
+                  "fl[]": ["identifier", "title", "creator"], "sort[]": "downloads desc",
+                  "rows": min(40, limit * 3), "page": page, "output": "json"}
+        docs = fetch_json("https://archive.org/advancedsearch.php", params).get("response", {}).get("docs", [])
+        docs = [d for d in docs if d.get("identifier") and relevance({
+            "title": d.get("title", ""), "channel": d.get("creator", "")}, query) >= 0][:limit]
+        results = []
+        if not docs:
+            return results
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
+            futures = {pool.submit(archive_stream_url, str(d["identifier"])): d for d in docs}
+            for future in concurrent.futures.as_completed(futures):
+                d = futures[future]
                 try:
-                    identifier = d["identifier"]
-                    title = d.get("title", "Sin título")
-                    creator = d.get("creator", "Archive")
-                    out.append({
-                        "id": f"archive_{identifier}",
-                        "title": str(title[0] if isinstance(title, list) else title)[:140],
-                        "channel": str(creator[0] if isinstance(creator, list) else creator)[:90],
-                        "description": str(d.get("description", ""))[:600],
-                        "thumbnail": f"https://archive.org/services/img/{identifier}",
-                        "url": f"https://archive.org/details/{identifier}",
-                        "stream_url": f.result(),
-                        "source": "ARCHIVE",
-                    })
-                except Exception as exc:
-                    app.logger.warning("Archive item error: %s", exc)
-        return out
-    except Exception as exc:
-        app.logger.warning("Archive search error: %s", exc)
+                    stream_url = future.result()
+                    ident = str(d["identifier"])
+                    title = d.get("title") or "Sin título"
+                    creator = d.get("creator") or "Internet Archive"
+                    if isinstance(title, list):
+                        title = title[0] if title else "Sin título"
+                    if isinstance(creator, list):
+                        creator = creator[0] if creator else "Internet Archive"
+                    results.append({"id": f"archive_{ident}", "title": str(title)[:140],
+                                    "channel": str(creator)[:90], "description": "",
+                                    "thumbnail": f"https://archive.org/services/img/{quote(ident)}",
+                                    "url": f"https://archive.org/details/{quote(ident)}",
+                                    "stream_url": stream_url, "source": "ARCHIVE"})
+                except (requests.RequestException, ValueError, LookupError) as exc:
+                    app.logger.info("Archive item omitted: %s", type(exc).__name__)
+        return results
+    except (requests.RequestException, ValueError, TypeError) as exc:
+        app.logger.warning("Archive search failed: %s", type(exc).__name__)
         return []
 
-def search_audius(query, limit=7):
-    endpoints = [
-        "https://discoveryprovider.audius.co/v1/tracks/search",
-        "https://audius-discovery-1.cultur3stake.com/v1/tracks/search",
-        "https://discoveryprovider2.audius.co/v1/tracks/search",
-    ]
-    for endpoint in endpoints:
+
+AUDIUS_ENDPOINTS = (
+    "https://discoveryprovider.audius.co/v1/tracks/search",
+    "https://audius-discovery-1.cultur3stake.com/v1/tracks/search",
+    "https://discoveryprovider2.audius.co/v1/tracks/search",
+)
+
+
+def search_audius(query: str, limit: int = 10) -> list:
+    for endpoint in AUDIUS_ENDPOINTS:
         try:
-            r = requests.get(endpoint, params={"query": query, "app_name": AUDIUS_APP_NAME}, timeout=REQUEST_TIMEOUT)
-            if r.ok:
-                tracks = r.json().get("data", [])
-                if tracks:
-                    result = []
-                    for t in tracks[:limit]:
-                        art = t.get("artwork") or {}
-                        result.append({
-                            "id": f"audius_{t.get('id')}",
-                            "title": str(t.get("title", "Track"))[:140],
-                            "channel": str((t.get("user") or {}).get("name", "Audius"))[:90],
-                            "description": str(t.get("description", ""))[:600],
-                            "thumbnail": art.get("1000x1000") or art.get("480x480") or art.get("150x150") or "",
-                            "url": f"https://audius.co{t.get('permalink','')}" if t.get("permalink") else f"https://audius.co/tracks/{t.get('id')}",
-                            "stream_url": f"https://discoveryprovider.audius.co/v1/tracks/{t.get('id')}/stream?app_name={quote(AUDIUS_APP_NAME)}",
-                            "source": "AUDIUS",
-                        })
-                    return result
-        except requests.RequestException:
+            tracks = fetch_json(endpoint, {"query": query, "app_name": AUDIUS_APP_NAME}).get("data", [])
+            if not tracks:
+                continue
+            results = []
+            for track in tracks[:limit * 2]:
+                ident = str(track.get("id", ""))
+                if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", ident):
+                    continue
+                artist = (track.get("user") or {}).get("name") or "Audius"
+                art = track.get("artwork") or {}
+                track_url = track.get("permalink") or ""
+                results.append({"id": f"audius_{ident}", "title": str(track.get("title") or "Pista")[:140],
+                                "channel": str(artist)[:90], "description": str(track.get("description") or "")[:300],
+                                "thumbnail": art.get("480x480") or art.get("1000x1000") or art.get("150x150") or "",
+                                "url": f"https://audius.co{track_url}" if str(track_url).startswith("/") else "https://audius.co",
+                                "stream_url": f"https://discoveryprovider.audius.co/v1/tracks/{quote(ident)}/stream?app_name={quote(AUDIUS_APP_NAME)}",
+                                "source": "AUDIUS"})
+            return results[:limit]
+        except (requests.RequestException, ValueError, TypeError, AttributeError):
             continue
     return []
 
-def search_jamendo(query, limit=7):
-    if not JAMENDO_CLIENT_ID:
-        return []
-    try:
-        params = {
-            "client_id": JAMENDO_CLIENT_ID, "format": "json", "limit": limit,
-            "search": query, "audioformat": "mp32", "include": "musicinfo+licenses", "imagesize": "300"
-        }
-        tracks = requests.get("https://api.jamendo.com/v3.0/tracks/", params=params, timeout=REQUEST_TIMEOUT).json().get("results", [])
-        return [{
-            "id": f"jamendo_{t.get('id')}",
-            "title": str(t.get("name", "Track"))[:140],
-            "channel": str(t.get("artist_name", "Jamendo"))[:90],
-            "description": f"{t.get('album_name','')} · {t.get('artist_name','')}",
-            "thumbnail": t.get("image") or t.get("album_image") or "",
-            "url": t.get("shareurl") or f"https://www.jamendo.com/track/{t.get('id')}",
-            "stream_url": t.get("audio") or t.get("audiodownload") or "",
-            "source": "JAMENDO",
-        } for t in tracks]
-    except Exception as exc:
-        app.logger.warning("Jamendo error: %s", exc)
-        return []
 
-def search_youtube(query, limit=5):
-    if not YOUTUBE_API_KEY:
-        return []
-    try:
-        params = {"part": "snippet", "q": query, "maxResults": limit, "type": "video",
-                  "videoCategoryId": "10", "key": YOUTUBE_API_KEY}
-        items = requests.get("https://www.googleapis.com/youtube/v3/search", params=params, timeout=REQUEST_TIMEOUT).json().get("items", [])
-        return [{
-            "id": f"youtube_{i['id'].get('videoId')}",
-            "title": str(i["snippet"].get("title", "YouTube"))[:140],
-            "channel": str(i["snippet"].get("channelTitle", ""))[:90],
-            "description": str(i["snippet"].get("description", ""))[:600],
-            "thumbnail": i["snippet"].get("thumbnails", {}).get("high", {}).get("url", ""),
-            "url": f"https://www.youtube.com/watch?v={i['id'].get('videoId')}",
-            "source": "YOUTUBE",
-            "video_id": i["id"].get("videoId"),
-        } for i in items]
-    except Exception as exc:
-        app.logger.warning("YouTube error: %s", exc)
-        return []
 
-def multi_search(query, limit=24):
-    funcs = [search_archive, search_audius, search_jamendo]
-    if YOUTUBE_API_KEY:
-        funcs.append(search_youtube)
-    per = max(4, limit // len(funcs))
-    results = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(funcs)) as pool:
-        futures = [pool.submit(fn, query, per) for fn in funcs]
-        for f in concurrent.futures.as_completed(futures):
-            try:
-                results.extend(f.result() or [])
-            except Exception as exc:
-                app.logger.warning("Search source error: %s", exc)
-    # Deduplicación estable.
-    seen, clean = set(), []
-    for item in results:
-        key = (item.get("source"), item.get("id"))
-        if key not in seen:
-            seen.add(key); clean.append(item)
-    return clean[:limit]
 
-@app.route("/api/search")
-@login_required
+
+
+
+
+
+
+def multi_search(query: str, page: int = 1) -> list:
+    cache_key = (normalize(query), page)
+    ranking_query = provider_query(query)
+    hit = cached_get(_search_cache, cache_key, SEARCH_CACHE_SECONDS)
+    if hit is not None:
+        return hit
+    if page > 1:
+        candidates = search_archive(query, limit=15, page=page)
+    else:
+        workers = [(search_archive, 8), (search_audius, 10)]
+        candidates = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(workers)) as pool:
+            futures = [pool.submit(fn, query, n) for fn, n in workers]
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    candidates.extend(future.result() or [])
+                except Exception:
+                    app.logger.exception("A provider failed")
+    seen = set()
+    scored = []
+    for item in candidates:
+        if item.get("source") not in {"ARCHIVE", "AUDIUS"}:
+            continue
+        ident = (item.get("source"), item.get("id"))
+        score = relevance(item, ranking_query)
+        if score < 0 or ident in seen:
+            continue
+        seen.add(ident)
+        scored.append((score, item))
+    scored.sort(key=lambda x: (-x[0], x[1].get("title", "").casefold()))
+    result = [item for _, item in scored]
+    cached_put(_search_cache, cache_key, result)
+    return result
+
+
+@app.after_request
+def response_headers(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    if request.path.startswith("/assets/"):
+        response.headers["Cache-Control"] = "public, max-age=3600"
+    elif request.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store"
+    elif request.path == "/":
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.get("/")
+def homepage():
+    return send_from_directory(ROOT, "index.html")
+
+
+@app.get("/legal/<path:filename>")
+def legal_pages(filename):
+    # No se permite navegación arbitraria por directorios desde la ruta legal.
+    if filename not in {"cookies.html", "privacidad.html", "aviso-legal.html"}:
+        return jsonify({"error": "Documento no encontrado"}), 404
+    return send_from_directory(os.path.join(ROOT, "legal"), filename)
+
+
+@app.get("/manifest.webmanifest")
+def pwa_manifest():
+    return send_from_directory(ROOT, "manifest.webmanifest", mimetype="application/manifest+json")
+
+
+@app.get("/sw.js")
+def pwa_service_worker():
+    response = send_from_directory(ROOT, "sw.js", mimetype="application/javascript")
+    response.headers["Cache-Control"] = "no-cache"
+    response.headers["Service-Worker-Allowed"] = "/"
+    return response
+
+
+@app.get("/health")
+def health():
+    return jsonify({"status": "ok", "version": VERSION,
+                    "providers": ["ARCHIVE", "AUDIUS"],
+                    "search_cache": "instance-local"})
+
+
+
+
+
+
+def catalogue_response(tracks):
+    from membership import get_user, user_public
+    user = get_user()
+    if user and user_public(user)["active"]:
+        return tracks
+    # A whitelist prevents cached/upstream playback links leaking into previews.
+    fields = {"id", "title", "channel", "source", "thumbnail"}
+    return [{key: value for key, value in track.items() if key in fields} | {"locked": True} for track in tracks]
+
+
+@app.get("/api/search")
 def api_search():
-    q = request.args.get("q", "").strip()[:160]
-    if not q:
+    query = sanitize_query(request.args.get("q", ""))
+    if not query:
         return jsonify([])
-    return jsonify(multi_search(q))
+    if not rate_allowed("search", 35):
+        return jsonify({"error": "Demasiadas búsquedas. Inténtalo en un minuto."}), 429
+    try:
+        page = max(1, min(int(request.args.get("page", "1")), 10))
+    except ValueError:
+        page = 1
+    return jsonify(catalogue_response(multi_search(query, page=page)))
 
-@app.route("/api/trending")
-@login_required
+
+@app.get("/api/trending")
 def api_trending():
-    return jsonify(multi_search("lofi chill jazz", 20))
+    if not rate_allowed("trending", 15):
+        return jsonify({"error": "Límite temporal de consultas"}), 429
+    return jsonify(catalogue_response(multi_search("electronic techno house trance")))
 
-@app.route("/api/resolve/<path:item_id>")
-@login_required
+
+@app.get("/api/resolve/<path:item_id>")
 def api_resolve(item_id):
-    if item_id.startswith("archive_"):
-        identifier = item_id[len("archive_"):]
-        try:
-            return jsonify({"id": item_id, "stream_url": _archive_file_url(identifier), "source": "ARCHIVE"})
-        except Exception as exc:
-            return jsonify({"error": str(exc)}), 404
-    return jsonify({"id": item_id, "stream_url": ""})
-
-ALLOWED_STREAM_HOSTS = {
-    "archive.org", "ia800", "ia801", "ia802", "ia803", "ia804", "ia805", "ia806", "ia807", "ia808", "ia809",
-    "audius.co", "jamendo.com", "cdn.jamendo.com", "mp3l.jamendo.com"
-}
-
-def allowed_stream_url(raw):
+    if not rate_allowed("resolve", 30):
+        return jsonify({"error": "Límite temporal de consultas"}), 429
+    if item_id.startswith("audius_"):
+        ident = item_id[7:]
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", ident):
+            return jsonify({"error": "Identificador no válido"}), 400
+        return jsonify({"id": item_id, "source": "AUDIUS", "stream_url": f"https://discoveryprovider.audius.co/v1/tracks/{quote(ident)}/stream?app_name={quote(AUDIUS_APP_NAME)}"})
+    if not item_id.startswith("archive_"):
+        return jsonify({"id": item_id, "stream_url": ""})
     try:
-        u = urlparse(raw)
-        host = (u.hostname or "").lower().rstrip(".")
-        if u.scheme != "https" or not host:
+        return jsonify({"id": item_id, "stream_url": archive_stream_url(item_id[8:]), "source": "ARCHIVE"})
+    except (requests.RequestException, ValueError, LookupError):
+        return jsonify({"error": "Audio no disponible"}), 404
+
+
+# El proxy mantiene la compatibilidad con el proyecto previo. Nunca sigue
+# redirecciones automáticamente; cada destino se valida nuevamente.
+def allowed_stream_url(url: str) -> bool:
+    try:
+        parsed = urlparse(url)
+        host = (parsed.hostname or "").lower().rstrip(".")
+        if parsed.scheme != "https" or parsed.username or parsed.password or parsed.port not in (None, 443):
             return False
-        if host in ALLOWED_STREAM_HOSTS or host.endswith(".archive.org") or host.endswith(".audius.co") or host.endswith(".jamendo.com"):
-            return True
-    except Exception:
-        pass
-    return False
+        try:
+            ipaddress.ip_address(host)
+            return False
+        except ValueError:
+            pass
+        return (host == "archive.org" or host.endswith(".archive.org")
+                or host == "audius.co" or host.endswith(".audius.co"))
+    except ValueError:
+        return False
 
-@app.route("/api/proxy")
-@login_required
+
+def _safe_upstream(url: str, headers: dict):
+    for _ in range(4):
+        if not allowed_stream_url(url):
+            raise ValueError("Destino no permitido")
+        response = requests.get(url, headers=headers, stream=True,
+                                allow_redirects=False, timeout=REQUEST_TIMEOUT)
+        if response.status_code not in (301, 302, 303, 307, 308):
+            return response
+        next_url = urljoin(url, response.headers.get("Location", ""))
+        response.close()
+        url = next_url
+    raise ValueError("Demasiadas redirecciones")
+
+
+@app.get("/api/proxy")
 def api_proxy():
-    target = request.args.get("url", "")
-    if not allowed_stream_url(target):
+    if not rate_allowed("proxy", 12):
+        return jsonify({"error": "Límite temporal de reproducción"}), 429
+    url = request.args.get("url", "")
+    if not allowed_stream_url(url):
         return jsonify({"error": "Origen no permitido"}), 403
-    headers = {"User-Agent": "OSTO/6.0", "Accept": "audio/*,*/*;q=0.8"}
-    if request.headers.get("Range"):
-        headers["Range"] = request.headers["Range"]
+    headers = {"User-Agent": "MAGGY/7.0", "Accept": "audio/*,*/*;q=0.8"}
+    requested_range = request.headers.get("Range", "")
+    if requested_range:
+        if not re.fullmatch(r"bytes=\d{0,12}-\d{0,12}", requested_range):
+            return jsonify({"error": "Rango no válido"}), 416
+        headers["Range"] = requested_range
     try:
-        upstream = requests.get(target, headers=headers, stream=True, timeout=REQUEST_TIMEOUT, allow_redirects=True)
-        if not upstream.ok and upstream.status_code != 206:
-            return jsonify({"error": f"Origen respondió {upstream.status_code}"}), 502
-
-        response_headers = {}
-        for name in ("Content-Type", "Content-Length", "Content-Range", "Accept-Ranges", "ETag", "Last-Modified"):
-            if upstream.headers.get(name):
-                response_headers[name] = upstream.headers[name]
-        response_headers["Cache-Control"] = "private, max-age=60"
-        status = 206 if upstream.status_code == 206 else 200
-
-        def generate():
+        upstream = _safe_upstream(url, headers)
+        if upstream.status_code not in (200, 206):
+            upstream.close()
+            return jsonify({"error": "El origen no respondió correctamente"}), 502
+        size = int(upstream.headers.get("Content-Length", "0") or 0)
+        if size > MAX_PROXY_BYTES:
+            upstream.close()
+            return jsonify({"error": "Audio demasiado grande para el proxy"}), 413
+        content_type = upstream.headers.get("Content-Type", "application/octet-stream")
+        if not (content_type.startswith("audio/") or content_type.startswith("application/octet-stream")):
+            upstream.close()
+            return jsonify({"error": "El origen no proporcionó audio"}), 502
+        forward_headers = {k: v for k in ("Content-Type", "Content-Range", "Accept-Ranges")
+                           if (v := upstream.headers.get(k))}
+        # No se anuncia Content-Length: el máximo también se aplica durante streaming.
+        def chunks():
+            sent = 0
             try:
-                for chunk in upstream.iter_content(chunk_size=64 * 1024):
-                    if chunk:
-                        yield chunk
+                for piece in upstream.iter_content(chunk_size=64 * 1024):
+                    if not piece:
+                        continue
+                    if sent + len(piece) > MAX_PROXY_BYTES:
+                        break
+                    sent += len(piece)
+                    yield piece
             finally:
                 upstream.close()
+        return Response(stream_with_context(chunks()),
+                        status=upstream.status_code, headers=forward_headers)
+    except (requests.RequestException, ValueError, OSError) as exc:
+        app.logger.warning("Audio proxy failed: %s", type(exc).__name__)
+        return jsonify({"error": "No se pudo reproducir este audio"}), 502
 
-        return Response(stream_with_context(generate()), status=status, headers=response_headers,
-                        direct_passthrough=True)
-    except requests.RequestException as exc:
-        return jsonify({"error": f"No se pudo abrir el audio: {exc}"}), 502
+
+from membership import install as install_membership
+install_membership(app)
+
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", "8080"))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(host="127.0.0.1", port=int(os.getenv("PORT", "8080")), debug=False)

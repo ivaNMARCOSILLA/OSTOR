@@ -1,0 +1,26 @@
+# Archivos de prueba y documentación que no necesita el despliegue.
+tests/
+VISTA_PREVIA_DESKTOP.png
+VISTA_PREVIA_MOVIL.png
+*.zip
+__pycache__/
+.pytest_cache/
+.venv/
+RESPALDO_RECUPERADO/
+INICIAR_ELECTRONICAMA.cmd
+INICIAR_ELECTRONICAMA.ps1
+INSTRUCCIONES_WINDOWS.txt
+FIRMAS_SHA256.txt
+.env
+.env.*
+
+.instance/
+*.sqlite3
+*.sqlite3-*
+
+docs/
+tools/
+requirements-dev.txt
+
+.agents/
+skills-lock.json
