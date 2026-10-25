@@ -8,7 +8,7 @@
 await window.MaggySession.ready;
 const storageKey = name => window.MaggySession ? window.MaggySession.key(name) : name;
 
-const VERSION = '8.4.0';
+const VERSION = '8.4.1';
 const KEY = Object.freeze({ favorites: storageKey('electronicama_v7_favorites'), history: storageKey('electronicama_v7_history'), ads: storageKey('electronicama_ads_consent_v1') });
 const MAX_FAVORITES = 160;
 const MAX_HISTORY = 75;
@@ -145,48 +145,52 @@ function goView(view) {
   render();
   byId('library').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
+const searchMemory = new Map();
 async function requestSearch(query, append = false) {
   query = String(query || '').trim().replace(/\s+/g, ' ').slice(0, 90);
   if (!query) { message('Escribe un artista o una canción.'); return; }
-  if (state.request) state.request.abort();
+  state.request?.abort();
   const controller = new AbortController(); state.request = controller;
   state.view = 'discover';
   if (!append) { state.query = query; state.page = 1; state.results = []; state.source = 'ALL'; }
+  const page = state.page;
   state.loading = true;
-  byId('search-button').disabled = true;
-  byId('load-more').disabled = true;
+  byId('search-button').disabled = true; byId('load-more').disabled = true;
   byId('search-input').value = query;
-  message(`Buscando «${query}» en las plataformas musicales...`);
-  render();
-  try {
-    const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&page=${state.page}`, {
-      signal: controller.signal, headers: { Accept: 'application/json' }
-    });
-    if (!response.ok) {
-      if (response.status === 429) throw new Error('Límite temporal de búsquedas. Inténtalo de nuevo en un minuto.');
-      throw new Error(`No se pudo completar la búsqueda (${response.status}).`);
-    }
-    const raw = await response.json();
-    const data = Array.isArray(raw) ? raw.filter(supportedTrack) : raw;
-    if (controller.signal.aborted) return;
-    if (!Array.isArray(data)) throw new Error('La respuesta del servidor no es válida.');
-    if (append) {
+  byId('spotify-search').href = `https://open.spotify.com/search/${encodeURIComponent(query)}`;
+  message(`Buscando «${query}»…`); render();
+  const sources = page > 1 ? ['ARCHIVE'] : ['AUDIUS', 'ARCHIVE'];
+  let failures = 0, received = 0;
+  const deadline = setTimeout(() => controller.abort(), 14000);
+  await Promise.allSettled(sources.map(async source => {
+    try {
+      const key = `${query.toLowerCase()}:${page}:${source}`;
+      let data = searchMemory.get(key);
+      if (!data || Date.now() - data.time > 60000) {
+        const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&page=${page}&source=${source}`, {signal: controller.signal, headers: {Accept: 'application/json'}});
+        if (!response.ok) throw new Error('Buscador no disponible');
+        const raw = await response.json();
+        if (!Array.isArray(raw)) throw new Error('Respuesta no válida');
+        data = {time: Date.now(), tracks: raw.filter(supportedTrack)};
+        if (data.tracks.length) searchMemory.set(key, data);
+        if (searchMemory.size > 30) searchMemory.delete(searchMemory.keys().next().value);
+      }
+      if (state.request !== controller || controller.signal.aborted) return;
       const seen = new Set(state.results.map(item => item.id));
-      state.results.push(...data.filter(item => item?.id && !seen.has(item.id)));
-    } else state.results = data.filter(item => item && typeof item.id === 'string' && typeof item.title === 'string');
-    message(`${state.results.length} resultados para «${query}»${append && data.length === 0 ? '. No quedan más resultados.' : ''}`);
-    if (append && data.length === 0) state.page = 10;
-  } catch (error) {
-    if (error.name === 'AbortError') return;
-    message(error.message || 'No se pudo conectar con el buscador.');
-  } finally {
-    if (state.request === controller) {
-      state.loading = false; state.request = null;
-      byId('search-button').disabled = false;
-      byId('load-more').disabled = false;
-      render();
-    }
-  }
+      const tracks = data.tracks.filter(item => typeof item.id === 'string' && typeof item.title === 'string');
+      state.results.push(...tracks.filter(item => !seen.has(item.id)));
+      received += tracks.length;
+      message(`${state.results.length} resultados para «${query}» · completando búsqueda…`);
+      render(); // The first available provider is visible immediately.
+    } catch { failures += 1; }
+  }));
+  clearTimeout(deadline);
+  if (state.request !== controller) return;
+  state.loading = false; state.request = null;
+  byId('search-button').disabled = false; byId('load-more').disabled = false;
+  if (append && !received && !failures) state.page = 10;
+  message(`${state.results.length} resultados para «${query}»${failures ? '. Una plataforma no respondió; puedes volver a buscar.' : ''}`);
+  render();
 }
 
 let sleepDeadline = 0;
@@ -219,18 +223,17 @@ function destroyMedia() {
     try { navigator.mediaSession.playbackState = 'none'; navigator.mediaSession.metadata = null; navigator.mediaSession.setPositionState?.(); } catch { /* no compatible */ }
   }
 }
-async function playTrack(track, queue = filteredTracks()) {
+function playTrack(track, queue = filteredTracks()) {
   if (!track || !track.id) return;
   if (!supportedTrack(track)) { message('Esta fuente ya no está disponible.'); return; }
   state.playSerial += 1;
-  const serial = state.playSerial;
-  if (window.MaggySession && !await window.MaggySession.verifyAccess()) return;
-  if (serial !== state.playSerial) return;
-  destroyMedia();
+  if (window.MaggySession && !window.MaggySession.requireAccess()) return;
+  // Keep the same native element, and call play() in the tap event on iOS.
+  // The paid /api/play endpoint checks access authoritatively on every track.
+  state.audio?.pause();
   state.currentTrack = track;
   state.queue = queue.filter(supportedTrack);
   state.currentIndex = Math.max(0, state.queue.findIndex(x => x.id === track.id));
-  rememberTrack(track);
   byId('player').classList.remove('hidden');
   byId('player-title').textContent = track.title;
   byId('player-artist').textContent = `${track.channel || 'Artista'} · ${track.source}`;
@@ -242,35 +245,54 @@ async function playTrack(track, queue = filteredTracks()) {
   byId('toggle-play').textContent = '▶';
   byId('toggle-play').setAttribute('aria-label', 'Reproducir');
   setStatus('Preparando el audio…');
-  try {
-    const response = await (window.MaggySession?.fetch || fetch)(`/api/resolve/${encodeURIComponent(track.id)}`);
-    if (!response.ok) throw new Error('Audio no disponible');
-    const data = await response.json();
-    if (state.playSerial === serial && safeImage(data.stream_url)) startAudio(data.stream_url);
-  } catch { if (state.playSerial === serial) setStatus('No se pudo preparar el audio. Comprueba tu acceso o prueba otra pista.'); }
+  startAudio(`/api/play/${encodeURIComponent(track.id)}`);
   render();
 }
 function startAudio(url) {
-  if (!safeImage(url)) { setStatus('Enlace de audio no válido.'); return; }
-  const audio = document.createElement('audio');
-  audio.controls = true; audio.setAttribute('playsinline', ''); audio.autoplay = true; audio.preload = 'metadata'; audio.src = url;
-  audio.addEventListener('ended', () => { const expired = sleepDeadline && Date.now() >= sleepDeadline; updateSleepTimer(); if (!expired) playNext(); });
-  audio.addEventListener('timeupdate', updateSleepTimer);
-  for (const name of ['loadedmetadata', 'timeupdate', 'ratechange', 'seeked']) audio.addEventListener(name, updateMediaPosition);
-  audio.addEventListener('play', () => {
-    byId('toggle-play').textContent = 'Ⅱ'; byId('toggle-play').setAttribute('aria-label', 'Pausar');
-    setStatus('Reproduciendo'); mediaSessionPlayback('playing');
-  });
-  audio.addEventListener('pause', () => {
-    byId('toggle-play').textContent = '▶'; byId('toggle-play').setAttribute('aria-label', 'Reproducir');
-    mediaSessionPlayback('paused');
-  });
-  audio.addEventListener('error', () => setStatus('El servidor de audio no está disponible. Prueba otra pista.'));
-  state.audio = audio;
+  if (!url.startsWith('/api/play/')) { setStatus('Enlace de audio no válido.'); return; }
+  let audio = state.audio;
+  if (!audio) {
+    audio = document.createElement('audio');
+    audio.controls = true; audio.setAttribute('playsinline', ''); audio.preload = 'auto';
+    audio.addEventListener('ended', () => { const expired = sleepDeadline && Date.now() >= sleepDeadline; updateSleepTimer(); if (!expired) playNext(); });
+    audio.addEventListener('timeupdate', updateSleepTimer);
+    for (const name of ['loadedmetadata', 'timeupdate', 'ratechange', 'seeked']) audio.addEventListener(name, updateMediaPosition);
+    audio.addEventListener('playing', () => {
+      byId('toggle-play').textContent = 'Ⅱ'; byId('toggle-play').setAttribute('aria-label', 'Pausar');
+      if (state.currentTrack) rememberTrack(state.currentTrack);
+      setStatus('Reproduciendo'); mediaSessionPlayback('playing');
+    });
+    audio.addEventListener('waiting', () => setStatus('Cargando audio…'));
+    audio.addEventListener('pause', () => {
+      byId('toggle-play').textContent = '▶'; byId('toggle-play').setAttribute('aria-label', 'Reproducir');
+      mediaSessionPlayback('paused');
+    });
+    audio.addEventListener('error', async () => {
+      if (state.audio !== audio || !state.currentTrack) return;
+      if (!state.audioRetries) {
+        state.audioRetries = 1;
+        setStatus('Probando una conexión alternativa…');
+        audio.src = `/api/play/${encodeURIComponent(state.currentTrack.id)}?retry=1`;
+        audio.play().catch(playbackRejected);
+        return;
+      }
+      const serial = state.playSerial;
+      const active = await window.MaggySession.verifyAccess();
+      if (serial === state.playSerial && active) setStatus('Esta pista no responde o no permite reproducción. Pulsa ▶ para reintentar o elige otra.');
+    });
+    state.audio = audio;
+    byId('player-media').replaceChildren(audio);
+  }
+  state.audioRetries = 0;
+  audio.src = url;
   setupAudioMediaSession(state.currentTrack);
-  byId('player-media').replaceChildren(audio);
-  audio.play().catch(() => setStatus('Pulsa ▶ para comenzar la reproducción.'));
+  audio.play().catch(playbackRejected);
 }
+function playbackRejected(error) {
+  if (error.name === 'NotAllowedError') setStatus('Safari necesita tu permiso: pulsa ▶ para escuchar.');
+  // AbortError is expected when switching tracks quickly; media errors retry above.
+}
+
 /** Controles nativos del teléfono SOLO para streaming de Audius/Archive. */
 function mediaSessionPlayback(value) {
   if (!('mediaSession' in navigator)) return;
@@ -299,7 +321,8 @@ function playPrevious() { if (state.currentIndex > 0) playTrack(state.queue[stat
 function togglePlayFromSystem() { state.audio?.play().catch(() => setStatus('Pulsa reproducir en Maggy para continuar.')); }
 function togglePlay() {
   if (state.audio) {
-    if (state.audio.paused) state.audio.play().catch(() => setStatus('No se pudo iniciar el audio.'));
+    if (state.audio.error && state.currentTrack) startAudio(`/api/play/${encodeURIComponent(state.currentTrack.id)}?retry=1`);
+    else if (state.audio.paused) state.audio.play().catch(playbackRejected);
     else state.audio.pause();
   }
 }

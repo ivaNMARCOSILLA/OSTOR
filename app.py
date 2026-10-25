@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""MAGGY PRO 8.4.0 — API musical y distribución web.
+"""MAGGY PRO 8.4.1 — API musical y distribución web.
 
 Proyecto y edición: Iván Marcos Illa.
 El código de servicios externos y sus marcas pertenece a sus titulares.
@@ -20,7 +20,7 @@ from collections import OrderedDict, deque
 from urllib.parse import quote, urljoin, urlparse
 
 import requests
-from flask import Flask, Response, jsonify, request, send_from_directory, stream_with_context
+from flask import Flask, Response, jsonify, request, redirect, send_from_directory, stream_with_context
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -29,11 +29,11 @@ app = Flask(__name__, static_folder=os.path.join(ROOT, "assets"), static_url_pat
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 app.logger.setLevel(logging.INFO)
 
-VERSION = "8.4.0"
+VERSION = "8.4.1"
 AUDIUS_APP_NAME = os.getenv("AUDIUS_APP_NAME", "electronicama")
 SEARCH_CACHE_SECONDS = max(15, min(int(os.getenv("SEARCH_CACHE_SECONDS", "300")), 3600))
 ARCHIVE_CACHE_SECONDS = max(60, min(int(os.getenv("ARCHIVE_CACHE_SECONDS", "3600")), 86400))
-REQUEST_TIMEOUT = (3.5, 9)
+REQUEST_TIMEOUT = (2.5, 6)
 MAX_PROXY_BYTES = 32 * 1024 * 1024
 MAX_SEARCH_LENGTH = 90
 
@@ -138,8 +138,8 @@ def relevance(item: dict, query: str) -> float:
     return score
 
 
-def fetch_json(url, params=None):
-    response = requests.get(url, params=params, timeout=REQUEST_TIMEOUT)
+def fetch_json(url, params=None, timeout=REQUEST_TIMEOUT):
+    response = requests.get(url, params=params, timeout=timeout)
     response.raise_for_status()
     return response.json()
 
@@ -151,11 +151,16 @@ def archive_stream_url(identifier: str) -> str:
     if cached:
         return cached
     data = fetch_json(f"https://archive.org/metadata/{quote(identifier, safe='')}")
-    extensions = (".mp3", ".m4a", ".ogg", ".opus")
+    metadata = data.get("metadata") or {}
+    if data.get("is_dark") or str(metadata.get("access-restricted-item", "")).lower() == "true":
+        raise LookupError("Este elemento requiere acceso en Archive")
+    # Prefer Safari-compatible derivatives, never the largest Ogg/album by default.
+    extensions = (".mp3", ".m4a", ".aac")
     files = [f for f in data.get("files", []) if
              str(f.get("name", "")).lower().endswith(extensions)
+             and str(f.get("private", "")).lower() not in {"true", "1"}
              and not any(x in str(f.get("name", "")).lower() for x in ("spectrogram", "waveform"))]
-    files.sort(key=lambda f: int(f.get("size", 0) or 0), reverse=True)
+    files.sort(key=lambda f: (next(i for i, ext in enumerate(extensions) if f["name"].lower().endswith(ext)), f["name"].casefold()))
     if not files:
         raise LookupError("No contiene audio compatible")
     url = f"https://archive.org/download/{quote(identifier, safe='')}/{quote(files[0]['name'], safe='/')}"
@@ -167,35 +172,27 @@ def search_archive(query: str, limit: int = 8, page: int = 1) -> list:
     try:
         # Escapar caracteres especiales de la sintaxis Lucene.
         safe = re.sub(r'[^\w\s\-áéíóúüñÁÉÍÓÚÜÑ]', ' ', query)
-        params = {"q": f'({" ".join(safe.split())}) AND mediatype:audio',
-                  "fl[]": ["identifier", "title", "creator"], "sort[]": "downloads desc",
+        params = {"q": f'({" ".join(safe.split())}) AND mediatype:audio AND (format:"VBR MP3" OR format:MP3 OR format:MPEG4) AND NOT access-restricted-item:true',
+                  "fl[]": ["identifier", "title", "creator", "access-restricted-item"], "sort[]": "downloads desc",
                   "rows": min(40, limit * 3), "page": page, "output": "json"}
         docs = fetch_json("https://archive.org/advancedsearch.php", params).get("response", {}).get("docs", [])
-        docs = [d for d in docs if d.get("identifier") and relevance({
-            "title": d.get("title", ""), "channel": d.get("creator", "")}, query) >= 0][:limit]
         results = []
-        if not docs:
-            return results
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
-            futures = {pool.submit(archive_stream_url, str(d["identifier"])): d for d in docs}
-            for future in concurrent.futures.as_completed(futures):
-                d = futures[future]
-                try:
-                    stream_url = future.result()
-                    ident = str(d["identifier"])
-                    title = d.get("title") or "Sin título"
-                    creator = d.get("creator") or "Internet Archive"
-                    if isinstance(title, list):
-                        title = title[0] if title else "Sin título"
-                    if isinstance(creator, list):
-                        creator = creator[0] if creator else "Internet Archive"
-                    results.append({"id": f"archive_{ident}", "title": str(title)[:140],
-                                    "channel": str(creator)[:90], "description": "",
-                                    "thumbnail": f"https://archive.org/services/img/{quote(ident)}",
-                                    "url": f"https://archive.org/details/{quote(ident)}",
-                                    "stream_url": stream_url, "source": "ARCHIVE"})
-                except (requests.RequestException, ValueError, LookupError) as exc:
-                    app.logger.info("Archive item omitted: %s", type(exc).__name__)
+        for d in docs:
+            ident = str(d.get("identifier", ""))
+            if not re.fullmatch(r"[A-Za-z0-9_.-]{1,160}", ident) or str(d.get("access-restricted-item", "")).lower() == "true":
+                continue
+            title = d.get("title") or "Sin título"
+            creator = d.get("creator") or "Internet Archive"
+            if isinstance(title, list): title = title[0] if title else "Sin título"
+            if isinstance(creator, list): creator = creator[0] if creator else "Internet Archive"
+            if relevance({"title": title, "channel": creator}, provider_query(query)) < 0:
+                continue
+            results.append({"id": f"archive_{ident}", "title": str(title)[:140],
+                            "channel": str(creator)[:90], "description": "",
+                            "thumbnail": f"https://archive.org/services/img/{quote(ident)}",
+                            "url": f"https://archive.org/details/{quote(ident)}", "source": "ARCHIVE"})
+            if len(results) >= limit: break
+        # Resolve only the selected item. Searching no longer downloads 8–15 metadata documents.
         return results
     except (requests.RequestException, ValueError, TypeError) as exc:
         app.logger.warning("Archive search failed: %s", type(exc).__name__)
@@ -203,8 +200,7 @@ def search_archive(query: str, limit: int = 8, page: int = 1) -> list:
 
 
 AUDIUS_ENDPOINTS = (
-    "https://discoveryprovider.audius.co/v1/tracks/search",
-    "https://audius-discovery-1.cultur3stake.com/v1/tracks/search",
+    "https://api.audius.co/v1/tracks/search",
     "https://discoveryprovider2.audius.co/v1/tracks/search",
 )
 
@@ -212,13 +208,16 @@ AUDIUS_ENDPOINTS = (
 def search_audius(query: str, limit: int = 10) -> list:
     for endpoint in AUDIUS_ENDPOINTS:
         try:
-            tracks = fetch_json(endpoint, {"query": query, "app_name": AUDIUS_APP_NAME}).get("data", [])
+            tracks = fetch_json(endpoint, {"query": query, "app_name": AUDIUS_APP_NAME, "limit": limit * 2}, timeout=(2, 3)).get("data", [])
             if not tracks:
                 continue
             results = []
             for track in tracks[:limit * 2]:
                 ident = str(track.get("id", ""))
                 if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", ident):
+                    continue
+                if (track.get("is_streamable") is False or track.get("is_available") is False
+                        or track.get("is_stream_gated") or (track.get("access") or {}).get("stream") is False):
                     continue
                 artist = (track.get("user") or {}).get("name") or "Audius"
                 art = track.get("artwork") or {}
@@ -227,7 +226,7 @@ def search_audius(query: str, limit: int = 10) -> list:
                                 "channel": str(artist)[:90], "description": str(track.get("description") or "")[:300],
                                 "thumbnail": art.get("480x480") or art.get("1000x1000") or art.get("150x150") or "",
                                 "url": f"https://audius.co{track_url}" if str(track_url).startswith("/") else "https://audius.co",
-                                "stream_url": f"https://discoveryprovider.audius.co/v1/tracks/{quote(ident)}/stream?app_name={quote(AUDIUS_APP_NAME)}",
+                                "stream_url": f"https://api.audius.co/v1/tracks/{quote(ident)}/stream?app_name={quote(AUDIUS_APP_NAME)}",
                                 "source": "AUDIUS"})
             return results[:limit]
         except (requests.RequestException, ValueError, TypeError, AttributeError):
@@ -243,13 +242,15 @@ def search_audius(query: str, limit: int = 10) -> list:
 
 
 
-def multi_search(query: str, page: int = 1) -> list:
-    cache_key = (normalize(query), page)
+def multi_search(query: str, page: int = 1, source: str = "ALL") -> list:
+    cache_key = (normalize(query), page, source)
     ranking_query = provider_query(query)
     hit = cached_get(_search_cache, cache_key, SEARCH_CACHE_SECONDS)
     if hit is not None:
         return hit
-    if page > 1:
+    if source == "AUDIUS":
+        candidates = search_audius(query, limit=10) if page == 1 else []
+    elif source == "ARCHIVE" or page > 1:
         candidates = search_archive(query, limit=15, page=page)
     else:
         workers = [(search_archive, 8), (search_audius, 10)]
@@ -274,7 +275,7 @@ def multi_search(query: str, page: int = 1) -> list:
         scored.append((score, item))
     scored.sort(key=lambda x: (-x[0], x[1].get("title", "").casefold()))
     result = [item for _, item in scored]
-    cached_put(_search_cache, cache_key, result)
+    if result: cached_put(_search_cache, cache_key, result)
     return result
 
 
@@ -345,13 +346,17 @@ def api_search():
     query = sanitize_query(request.args.get("q", ""))
     if not query:
         return jsonify([])
-    if not rate_allowed("search", 35):
+    if not rate_allowed("search", 70):
         return jsonify({"error": "Demasiadas búsquedas. Inténtalo en un minuto."}), 429
     try:
         page = max(1, min(int(request.args.get("page", "1")), 10))
     except ValueError:
         page = 1
-    return jsonify(catalogue_response(multi_search(query, page=page)))
+    source = request.args.get("source", "ALL").upper()
+    if source not in {"ALL", "ARCHIVE", "AUDIUS"}:
+        return jsonify({"error": "Plataforma no válida"}), 400
+    tracks = multi_search(query, page=page) if source == "ALL" else multi_search(query, page=page, source=source)
+    return jsonify(catalogue_response(tracks))
 
 
 @app.get("/api/trending")
@@ -369,13 +374,37 @@ def api_resolve(item_id):
         ident = item_id[7:]
         if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", ident):
             return jsonify({"error": "Identificador no válido"}), 400
-        return jsonify({"id": item_id, "source": "AUDIUS", "stream_url": f"https://discoveryprovider.audius.co/v1/tracks/{quote(ident)}/stream?app_name={quote(AUDIUS_APP_NAME)}"})
+        return jsonify({"id": item_id, "source": "AUDIUS", "stream_url": f"https://api.audius.co/v1/tracks/{quote(ident)}/stream?app_name={quote(AUDIUS_APP_NAME)}"})
     if not item_id.startswith("archive_"):
         return jsonify({"id": item_id, "stream_url": ""})
     try:
         return jsonify({"id": item_id, "stream_url": archive_stream_url(item_id[8:]), "source": "ARCHIVE"})
     except (requests.RequestException, ValueError, LookupError):
         return jsonify({"error": "Audio no disponible"}), 404
+
+
+@app.get("/api/play/<path:item_id>")
+def api_play(item_id):
+    """One paid request from the native audio element; Range stays with the origin."""
+    if not rate_allowed("play", 90):
+        return jsonify({"error": "Límite temporal de reproducción"}), 429
+    if item_id.startswith("audius_"):
+        ident = item_id[7:]
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", ident):
+            return jsonify({"error": "Identificador no válido"}), 400
+        host = "discoveryprovider2.audius.co" if request.args.get("retry") == "1" else "api.audius.co"
+        return redirect(f"https://{host}/v1/tracks/{quote(ident)}/stream?app_name={quote(AUDIUS_APP_NAME)}", code=302)
+    if item_id.startswith("archive_"):
+        try:
+            ident = item_id[8:]
+            if request.args.get("retry") == "1":
+                with _cache_lock: _archive_cache.pop(ident, None)
+            return redirect(archive_stream_url(ident), code=302)
+        except ValueError:
+            return jsonify({"error": "Identificador no válido"}), 400
+        except (requests.RequestException, LookupError, TypeError):
+            return jsonify({"error": "Esta pista no ofrece audio público compatible"}), 404
+    return jsonify({"error": "Fuente no disponible"}), 404
 
 
 # El proxy mantiene la compatibilidad con el proyecto previo. Nunca sigue

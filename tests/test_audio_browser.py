@@ -24,7 +24,13 @@ def run():
         with wave.open(audio,'wb') as wav:
             wav.setnchannels(1);wav.setsampwidth(2);wav.setframerate(8000);wav.writeframes(b'\x00\x00'*80000)
         page.route('https://test.invalid/music.wav',lambda route:route.fulfill(body=audio.getvalue(),content_type='audio/wav',headers={'Access-Control-Allow-Origin':'*'}))
-        page.route('**/api/resolve/*',lambda route:route.fulfill(json={'stream_url':'https://test.invalid/music.wav'}))
+        def serve_audio(route):
+            # Exercise the automatic alternate connection, then real native decoding.
+            if 'retry=1' not in route.request.url:
+                route.fulfill(status=503,body='Temporary provider outage')
+            else:
+                route.fulfill(body=audio.getvalue(),content_type='audio/wav')
+        page.route('**/api/play/*',serve_audio)
         page.route('**/api/search?*',lambda route:route.fulfill(json=valid+removed))
         page.goto(BASE_URL+'/');page.locator('#consent-decline').click()
         page.locator('.track-card').first.wait_for()
@@ -39,6 +45,13 @@ def run():
         assert page.locator('.channel-card').count()==2
         page.locator('.channel-card').last.locator('button').first.click()
         page.wait_for_function("document.querySelector('audio')?.currentTime > 0")
+        assert any('/api/play/archive_test?retry=1' in url for url in requests)
+        assert not any('/api/resolve/' in url for url in requests)
+        page.evaluate("document.querySelector('audio').dataset.reused = 'yes'")
+        page.locator('.channel-card').last.locator('button').first.click()
+        page.wait_for_function("document.querySelector('audio')?.currentTime > 0")
+        assert page.locator('audio').get_attribute('data-reused') == 'yes'
+
         page.set_viewport_size({'width':390,'height':844})
         page.locator('#player-expand').click()
         assert page.locator('#player-expand').get_attribute('aria-expanded')=='true'

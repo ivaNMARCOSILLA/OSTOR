@@ -17,3 +17,9 @@ Las instrucciones actuales de despliegue están en docs/VERCEL.md. El historial 
 ### Experiencia móvil 8.4
 
 Reproductor vertical ampliable con zonas seguras para iPhone, controles táctiles grandes, saltos de 15 segundos y temporizador de 15/30/60 minutos. Selecciones por actividad: desconectar, entrenar, concentrarse y viajar. Media Session incorpora búsqueda temporal cuando el navegador la admite. AirPlay y controles de pantalla bloqueada dependen de Safari y del dispositivo; no se garantiza reproducción continua en segundo plano. El temporizador se comprueba también al recibir eventos de audio y al volver a la página; iOS puede suspender JavaScript en segundo plano.
+
+### Reproducción y búsqueda 8.4.1
+
+El elemento de audio reutilizable inicia `/api/play/<id>` en el propio gesto del usuario. Esta ruta comprueba el acceso vigente y redirige al proveedor, conservando la descarga parcial y los controles nativos; no espera a `/api/account/me` y `/api/resolve` antes de sonar. Si falla, intenta una conexión alternativa una vez.
+
+La búsqueda consulta las dos fuentes en paralelo y muestra cada respuesta al llegar. Archive se filtra por formatos compatibles y elementos públicos, sin descargar metadatos por cada resultado; el archivo seleccionado se resuelve y guarda en caché al reproducir. Prioriza MP3 y excluye archivos privados/elementos restringidos. Audius usa su API oficial, excluye pistas marcadas no disponibles o con acceso restringido y dispone de un segundo proveedor. Esto reduce esperas, pero no garantiza disponibilidad de contenido externo ni reproducción instantánea.

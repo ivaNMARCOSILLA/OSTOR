@@ -322,3 +322,5 @@ body:has(.player.expanded) .content{padding-bottom:410px}body:has(.player:not(.h
 .player.expanded .player-extra{grid-column:1/-1;grid-row:5;display:flex;flex-direction:column;padding:12px 0 0;gap:18px;border-top:1px solid #3868b8}.iphone-hint{text-align:center}.app-shell:has(+ .player:not(.hidden)) .content{padding-bottom:calc(390px + env(safe-area-inset-bottom))}body:has(.player.expanded) .content{padding-bottom:85dvh}
 }
 @media(max-height:500px) and (orientation:landscape){.player{max-height:75dvh}.player-art{width:44px;height:44px}}
+
+.external-catalog{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:20px;margin-top:24px;border:1px solid #4983ed;border-radius:16px;background:#08245b}.external-catalog strong{color:#ffe600;font-size:12px;letter-spacing:1px}.external-catalog p{font-size:12px;line-height:1.7;color:#d9e6ff;max-width:620px}.external-catalog a{flex-shrink:0;border:2px solid #699dff;border-radius:10px;padding:14px;color:white;font-size:13px;font-weight:700;text-align:center;min-height:48px}@media(max-width:650px){.external-catalog{flex-direction:column;align-items:stretch}}

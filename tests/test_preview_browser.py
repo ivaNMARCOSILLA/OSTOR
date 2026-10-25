@@ -18,7 +18,7 @@ def run():
         page.locator('.cover-button').click();page.locator('#unlock-dialog').wait_for(state='visible')
         assert '14 días' in page.locator('#unlock-dialog').inner_text()
         assert page.locator('audio').count()==0
-        assert not any('/api/resolve/' in url for url in requests)
+        assert not any('/api/resolve/' in url or '/api/play/' in url for url in requests)
         page.locator('#unlock-close').click()
         page.locator('.save-button').click();assert page.locator('#unlock-dialog').is_visible()
         assert page.evaluate("localStorage.getItem('maggy_member_visitor_electronicama_v7_favorites')") is None
