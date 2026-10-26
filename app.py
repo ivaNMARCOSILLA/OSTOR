@@ -30,7 +30,7 @@ app = Flask(__name__, static_folder=os.path.join(ROOT, "assets"), static_url_pat
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 app.logger.setLevel(logging.INFO)
 
-VERSION = "9.3.0"
+VERSION = "9.3.1"
 AUDIUS_APP_NAME = os.getenv("AUDIUS_APP_NAME", "electronicama")
 SEARCH_CACHE_SECONDS = max(15, min(int(os.getenv("SEARCH_CACHE_SECONDS", "300")), 3600))
 ARCHIVE_CACHE_SECONDS = max(60, min(int(os.getenv("ARCHIVE_CACHE_SECONDS", "3600")), 86400))
@@ -706,6 +706,10 @@ from founders import install as install_founders
 install_founders(app)
 from sounds import install as install_sounds
 install_sounds(app)
+
+
+from analytics import install as install_analytics
+install_analytics(app)
 
 
 if __name__ == "__main__":

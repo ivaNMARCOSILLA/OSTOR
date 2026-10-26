@@ -60,6 +60,7 @@ async function loadAdmin() {
     $('admin-payments').append(row);
   }
   renderCalendar();
+  await loadStatistics();
 }
 function renderMembers(){
   const clients=members.filter(member=>member.role!=='admin');
@@ -152,3 +153,17 @@ $('payment-form').addEventListener('submit',async event=>{event.preventDefault()
 window.OlAccountReady=refresh().then(()=>{if(streamReturn&&current)location.assign(streamReturn);}).catch(error=>status(error.message));
 
 if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('/sw.js').catch(()=>{});
+
+async function loadStatistics(){
+ if(current?.role!=='admin')return;
+ const button=$('refresh-statistics');button.disabled=true;
+ try{
+  const d=await api('/api/admin/statistics'),money=n=>new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR'}).format(n/100);
+  const cards=[['En línea ahora',d.online.total],['Con cuenta en línea',d.online.members],['Visitantes en línea',d.online.guests],['Clientes registrados',d.accounts.registered],['Registros · últimos 7 días',d.accounts.new_week],['Periodos pagados vigentes',d.accounts.paid_active],['Amigos con acceso gratuito',d.friends],['Fundadores activos',d.founders],['Canales creados',d.channels],['Emisiones activas',d.live],['Pagos confirmados',d.payments.count],['Importe confirmado · total',money(d.payments.total_cents)],['Importe confirmado · mes UTC',money(d.payments.month_cents)],['Correos pendientes o fallidos',d.pending_notifications]];
+  $('statistics-cards').replaceChildren(...cards.map(([label,value])=>{const card=text('article','');card.append(text('strong',String(value)),text('span',label));return card;}));
+  $('statistics-days').replaceChildren(...d.days.map(day=>{const row=text('tr','');for(const value of [day.day,day.registrations,day.payments,money(day.cents)])row.append(text('td',String(value)));return row;}));
+  $('statistics-status').textContent='Actualizado: '+date(d.updated_at)+'. En línea: actividad reciente de 90 segundos; cuentas únicas y visitantes por navegador. Las categorías de acceso pueden coincidir.';
+ }catch(error){$('statistics-status').textContent='No se pudieron actualizar las estadísticas. '+error.message;}finally{button.disabled=false;}
+}
+$('refresh-statistics').addEventListener('click',loadStatistics);
+setInterval(()=>{if(!document.hidden&&current?.role==='admin')loadStatistics();},60000);

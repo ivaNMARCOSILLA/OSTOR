@@ -28,7 +28,7 @@ class PostgresMembershipTests(unittest.TestCase):
         ready=patch('streamers.streamer_sales_ready',return_value=True);ready.start();self.addCleanup(ready.stop)
         self.app=application.app
         with self.app.app_context(),m.database() as connection:
-            for table in ['founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:
+            for table in ['online_presence','founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:
                 connection.execute('DELETE FROM '+table)
         with self.app.app_context():
             m.create_admin('pg-admin','postgres-admin-password-123')
@@ -48,6 +48,20 @@ class PostgresMembershipTests(unittest.TestCase):
 
     def grant(self,client,plan,reference):
         return self.post(client,'/api/admin/confirm-payment',{'member_id':self.member['id'],'plan':plan,'reference':reference})
+
+    def test_statistics_and_presence_use_persistent_postgresql(self):
+        visitor=self.app.test_client()
+        result=self.post(visitor,'/api/presence',{})
+        self.assertEqual(result.status_code,200)
+        self.assertEqual(result.json['guests'],1)
+        self.assertEqual(self.post(visitor,'/api/presence',{}).json['guests'],1)
+        self.assertEqual(self.post(self.client,'/api/presence',{}).json['members'],1)
+        self.assertEqual(self.grant(self.admin,'monthly','PG-STATISTICS-001').status_code,200)
+        data=self.admin.get('/api/admin/statistics').json
+        self.assertEqual(data['accounts']['registered'],1)
+        self.assertEqual(data['payments']['total_cents'],600)
+        self.assertEqual(sum(day['cents'] for day in data['days']),600)
+        self.assertEqual(data['online']['total'],2)
 
     def test_founder_last_slot_is_serialized_and_signature_persists(self):
         with self.app.app_context(),m.database() as connection:

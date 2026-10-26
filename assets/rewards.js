@@ -1,4 +1,4 @@
-import {playStickerSound} from '/assets/sticker-audio.js?v=9.3.0';
+import {playStickerSound} from '/assets/sticker-audio.js?v=9.3.1';
 /* Account collection: paginated artwork, bounded active-time rewards. */
 const panel=document.getElementById('ol-collection');
 if(panel){

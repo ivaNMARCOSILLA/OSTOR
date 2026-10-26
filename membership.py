@@ -50,6 +50,10 @@ def database():
 def init_database():
     with database() as conn:
         conn.executescript('''
+        CREATE TABLE IF NOT EXISTS online_presence (
+          visitor_id TEXT PRIMARY KEY,member_id TEXT,seen_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS online_presence_time ON online_presence(seen_at);
         CREATE TABLE IF NOT EXISTS members (
           id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE,
           password_hash TEXT, role TEXT NOT NULL DEFAULT 'member',
@@ -186,7 +190,7 @@ def verify_csrf():
 def restrict_music():
     # Music is free. Account collections require login; Ol Live requires premium.
     path=request.path
-    if not path.startswith('/api/') or path.startswith(('/api/account/','/api/admin/','/api/play/','/api/resolve/')) or path in {'/api/search','/api/trending','/api/proxy','/api/live/catalogue','/api/live/founders','/api/live/founders/claim'}:
+    if not path.startswith('/api/') or path.startswith(('/api/account/','/api/admin/','/api/play/','/api/resolve/')) or path in {'/api/search','/api/trending','/api/proxy','/api/presence','/api/live/catalogue','/api/live/founders','/api/live/founders/claim'}:
         return None
     if path.endswith('/sound.wav') and path.startswith(('/api/stickers/','/api/live/founders/')):return None
     user=get_user()
