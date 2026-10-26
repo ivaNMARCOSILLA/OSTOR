@@ -29,8 +29,8 @@ La cuenta permite activar voluntariamente verificación de dos factores TOTP con
 Pagos, mantenimiento, supervisión y preparación Android: [guía de activación](docs/PAGOS_Y_PLAY_STORE.md). La PWA ya se instala desde el navegador. No se afirma publicación en Google Play ni cobros reales sin completar la configuración del gestor.
 
 
-Construir el paquete fuente: `python tools/build_release.py`. Comprobar su contenido y SHA-256: `python tools/verify_release.py ../artifacts/OL_9_8_3.zip`. El ZIP usa la carpeta `Ol`, excluye cuentas y secretos y sirve para web/PWA; la plantilla Android no es una publicación en Play Store.
+Construir el paquete fuente: `python tools/build_release.py`. Comprobar su contenido y SHA-256: `python tools/verify_release.py ../artifacts/OL_9_8_4.zip`. El ZIP usa la carpeta `Ol`, excluye cuentas y secretos y sirve para web/PWA; la plantilla Android no es una publicación en Play Store.
 
-Ol 9.8.3: [próximo estreno y preparación privada](docs/PREESTRENO_OL_LIVE.md). Nuevas pruebas de siete días; después, 25 € en un único pago. El modo estreno impide iniciar pruebas y cobros y oculta los paneles públicos de Ol Live.
+Ol 9.8.4: [próximo estreno y preparación privada](docs/PREESTRENO_OL_LIVE.md). Nuevas pruebas de siete días; después, 25 € en un único pago. El modo estreno impide iniciar pruebas y cobros y oculta los paneles públicos de Ol Live.
 
 Registro con correo privado, apodo, confirmación y recuperación de contraseña; navegación supervisada y revisiones programadas: [guía de cuentas y accesos](docs/CUENTAS_Y_REVISION_AUTOMATICA.md).

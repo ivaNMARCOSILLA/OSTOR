@@ -1,8 +1,8 @@
-import {openSubscription} from '/assets/subscriptions.js?v=9.8.3';
-import {founderBadge} from '/assets/badges.js?v=9.8.3';
+import {openSubscription} from '/assets/subscriptions.js?v=9.8.4';
+import {founderBadge} from '/assets/badges.js?v=9.8.4';
 'use strict';
-import {StreamCommunity} from '/assets/community.js?v=9.8.3';
-import {StudioTools} from '/assets/studio-tools.js?v=9.8.3';
+import {StreamCommunity} from '/assets/community.js?v=9.8.4';
+import {StudioTools} from '/assets/studio-tools.js?v=9.8.4';
 const $=id=>document.getElementById(id);
 let premiereOnly=false;
 let publicInfo=null,liveCategory='all';

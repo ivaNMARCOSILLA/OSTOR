@@ -139,7 +139,22 @@ def email_health():
   import os
   from email.utils import parseaddr
   sender=parseaddr(os.getenv('OL_EMAIL_FROM',''))[1];domain=sender.rsplit('@',1)[-1].lower() if '@' in sender else ''
-  return jsonify(configured=mail_ready(),provider='resend' if os.getenv('RESEND_API_KEY') else 'smtp',sender_domain=domain,customer_sender_configured=bool(mail_ready() and domain and domain!='resend.dev'),provider_delivery_verified=False)
+  from flask import request
+  provider='resend' if os.getenv('RESEND_API_KEY') else 'smtp'
+  public_domains={'gmail.com','googlemail.com','outlook.com','hotmail.com','yahoo.com','icloud.com','live.com','aol.com','proton.me','protonmail.com','resend.dev'}
+  supported=bool(mail_ready() and domain and (provider!='resend' or domain not in public_domains))
+  result={'configured':mail_ready(),'provider':provider,'sender_domain':domain,'customer_sender_configured':supported,'provider_delivery_verified':False}
+  if request.args.get('verify')=='1' and provider=='resend':
+   import requests
+   try:
+    response=requests.get('https://api.resend.com/domains',headers={'Authorization':'Bearer '+os.environ['RESEND_API_KEY']},timeout=(2,5),allow_redirects=False)
+    if response.status_code==200:
+     data=response.json();domains=data.get('data',[]) if isinstance(data,dict) else []
+     result['site_domains']=[{'name':d.get('name'),'status':d.get('status')} for d in domains if isinstance(d,dict) and (d.get('name')=='electronicama.com' or str(d.get('name','')).endswith('.electronicama.com'))]
+     result['domain_check']='complete'
+    else:result['domain_check']='provider_permission_or_configuration_required'
+   except (requests.RequestException,ValueError):result['domain_check']='temporarily_unavailable'
+  return jsonify(result)
  return report()
 
 
