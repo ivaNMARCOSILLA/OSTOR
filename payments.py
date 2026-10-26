@@ -3,7 +3,7 @@ import hashlib,hmac,json,os,re,secrets,time
 from datetime import datetime,timedelta,timezone
 import requests
 from flask import Blueprint,jsonify,request,redirect,current_app,session
-from membership import database,get_user,user_public,payload,stamp,now_utc,end_of_plan,allow_attempt
+from membership import database,get_user,user_public,payload,stamp,now_utc,end_of_plan,allow_attempt,require_admin
 bp=Blueprint('payments',__name__)
 ORIGIN='https://electronicama.com'
 class PaymentError(Exception):pass
@@ -31,8 +31,9 @@ def init_database():
  id TEXT PRIMARY KEY,event_type TEXT NOT NULL,received_at TEXT NOT NULL
  );''')
 
-def stripe(method,path,data=None,account=None,idempotency=None,oauth=False):
- key=os.getenv('STRIPE_SECRET_KEY','')
+def stripe(method,path,data=None,account=None,idempotency=None,oauth=False,sandbox=False):
+ key=os.getenv('STRIPE_TEST_SECRET_KEY' if sandbox else 'STRIPE_SECRET_KEY','')
+ if sandbox and not key.startswith(('sk_test_','rk_test_')):raise PaymentError('Configura una clave secreta de pruebas en STRIPE_TEST_SECRET_KEY.')
  if not key:raise PaymentError('Stripe está pendiente de configurar.')
  if oauth:data={**(data or {}),'client_secret':key}
  headers={'Authorization':'Bearer '+key,'Stripe-Version':'2024-06-20'}
@@ -53,6 +54,30 @@ def status():
  user=get_user()
  with database() as c:account=account_for(c,user['id']) if user else None
  return jsonify(provider=provider(),configured=configured(),enabled=ready(),creator_connected=bool(account),connect_available=bool(os.getenv('STRIPE_CONNECT_CLIENT_ID','').startswith('ca_') and os.getenv('STRIPE_SECRET_KEY','').startswith('sk_live_')),platform_price_cents=2500,currency='eur',platform_commission_percent=0,renewal='manual',play_distribution=bool(session.get('ol_play_distribution')),pending_reason=None if ready() else 'El gestor y Ol Live deben estar configurados y comprobados antes de cobrar.')
+
+def sandbox_configured():return bool(os.getenv('STRIPE_TEST_SECRET_KEY','').startswith(('sk_test_','rk_test_')) and os.getenv('STRIPE_TEST_WEBHOOK_SECRET','').startswith('whsec_'))
+
+@bp.get('/api/admin/payments/test-status')
+@require_admin
+def test_status():return jsonify(configured=sandbox_configured(),mode='test',grants_access=False)
+
+@bp.post('/api/admin/payments/test-checkout')
+@require_admin
+def test_checkout():
+ if not sandbox_configured():return jsonify(error='Añade las dos variables privadas de pruebas en Vercel: STRIPE_TEST_SECRET_KEY y STRIPE_TEST_WEBHOOK_SECRET.'),409
+ if not allow_attempt('stripe-admin-test',limit=4):return jsonify(error='Espera unos minutos antes de repetir la prueba.'),429
+ ident=secrets.token_hex(16);user=get_user()
+ with database() as c:
+  c.execute('BEGIN IMMEDIATE')
+  pending=c.execute("SELECT id FROM stripe_orders WHERE member_id=? AND kind='test' AND state='open' AND created_at>?",(user['id'],stamp(now_utc()-timedelta(minutes=31)))).fetchone()
+  if pending:return jsonify(error='Ya existe una sesión de prueba pendiente. Complétala o espera a su caducidad.'),409
+  c.execute("INSERT INTO stripe_orders(id,member_id,kind,account_id,amount_cents,currency,created_at,state) VALUES(?,?,'test','',2500,'eur',?,'open')",(ident,user['id'],stamp(now_utc())))
+ try:
+  result=stripe('POST','/checkout/sessions',{'mode':'payment','success_url':ORIGIN+'/account?test_payment=processing','cancel_url':ORIGIN+'/account?test_payment=cancelled','metadata[ol_order]':ident,'client_reference_id':ident,'line_items[0][quantity]':'1','line_items[0][price_data][currency]':'eur','line_items[0][price_data][unit_amount]':'2500','line_items[0][price_data][product_data][name]':'Ol · PRUEBA SIN DINERO REAL · no activa acceso','payment_method_types[0]':'card','expires_at':str(int(time.time())+1800)},idempotency='ol-test-'+ident,sandbox=True)
+  if not str(result.get('id','')).startswith('cs_test_') or not str(result.get('url','')).startswith('https://checkout.stripe.com/'):raise PaymentError('Stripe no devolvió una sesión válida de pruebas.')
+  with database() as c:c.execute('UPDATE stripe_orders SET checkout_id=? WHERE id=?',(result['id'],ident))
+  return jsonify(url=result['url'],mode='test',grants_access=False)
+ except PaymentError as e:return jsonify(error=str(e)),409
 
 @bp.post('/api/payments/connect')
 def connect():
@@ -146,11 +171,13 @@ def verified_event(raw,signature,secret):
 
 def fulfill(c,order,obj):
  if order['paid_at'] or order['reversed_at']:return False
- if c.execute('SELECT payment_intent FROM stripe_reversals WHERE payment_intent=? AND account_id=?',(obj.get('payment_intent'),order['account_id'])).fetchone():
+ if c.execute('SELECT payment_intent FROM stripe_reversals WHERE payment_intent=? AND account_id=?',(('test:'+str(obj.get('payment_intent'))) if order['kind']=='test' else obj.get('payment_intent'),order['account_id'])).fetchone():
   c.execute("UPDATE stripe_orders SET reversed_at=?,state='reversed' WHERE id=?",(stamp(now_utc()),order['id']));return False
  if obj.get('payment_status')!='paid' or obj.get('amount_total')!=order['amount_cents'] or obj.get('currency')!='eur' or obj.get('id')!=order['checkout_id']:raise ValueError('payment mismatch')
  if (obj.get('metadata') or {}).get('ol_order')!=order['id']:raise ValueError('metadata mismatch')
  now=stamp(now_utc());reference='stripe:'+obj['id']
+ if order['kind']=='test':
+  c.execute("UPDATE stripe_orders SET paid_at=?,payment_intent=?,state='test_paid' WHERE id=?",(now,obj.get('payment_intent'),order['id']));return False
  if order['kind']=='platform':
   end=stamp(end_of_plan(now_utc(),'lifetime'))
   # Automated receipt explicitly attributes verification to the account holder, not a fabricated administrator.
@@ -167,34 +194,37 @@ def fulfill(c,order,obj):
 
 @bp.post('/api/payments/webhook/<scope>')
 def webhook(scope):
- if scope not in {'platform','connect'}:return jsonify(error='No existe ese webhook.'),404
- try:event=verified_event(request.get_data(),request.headers.get('Stripe-Signature',''),os.getenv('STRIPE_CONNECT_WEBHOOK_SECRET' if scope=='connect' else 'STRIPE_WEBHOOK_SECRET',''))
+ if scope not in {'platform','connect','test'}:return jsonify(error='No existe ese webhook.'),404
+ try:event=verified_event(request.get_data(),request.headers.get('Stripe-Signature',''),os.getenv('STRIPE_TEST_WEBHOOK_SECRET' if scope=='test' else 'STRIPE_CONNECT_WEBHOOK_SECRET' if scope=='connect' else 'STRIPE_WEBHOOK_SECRET',''))
  except (ValueError,TypeError,UnicodeError):return jsonify(error='Firma del gestor no válida.'),400
- if event.get('livemode') is not True:return jsonify(error='Se requieren eventos de modo real.'),400
+ if type(event.get('livemode')) is not bool or event['livemode']!=(scope!='test'):return jsonify(error='El modo del evento no coincide con el webhook.'),400
  account=event.get('account','')
  if bool(account)!=(scope=='connect'):return jsonify(error='Origen del evento no válido.'),400
+ event_id=('test:' if scope=='test' else '')+event['id']
  obj=(event.get('data') or {}).get('object') or {};changed=False;order=None
  try:
   with database() as c:
    c.execute('BEGIN IMMEDIATE')
-   if c.execute('SELECT id FROM stripe_events WHERE id=?',(event['id'],)).fetchone():return jsonify(ok=True,duplicate=True)
+   if c.execute('SELECT id FROM stripe_events WHERE id=?',(event_id,)).fetchone():return jsonify(ok=True,duplicate=True)
    kind=event.get('type')
    if kind in {'checkout.session.completed','checkout.session.async_payment_succeeded','checkout.session.expired'}:
     order=c.execute('SELECT * FROM stripe_orders WHERE checkout_id=? AND account_id=?',(obj.get('id',''),account)).fetchone()
     if order:
+     if (order['kind']=='test')!=(scope=='test'):raise ValueError('order mode mismatch')
      if kind=='checkout.session.expired':c.execute("UPDATE stripe_orders SET state='expired' WHERE id=? AND paid_at IS NULL",(order['id'],))
      else:changed=fulfill(c,order,obj)
    elif kind in {'charge.refunded','charge.dispute.created'}:
     intent=obj.get('payment_intent');order=c.execute('SELECT * FROM stripe_orders WHERE payment_intent=? AND account_id=?',(intent,account)).fetchone() if intent else None
-    if intent and (kind=='charge.dispute.created' or obj.get('refunded') is True):c.execute('INSERT INTO stripe_reversals VALUES(?,?,?) ON CONFLICT(payment_intent,account_id) DO NOTHING',(intent,account,stamp(now_utc())))
+    if intent and (kind=='charge.dispute.created' or obj.get('refunded') is True):c.execute('INSERT INTO stripe_reversals VALUES(?,?,?) ON CONFLICT(payment_intent,account_id) DO NOTHING',(('test:'+intent) if scope=='test' else intent,account,stamp(now_utc())))
+    if order and (order['kind']=='test')!=(scope=='test'):raise ValueError('order mode mismatch')
     if order and (kind=='charge.dispute.created' or obj.get('refunded') is True):
      now=stamp(now_utc());c.execute("UPDATE stripe_orders SET reversed_at=?,state='reversed' WHERE id=?",(now,order['id']))
      if order['kind']=='creator':c.execute('UPDATE creator_subscriptions SET revoked_at=? WHERE reference=?',(now,'stripe:'+order['checkout_id']))
-     else:
+     elif order['kind']=='platform':
       c.execute('UPDATE live_entitlements SET paid_at=NULL,revoked_at=? WHERE member_id=?',(now,order['member_id']))
       c.execute('UPDATE streamer_access SET until_at=? WHERE member_id=?',(now,order['member_id']))
       c.execute('UPDATE members SET access_until=? WHERE id=?',(now,order['member_id']))
-   c.execute('INSERT INTO stripe_events VALUES(?,?,?)',(event['id'],str(kind),stamp(now_utc())))
+   c.execute('INSERT INTO stripe_events VALUES(?,?,?)',(event_id,str(kind),stamp(now_utc())))
  except (ValueError,TypeError):return jsonify(error='El evento no coincide con el pedido registrado.'),400
  if changed:
   from notifications import notify

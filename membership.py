@@ -232,7 +232,7 @@ def csrf_token():
 
 
 def verify_csrf():
-    if request.path in {'/api/payments/webhook/platform','/api/payments/webhook/connect'}:return  # Verified by timestamped Stripe signature; never session auth.
+    if request.path in {'/api/payments/webhook/platform','/api/payments/webhook/connect','/api/payments/webhook/test'}:return  # Verified by timestamped Stripe signature; never session auth.
     if request.method in {'POST', 'PUT', 'PATCH', 'DELETE'} and request.path.startswith('/api/'):
         expected = session.get('csrf')
         if not expected or not secrets.compare_digest(request.headers.get('X-CSRF-Token', ''), expected):
