@@ -42,6 +42,8 @@ def heartbeat():
 @bp.get('/api/admin/statistics')
 @require_admin
 def statistics():
+    from founder_slots import cleanup
+    cleanup()
     instant = now_utc()
     month = stamp(instant.replace(day=1,hour=0,minute=0,second=0))
     with database() as conn:

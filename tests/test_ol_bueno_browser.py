@@ -18,7 +18,7 @@ def run():
   assert 'maximum-scale' not in page.locator('meta[name=viewport]').get_attribute('content')
   assert 'user-scalable=no' not in page.locator('meta[name=viewport]').get_attribute('content')
   assert page.locator('#hero .gold-text').is_visible()
-  assert page.locator('#planes').inner_text().count('25 €')==1
+  assert '25 €' in page.locator('#planes .plan.featured h3').inner_text()
   assert all(old not in page.locator('#planes').inner_text() for old in ['1 €','6 €','8 €'])
   page.goto(BASE_URL+'/account');assert page.locator('#trial-start').is_disabled()
   assert page.locator('#pay-lifetime').get_attribute('href') is None

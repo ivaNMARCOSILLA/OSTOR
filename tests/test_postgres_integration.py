@@ -30,7 +30,7 @@ class PostgresMembershipTests(unittest.TestCase):
         ready=patch('streamers.streamer_sales_ready',return_value=True);ready.start();self.addCleanup(ready.stop)
         self.app=application.app
         with self.app.app_context(),m.database() as connection:
-            for table in ['live_launch','creator_daily_activity','founder_activity','live_entitlements','human_challenges','promotion_metrics','online_presence','founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:
+            for table in ['founder_slot_history','live_launch','creator_daily_activity','founder_activity','live_entitlements','human_challenges','promotion_metrics','online_presence','founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:
                 connection.execute('DELETE FROM '+table)
         with self.app.app_context():
             m.create_admin('pg-admin','postgres-admin-password-123')
@@ -41,7 +41,7 @@ class PostgresMembershipTests(unittest.TestCase):
 
     def post(self,client,path,data):
         csrf=client.get('/api/account/me').json['csrf']
-        if path=='/api/live/founders/claim':
+        if path in {'/api/live/founders/claim','/api/account/live-trial'}:
             data=dict(data,human_id=client.get('/api/account/human-check').json['id'],human_answer='OL234')
         return client.post(path,json=data,headers={'X-CSRF-Token':csrf})
 
@@ -52,6 +52,26 @@ class PostgresMembershipTests(unittest.TestCase):
 
     def grant(self,client,plan,reference):
         return legacy_payment(self.app,client,self.member['id'],plan,reference)
+
+    def test_trial_slot_expiry_reallocation_and_private_history(self):
+        with patch('streamers.live_ready',return_value=True),patch('live_access.video_service_available',return_value=True):
+            trial=self.post(self.client,'/api/account/live-trial',{})
+            self.assertEqual(trial.status_code,200)
+            self.assertEqual(trial.json['founder_number'],1)
+            with self.app.app_context(),m.database() as conn:
+                conn.execute('UPDATE live_entitlements SET trial_until=? WHERE member_id=?',(m.stamp(m.now_utc()-m.timedelta(seconds=1)),self.member['id']))
+            second=self.app.test_client()
+            self.assertEqual(self.post(second,'/api/account/register',{'username':'pg-next-holder','password':'postgres-next-holder-password-123'}).status_code,201)
+            newtrial=self.post(second,'/api/account/live-trial',{})
+            self.assertEqual(newtrial.status_code,200)
+            self.assertEqual(newtrial.json['founder_number'],1)
+            self.assertIsNone(self.client.get('/api/account/me').json['user']['founder_number'])
+            history=self.admin.get('/api/admin/founders/history').json
+            self.assertEqual(history['total'],1)
+            self.assertEqual(history['history'][0]['username'],'pg-client')
+            retry=self.post(self.client,'/api/account/live-trial',{})
+            self.assertTrue(retry.json['already_started'])
+            self.assertIsNone(retry.json['founder_number'])
 
     def test_statistics_and_presence_use_persistent_postgresql(self):
         visitor=self.app.test_client()
@@ -153,7 +173,7 @@ class PostgresMembershipTests(unittest.TestCase):
                 legacy_payment(source,admin,ident,'welcome','SQLITE-MIGRATE-001')
                 expected=client.get('/api/account/me').json['user']['access_until']
             with self.app.app_context(),m.database() as connection:
-                for table in ['live_launch','creator_daily_activity','founder_activity','live_entitlements','human_challenges','promotion_metrics','founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:connection.execute('DELETE FROM '+table)
+                for table in ['founder_slot_history','live_launch','creator_daily_activity','founder_activity','live_entitlements','human_challenges','promotion_metrics','founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:connection.execute('DELETE FROM '+table)
             counts=migrate(Path(folder)/'members.sqlite3',self.app)
             self.assertEqual(counts['members'],2);self.assertEqual(counts['payments'],1)
             migrated=self.app.test_client()

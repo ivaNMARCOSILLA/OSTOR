@@ -85,6 +85,11 @@ def init_database():
           member_id TEXT PRIMARY KEY REFERENCES members(id),number INTEGER NOT NULL UNIQUE CHECK(number>=1 AND number<=100),
           claimed_at TEXT NOT NULL,revoked_at TEXT
         );
+        CREATE TABLE IF NOT EXISTS founder_slot_history (
+          id TEXT PRIMARY KEY,member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,number INTEGER NOT NULL,
+          claimed_at TEXT NOT NULL,trial_until TEXT NOT NULL,released_at TEXT NOT NULL,reason TEXT NOT NULL,signature_json TEXT
+        );
+        CREATE INDEX IF NOT EXISTS founder_slot_history_member ON founder_slot_history(member_id);
         CREATE TABLE IF NOT EXISTS founder_signatures (
           member_id TEXT PRIMARY KEY REFERENCES live_founders(member_id) ON DELETE CASCADE,
           mode TEXT NOT NULL,letter TEXT NOT NULL DEFAULT '',caption TEXT NOT NULL DEFAULT '',audio_json TEXT,updated_at TEXT NOT NULL
@@ -179,7 +184,7 @@ def user_public(user,founder_state=None):
         from live_access import founder_activity
         if founder_state is None:
             with database() as conn:founder_state=founder_activity(user['id'],conn)
-        founder_active=founder_state['eligible']
+        founder_active=founder_state['eligible'] and (live_lifetime or not trial_until or trial_until>stamp(now_utc()))
     active = user['role'] == 'admin' or complimentary or founder_active or live_lifetime or trial_active or bool(user['access_until'] and datetime.fromisoformat(user['access_until']) > now_utc())
     streamer_until=user['streamer_until'] if 'streamer_until' in user.keys() else None
     streamer_active=active and (user['role']=='admin' or founder_active or live_lifetime or trial_active or bool(streamer_until and datetime.fromisoformat(streamer_until)>now_utc()))
@@ -264,7 +269,16 @@ def account_me():
     with database() as conn:
         payments = [dict(row) for row in conn.execute('SELECT plan,amount_cents,starts_at,ends_at,verified_at FROM payments WHERE member_id=? ORDER BY ends_at DESC', (user['id'] if user else '',))]
     from streamers import streamer_sales_ready,live_ready
-    return jsonify(user=user_public(user) if user else None, csrf=csrf_token(), payments=payments, payment_mode='manual_verified', streamer_available=streamer_sales_ready(),premium_available=streamer_sales_ready(),live_video_ready=live_ready(),music_free=True,live_price_cents=2500,live_trial_months=3)
+    from founder_slots import cleanup,reservation
+    cleanup()
+    if user:
+        from flask import g
+        if hasattr(g,'member'):del g.member
+        user=get_user()
+    with database() as conn:
+        slot=reservation(conn,user['id']) if user else None
+        last_release=conn.execute('SELECT number,trial_until,released_at FROM founder_slot_history WHERE member_id=? ORDER BY released_at DESC,id DESC LIMIT 1',(user['id'],)).fetchone() if user else None
+    return jsonify(user=user_public(user) if user else None, csrf=csrf_token(), payments=payments, payment_mode='manual_verified', streamer_available=streamer_sales_ready(),premium_available=streamer_sales_ready(),founder_reservation=slot,founder_last_release=dict(last_release) if last_release else None,live_video_ready=live_ready(),music_free=True,live_price_cents=2500,live_trial_months=3)
 
 
 @bp.post('/api/account/register')
@@ -280,7 +294,7 @@ def register():
             conn.execute('INSERT INTO members(id,username,password_hash,created_at) VALUES(?,?,?,?)',
                          (ident, name, generate_password_hash(data['password']), stamp(now_utc())))
         session.clear()
-        session.update(member_id=ident, session_version=0)
+        session.update(member_id=ident, session_version=0,csrf=secrets.token_urlsafe(32))
         session.permanent = True
         notify('registration','Nueva cuenta registrada','Se ha registrado una cuenta de cliente. El registro no activa acceso de pago.',event_key='registration:'+ident)
         return jsonify(ok=True), 201
@@ -302,7 +316,7 @@ def login():
     if not check_password_hash(encoded, valid_password) or not user or not user['password_hash']:
         return jsonify(error='Usuario o contraseña incorrectos.'), 401
     session.clear()
-    session.update(member_id=user['id'], session_version=user['session_version'])
+    session.update(member_id=user['id'], session_version=user['session_version'],csrf=secrets.token_urlsafe(32))
     session.permanent = True
     return jsonify(ok=True)
 
@@ -409,7 +423,7 @@ def accept_invite():
             conn.execute('UPDATE members SET password_hash=? WHERE id=?', (generate_password_hash(data['password']), invitation['member_id']))
             conn.execute('UPDATE invitations SET used_at=? WHERE token_hash=?', (stamp(now_utc()), invitation['token_hash']))
         session.clear()
-        session.update(member_id=invitation['member_id'], session_version=0)
+        session.update(member_id=invitation['member_id'], session_version=0,csrf=secrets.token_urlsafe(32))
         session.permanent = True
         notify('invitation','Invitación aceptada','Un invitado ha activado su cuenta. Revisa su acceso gratuito en administración.',event_key='invite:'+invitation['member_id'])
         return jsonify(ok=True)
@@ -430,21 +444,23 @@ def confirm_payment():
     try:
         with database() as conn:
             conn.execute('BEGIN IMMEDIATE')
+            from founder_slots import release_expired,reservation,payment_allowed
+            release_expired(conn)
             user = conn.execute('SELECT * FROM members WHERE id=?', (str(data.get('member_id', '')),)).fetchone()
             if not user or user['role'] == 'admin':
                 return jsonify(error='Selecciona una cuenta de cliente.'), 400
             from live_access import details,founder_activity
             friend=conn.execute('SELECT revoked_at FROM friend_access WHERE member_id=?',(user['id'],)).fetchone()
-            founder=conn.execute('SELECT revoked_at FROM live_founders WHERE member_id=?',(user['id'],)).fetchone()
-            if (friend and not friend['revoked_at']) or (founder and not founder['revoked_at'] and founder_activity(user['id'],conn)['eligible']):return jsonify(error='Esta cuenta tiene acceso especial activo. No corresponde registrar un cobro.'),409
+            if friend and not friend['revoked_at']:return jsonify(error='Esta cuenta tiene acceso especial activo. No corresponde registrar un cobro.'),409
             entitlement=details(user['id'],conn)
             if entitlement.get('paid_at'):return jsonify(error='Esta cuenta ya tiene el pago único de Ol Live.'),409
-            if not entitlement.get('trial_until') or entitlement['trial_until']>stamp(now_utc()):return jsonify(error='Primero disfruta los tres meses de prueba. No se registra ningún cobro durante ese periodo.'),409
+            slot=reservation(conn,user['id'])
+            if not payment_allowed(entitlement,slot):return jsonify(error='El pago único se habilita al terminar la prueba; con plaza reservada puedes confirmarlo voluntariamente durante los últimos siete días para conservar tu número.'),409
             start=now_utc();end=end_of_plan(start,plan)
             conn.execute('INSERT INTO payments VALUES(?,?,?,?,?,?,?,?,?)',(secrets.token_hex(16),user['id'],plan,PLANS[plan]['cents'],stamp(start),stamp(end),stamp(now_utc()),get_user()['id'],reference))
             access_end=max(end,datetime.fromisoformat(user['access_until'])) if user['access_until'] else end
             conn.execute('UPDATE members SET access_until=?,welcome_used=MAX(welcome_used,?) WHERE id=?',(stamp(access_end),1,user['id']))
-            conn.execute('UPDATE live_entitlements SET paid_at=?,revoked_at=NULL WHERE member_id=?',(stamp(now_utc()),user['id']))
+            conn.execute('INSERT INTO live_entitlements(member_id,trial_until,paid_at) VALUES(?,?,?) ON CONFLICT(member_id) DO UPDATE SET paid_at=excluded.paid_at,revoked_at=NULL',(user['id'],entitlement.get('trial_until') or (slot or {}).get('trial_until'),stamp(now_utc())))
             conn.execute('INSERT INTO streamer_access(member_id,until_at) VALUES(?,?) ON CONFLICT(member_id) DO UPDATE SET until_at=excluded.until_at',(user['id'],stamp(end)))
         notify('payment','Pago registrado',f'Se ha registrado un pago comprobado de {PLANS[plan]["cents"]/100:.2f} € para el plan {plan}. Consulta usuario, referencia y fechas en el panel privado.',event_key='payment:'+reference)
         return jsonify(ok=True, access_until=stamp(access_end))
@@ -495,7 +511,7 @@ def install(app):
         app.secret_key = key_file.read_text().strip()
     app.config.update(MEMBERSHIP_DATABASE=str(state_dir / 'members.sqlite3'), MEMBERSHIP_DATABASE_URL=remote_database,
                       MEMBERSHIP_DUMMY_HASH=generate_password_hash(secrets.token_urlsafe(32)),
-                      SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax', SESSION_COOKIE_SECURE=on_vercel or os.getenv('MAGGY_COOKIE_SECURE', '1') != '0',
+                      SESSION_REFRESH_EACH_REQUEST=False, SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax', SESSION_COOKIE_SECURE=on_vercel or os.getenv('MAGGY_COOKIE_SECURE', '1') != '0',
                       PERMANENT_SESSION_LIFETIME=timedelta(days=30), MAX_CONTENT_LENGTH=65536)
     with app.app_context():
         init_database()

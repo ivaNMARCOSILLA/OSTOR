@@ -13,6 +13,8 @@ def limit_requests():
 
 @bp.get('/api/live/founders')
 def status():
+ from founder_slots import cleanup,reservation
+ cleanup()
  user=get_user()
  with database() as conn:
   claimed=conn.execute('SELECT COUNT(*) AS n FROM live_founders').fetchone()['n']
@@ -20,11 +22,12 @@ def status():
  if mine:
   with database() as conn:preferences=conn.execute('SELECT mode AS badge_mode,letter AS badge_letter,caption AS badge_caption,audio_json AS badge_audio FROM founder_signatures WHERE member_id=?',(user['id'],)).fetchone()
   mine=dict(mine)
+  with database() as conn:mine['reservation']=reservation(conn,user['id'])
   from live_access import founder_activity
   with database() as conn:mine['activity']=founder_activity(user['id'],conn)
   mine['signature']=signature_from_row(preferences or {})
  if mine:mine['future_transfer_eligible']=mine['number']==1
- return jsonify(limit=LIMIT,claimed=claimed,remaining=max(0,LIMIT-claimed),mine=mine if mine else None,lifetime=True,transfer_sales_open=False,activity_required=True)
+ return jsonify(limit=LIMIT,claimed=claimed,remaining=max(0,LIMIT-claimed),mine=mine if mine else None,lifetime=False,transfer_sales_open=False,activity_required=True,payment_required=True,trial_months=3)
 
 @bp.post('/api/live/founders/claim')
 def claim():
@@ -33,22 +36,26 @@ def claim():
  if not allow_attempt('founder-claim',12):return jsonify(error='Demasiados intentos. Espera unos minutos.'),429
  with database() as conn:
   conn.execute('BEGIN IMMEDIATE')
+  from founder_slots import release_expired,reserve
+  release_expired(conn)
   existing=conn.execute('SELECT number,revoked_at FROM live_founders WHERE member_id=?',(user['id'],)).fetchone()
   if existing:
    if existing['revoked_at']:return jsonify(error='Esta plaza fue revocada. Contacta con administración; no se puede reclamar otra.'),403
-   return jsonify(ok=True,number=existing['number'],already_claimed=True,lifetime=True)
+   return jsonify(ok=True,number=existing['number'],already_claimed=True,lifetime=False,payment_required=True)
   from human_check import verify
   if not verify(conn):return jsonify(error='Completa la comprobación visual antes de reservar. El código caduca y solo se usa una vez.'),400
-  total=conn.execute('SELECT COUNT(*) AS n FROM live_founders').fetchone()['n']
-  if total>=LIMIT:return jsonify(error='Las 100 plazas gratuitas de fundador ya están reservadas.'),409
-  number=total+1
-  conn.execute('INSERT INTO live_founders(member_id,number,claimed_at) VALUES(?,?,?)',(user['id'],number,stamp(now_utc())))
+  entitlement=conn.execute('SELECT * FROM live_entitlements WHERE member_id=?',(user['id'],)).fetchone()
+  if entitlement and not entitlement['paid_at'] and entitlement['trial_until'] and entitlement['trial_until']<=stamp(now_utc()):return jsonify(error='Tu prueba ya terminó. Puedes continuar con el pago único de 25 €, pero el número liberado puede haberse asignado a otra persona.'),409
+  number=reserve(conn,user['id'])
+  if number is None:return jsonify(error='Las 100 plazas de prueba ya están reservadas.'),409
   launch=conn.execute("SELECT started_at FROM live_launch WHERE id='live'").fetchone()
   if launch:
    from live_access import months_after
-   conn.execute('INSERT INTO founder_activity(member_id,qualification_until) VALUES(?,?) ON CONFLICT(member_id) DO NOTHING',(user['id'],stamp(months_after(now_utc()))))
- notify('founder','Nueva plaza Ol Live fundadores',f'Se ha reservado la plaza {number} de 100. Incluye plaza de creador condicionada a actividad e insignia. Consulta la cuenta en administración.',event_key='founder:'+user['id'])
- return jsonify(ok=True,number=number,already_claimed=False,lifetime=True)
+   end=stamp(months_after(now_utc()))
+   conn.execute('INSERT INTO live_entitlements(member_id,trial_started_at,trial_until) VALUES(?,?,?) ON CONFLICT(member_id) DO NOTHING',(user['id'],stamp(now_utc()),end))
+   conn.execute('INSERT INTO founder_activity(member_id,qualification_until) VALUES(?,?) ON CONFLICT(member_id) DO NOTHING',(user['id'],end))
+ notify('founder','Nueva plaza Ol Live fundadores',f'Se ha reservado la plaza {number} de 100. Reserva durante tres meses. Para conservarla se debe confirmar el pago único de 25 € antes del vencimiento y mantener la actividad indicada. Consulta la cuenta en administración.',event_key='founder:'+user['id'])
+ return jsonify(ok=True,number=number,already_claimed=False,lifetime=False,payment_required=True)
 
 @bp.post('/api/admin/founders/revoke')
 @require_admin
@@ -137,6 +144,8 @@ def save_signature():
 @bp.get('/api/admin/founders/activity')
 @require_admin
 def activity_directory():
+ from founder_slots import cleanup
+ cleanup()
  from flask import request
  from live_access import founder_activity
  try:page=max(1,int(request.args.get('page',1)))
@@ -164,3 +173,16 @@ def extend_grace():
   deadline=stamp(base+timedelta(days=days))
   conn.execute('INSERT INTO founder_activity(member_id,qualification_until) VALUES(?,?) ON CONFLICT(member_id) DO UPDATE SET qualification_until=excluded.qualification_until',(ident,deadline))
  return jsonify(ok=True,qualification_until=deadline)
+
+@bp.get('/api/admin/founders/history')
+@require_admin
+def slot_history():
+ from founder_slots import cleanup
+ cleanup()
+ from flask import request
+ try:page=max(1,int(request.args.get('page',1)))
+ except ValueError:page=1
+ with database() as conn:
+  total=conn.execute('SELECT COUNT(*) AS n FROM founder_slot_history').fetchone()['n']
+  rows=conn.execute('SELECT h.number,h.claimed_at,h.trial_until,h.released_at,h.reason,m.username FROM founder_slot_history h JOIN members m ON m.id=h.member_id ORDER BY h.released_at DESC,h.id DESC LIMIT 25 OFFSET ?',((page-1)*25,)).fetchall()
+ return jsonify(history=[dict(row) for row in rows],total=total,page=page,pages=max(1,(total+24)//25))

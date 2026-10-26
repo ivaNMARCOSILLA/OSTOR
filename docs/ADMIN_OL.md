@@ -57,7 +57,7 @@ La música y la biblioteca son gratuitas. Todo Ol Live se ofrece con tres meses 
 
 ## Los 100 fundadores
 
-Hay 100 plazas numeradas que requieren actividad: un primer directo verificado de 30 minutos durante la prueba y luego 120 minutos por ventana de 30 días. No se cobra por la plaza si se mantienen estas condiciones. Las plazas tienen una comprobación visual antiautomatismos; el número se conserva en el historial. Solo n.º 1 se marca para una posible cesión futura; la venta no está habilitada y los demás números no son transferibles. El panel permite revisar el progreso y ampliar plazos por incidencias.
+Hay 100 plazas numeradas que requieren actividad: un primer directo verificado de 30 minutos durante la prueba y luego 120 minutos por ventana de 30 días. Al final de la prueba se debe confirmar el pago único de 25 € para conservar la plaza, además de las condiciones de actividad. Las plazas tienen una comprobación visual antiautomatismos; el número se conserva en el historial. Solo n.º 1 se marca para una posible cesión futura; la venta no está habilitada y los demás números no son transferibles. El panel permite revisar el progreso y ampliar plazos por incidencias.
 
 La insignia se personaliza con una letra, frase, canción gratuita o sonido sin alterar el número oficial. Las normas de buen trato y seguridad se mantienen. Revocar invalida las sesiones; la música permanece gratuita.
 
@@ -69,10 +69,18 @@ El contador público distingue cuentas conectadas y visitantes sin cuenta. Compr
 
 ## Ol del bueno · actualización comercial
 
-Sustituye los planes de 1, 6 y 8 euros: una prueba de tres meses y después 25 € en un único pago voluntario. Los pagos e historiales anteriores se conservan. El servidor rechaza nuevas operaciones de los planes retirados, pagos durante la prueba, referencias repetidas y un segundo pago de por vida. La prueba solo puede iniciarse una vez y no comienza con el vídeo desactivado. Revocar invalida las sesiones y el acceso nuevo; no reinicia la prueba.
+Sustituye los planes de 1, 6 y 8 euros: una prueba de tres meses y después 25 € en un único pago voluntario. Los pagos e historiales anteriores se conservan. El servidor rechaza nuevas operaciones de los planes retirados, pagos antes de los últimos siete días de la prueba con plaza reservada, referencias repetidas y un segundo pago de por vida. La prueba solo puede iniciarse una vez y no comienza con el vídeo desactivado. Revocar invalida las sesiones y el acceso nuevo; no reinicia la prueba.
 
-Las plazas de fundador son condicionales: primer directo continuo de 30 minutos y luego 120 minutos en los últimos 30 días, tras el periodo inicial de tres meses. Se consulta ListParticipants de LiveKit para verificar pistas de cámara o pantalla publicadas por la identidad del creador; no se confía únicamente en el indicador del navegador. Solo se acreditan intervalos de hasta 75 segundos entre verificaciones. La falta de actividad desactiva derechos pero mantiene número e historial para revisión; la venta de plazas no está habilitada. Solo n.º 1 es elegible para una opción futura, sin valor económico prometido.
+Las plazas de fundador son condicionales: primer directo continuo de 30 minutos y luego 120 minutos en los últimos 30 días, tras el periodo inicial de tres meses. Se consulta ListParticipants de LiveKit para verificar pistas de cámara o pantalla publicadas por la identidad del creador; no se confía únicamente en el indicador del navegador. Solo se acreditan intervalos de hasta 75 segundos entre verificaciones. La falta de actividad desactiva derechos especiales para revisión; si vence la prueba sin pago se libera el número y se conserva un historial privado. La venta de plazas no está habilitada. Solo n.º 1 es elegible para una opción futura, sin valor económico prometido.
 
 La comprobación visual contra automatismos caduca en cinco minutos, está vinculada a la sesión y solo sirve una vez. Limita reservas automatizadas; no garantiza identidad única ni elimina todos los bots. Usuarios con dificultades de lectura necesitan ayuda de administración. Para protección adicional especializada puede integrarse un proveedor de retos con sus credenciales.
 
 Los stickers pronuncian frases positivas mediante la voz española del dispositivo; no utilizan el micrófono ni una voz clonada. La disponibilidad depende del navegador; se muestra el texto y se conserva un sonido alternativo cuando no hay síntesis de voz. No hay reproducción automática. El tamaño de formulario es de al menos 16 px para evitar el zoom automático de iPhone; el zoom manual sigue permitido.
+
+## Reserva durante la prueba y liberación por falta de pago
+
+Iniciar una nueva prueba reserva atómicamente el menor número libre entre 1 y 100, después de la comprobación visual. Si están ocupados los cien, no se consume la prueba. Una reserva previa a la activación real de vídeo no consume días; su periodo comienza al estar disponible Ol Live.
+
+Para conservar el número se deben confirmar 25 € antes del vencimiento. Se permite el pago voluntario durante los últimos siete días para dar tiempo a la comprobación manual de PayPal; no se producen cargos automáticos. Si vence sin confirmación, la siguiente comprobación del sistema libera la plaza antes de asignar o contabilizar reservas. No hace falta que el antiguo usuario vuelva a entrar. El número, fechas y diseño anterior se archivan en un historial privado de 25 registros por página.
+
+El antiguo titular pierde la insignia y no puede iniciar otra prueba ni recuperar automáticamente el número. Puede pagar 25 € para continuar en Ol Live y, si queda una plaza libre, solicitar otra con el acceso pagado. La misma plaza nunca tiene dos titulares actuales: pagos, vencimientos y asignaciones utilizan la misma transacción serializada. Un pago confirmado a tiempo conserva el número tras la prueba. La posible cesión futura de la plaza n.º 1 sigue sin estar habilitada.

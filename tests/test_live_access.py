@@ -9,13 +9,16 @@ from auth_support import authenticated_client
 
 class LiveAccessTests(unittest.TestCase):
  def setUp(self):
+  code=patch("human_check.new_code",return_value="OL234");code.start();self.addCleanup(code.stop)
   healthy=patch("live_access.video_service_available",return_value=True);healthy.start();self.addCleanup(healthy.stop)
   self.admin=authenticated_client(app.app,self.addCleanup)
   with app.app.app_context():st.init_database()
   self.user=app.app.test_client();self.post(self.user,'/api/account/register',{'username':'live-user','password':'live-user-password-123'})
   self.ident=self.user.get('/api/account/me').json['user']['id']
  def post(self,client,path,data):
-  token=client.get('/api/account/me').json['csrf'];return client.post(path,json=data,headers={'X-CSRF-Token':token})
+  token=client.get('/api/account/me').json['csrf']
+  if path=='/api/account/live-trial':data=dict(data,human_id=client.get('/api/account/human-check').json['id'],human_answer='OL234')
+  return client.post(path,json=data,headers={'X-CSRF-Token':token})
  def pay(self,client=None,reference='REAL-REFERENCE-001',member=None,plan='lifetime'):
   return self.post(client or self.admin,'/api/admin/confirm-payment',{'member_id':member or self.ident,'plan':plan,'reference':reference})
  def test_three_calendar_months_once_and_no_premature_or_repeated_billing(self):

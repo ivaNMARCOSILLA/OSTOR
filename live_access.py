@@ -26,7 +26,10 @@ def founder_activity(member_id,conn):
   if launch:deadline=stamp(months_after(datetime.fromisoformat(launch['started_at'])))
  qualified=bool(row.get('first_completed_at'))
  grace=not deadline or deadline>stamp(now_utc())
- return dict(initial_minutes=INITIAL_MINUTES,monthly_minutes=MONTHLY_MINUTES,verified_seconds=row.get('total_seconds',0),recent_seconds=recent,qualification_until=deadline,first_completed_at=row.get('first_completed_at'),qualified=qualified,eligible=grace or (qualified and recent>=MONTHLY_MINUTES*60),provisional=not qualified)
+ from founder_slots import reservation
+ slot=reservation(conn,member_id)
+ payment_current=not slot or slot['confirmed'] or not slot['trial_until'] or slot['trial_until']>stamp(now_utc())
+ return dict(payment_current=payment_current,initial_minutes=INITIAL_MINUTES,monthly_minutes=MONTHLY_MINUTES,verified_seconds=row.get('total_seconds',0),recent_seconds=recent,qualification_until=deadline,first_completed_at=row.get('first_completed_at'),qualified=qualified,eligible=payment_current and (grace or (qualified and recent>=MONTHLY_MINUTES*60)),provisional=not qualified)
 
 @bp.post('/api/account/live-trial')
 def trial():
@@ -35,14 +38,25 @@ def trial():
  from streamers import live_ready
  if not live_ready() or not video_service_available():return jsonify(error='Tus tres meses empezarán cuando Ol Live esté disponible. Todavía no consumimos tu prueba.'),409
  with database() as conn:
-  conn.execute('BEGIN IMMEDIATE');existing=details(user['id'],conn)
-  if existing:return jsonify(ok=True,trial_until=existing.get('trial_until'),already_started=True)
+  conn.execute('BEGIN IMMEDIATE')
+  from founder_slots import release_expired,reserve
+  release_expired(conn);existing=details(user['id'],conn)
+  own=conn.execute('SELECT number,revoked_at FROM live_founders WHERE member_id=?',(user['id'],)).fetchone()
+  if existing:return jsonify(ok=True,trial_until=existing.get('trial_until'),already_started=True,founder_number=own['number'] if own else None)
+  if not own:
+   used=conn.execute('SELECT COUNT(*) AS n FROM live_founders').fetchone()['n']
+   if used>=100:return jsonify(error='Las 100 plazas de prueba están reservadas. Vuelve cuando quede una disponible.'),409
+   from human_check import verify
+   if not verify(conn):return jsonify(error='Completa la comprobación visual para reservar una plaza de prueba.',code='human_required'),400
+  elif own['revoked_at']:return jsonify(error='Tu plaza fue desactivada. Contacta con administración.'),403
+  number=reserve(conn,user['id'])
+  if number is None:return jsonify(error='Las 100 plazas de prueba están reservadas.'),409
   start=now_utc();end=months_after(start)
   conn.execute("INSERT INTO live_launch(id,started_at) VALUES('live',?) ON CONFLICT(id) DO NOTHING",(stamp(start),))
   conn.execute('INSERT INTO live_entitlements(member_id,trial_started_at,trial_until) VALUES(?,?,?)',(user['id'],stamp(start),stamp(end)))
-  if user['founder_number']:
+  if number:
    conn.execute('INSERT INTO founder_activity(member_id,qualification_until) VALUES(?,?) ON CONFLICT(member_id) DO NOTHING',(user['id'],stamp(end)))
- return jsonify(ok=True,trial_until=stamp(end),already_started=False)
+ return jsonify(ok=True,trial_until=stamp(end),already_started=False,founder_number=number)
 
 def verified_broadcast(channel,user):
  """Ask LiveKit for actual published tracks; never trust the browser's live flag."""
