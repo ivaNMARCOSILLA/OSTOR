@@ -16,6 +16,9 @@ class LiveAccessTests(unittest.TestCase):
   self.user=app.app.test_client();self.post(self.user,'/api/account/register',{'username':'live-user','password':'live-user-password-123'})
   self.ident=self.user.get('/api/account/me').json['user']['id']
  def post(self,client,path,data):
+  if path=='/api/account/register':
+   from registration_support import registration_data
+   data=registration_data(client,data)
   token=client.get('/api/account/me').json['csrf']
   if path=='/api/account/live-trial':data=dict(data,human_id=client.get('/api/account/human-check').json['id'],human_answer='OL234')
   return client.post(path,json=data,headers={'X-CSRF-Token':token})

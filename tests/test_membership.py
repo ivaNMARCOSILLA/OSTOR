@@ -29,6 +29,9 @@ class MembershipTests(unittest.TestCase):
         self.member = self.client.get('/api/account/me').json['user']
 
     def post(self, client, path, data):
+        if path=='/api/account/register':
+         from registration_support import registration_data
+         data=registration_data(client,data)
         token = client.get('/api/account/me').json['csrf']
         return client.post(path, json=data, headers={'X-CSRF-Token':token})
 

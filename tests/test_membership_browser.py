@@ -7,8 +7,8 @@ def run():
  with sync_playwright() as p:
   browser=p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox']);context=browser.new_context();page=context.new_page();errors=[]
   page.on('pageerror',lambda e:errors.append(str(e)));page.goto(BASE_URL+'/account')
-  page.locator('#credentials > details > summary').click();name='free-'+secrets.token_hex(4);password=secrets.token_urlsafe(20)
-  page.locator('#register-form [name=username]').fill(name);page.locator('#register-form [name=password]').fill(password);page.locator('#register-form button').click();page.locator('#member-panel').wait_for(state='visible')
+  name='free-'+secrets.token_hex(4);password=secrets.token_urlsafe(20)
+  page.locator('#register-form [name=username]').fill(name);page.locator('#register-form [name=password]').fill(password);page.locator('#registration-human-id').wait_for(state='attached');page.wait_for_function("document.querySelector('#registration-human-id').value.length===32");page.locator('#registration-human-answer').fill('OL234');page.locator('#registration-submit').click();page.locator('#member-panel').wait_for(state='visible')
   assert page.locator('#enter-maggy').is_visible();assert 'gratuita' in page.locator('#access-status').inner_text()
   assert context.request.get(BASE_URL+'/api/rewards').status==200
   assert context.request.get(BASE_URL+'/api/streamers').status==402

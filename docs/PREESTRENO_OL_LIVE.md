@@ -19,3 +19,7 @@ Se han retirado los formularios de cobros externos y regalos monetarios. Los his
 Los textos permiten saltos de línea naturales y respetan el zoom expreso del navegador. Las comprobaciones de interfaz incluyen anchos de 320, 390, 768 y 1440 píxeles.
 
 La noticia utiliza una ilustración botánica original sin marcas ni personajes. El archivo WebP conserva transparencia y reduce el tamaño de descarga respecto al original generado.
+
+## Registro público (9.8.2)
+
+Crear cuenta está disponible sin invitación ni autorización de administración, antes del estreno. El formulario aparece desplegado por encima de la promoción y muestra validación inmediata junto al botón. Exige usuario de 3–60 caracteres y contraseña de al menos 12 caracteres, además de una comprobación visual de cinco caracteres. El código dura cinco minutos, está vinculado a la sesión y solo se utiliza una vez. Los límites de intentos, CSRF, hashes de contraseñas y 2FA opcional siguen activos. Registrar la cuenta no concede permisos ni inicia las pruebas de Ol Live.

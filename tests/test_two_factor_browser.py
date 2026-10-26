@@ -9,7 +9,7 @@ def code(secret):
 def run():
  with sync_playwright() as p:
   browser=p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox']);context=browser.new_context(viewport={'width':390,'height':844});name='secure-'+secrets.token_hex(3);password=secrets.token_urlsafe(24)
-  csrf=context.request.get(BASE_URL+'/api/account/me').json()['csrf'];assert context.request.post(BASE_URL+'/api/account/register',data={'username':name,'password':password},headers={'X-CSRF-Token':csrf}).status==201
+  csrf=context.request.get(BASE_URL+'/api/account/me').json()['csrf'];assert context.request.post(BASE_URL+'/api/account/register',data=__import__('registration_support').registration_data(context,{'username':name,'password':password}),headers={'X-CSRF-Token':csrf}).status==201
   page=context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)));page.goto(BASE_URL+'/account');page.locator('#two-factor-settings > summary').click()
   page.wait_for_function("document.querySelector('#two-factor-status').textContent.includes('desactivada')")
   page.locator('#two-factor-setup [name=password]').fill(password);page.locator('#two-factor-setup button').click();page.locator('#two-factor-confirm').wait_for(state='visible')

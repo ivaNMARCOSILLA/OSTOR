@@ -19,6 +19,9 @@ class CreatorSubscriptionTests(unittest.TestCase):
   result=self.post(self.creator,'/api/streamers/me',{'title':'Mi canal Ol','paypal_url':'https://paypal.me/CreatorOnly','owns_paypal':True})
   self.channel=result.json['channel']['id']
  def post(self,client,path,data):
+  if path=='/api/account/register':
+   from registration_support import registration_data
+   data=registration_data(client,data)
   token=client.get('/api/account/me').json['csrf'];return client.post(path,json=data,headers={'X-CSRF-Token':token})
  def member(self,name,creator=False):
   c=app.app.test_client();self.assertEqual(self.post(c,'/api/account/register',{'username':name,'password':'subscription-test-password-123'}).status_code,201)

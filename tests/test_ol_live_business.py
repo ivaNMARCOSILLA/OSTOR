@@ -15,6 +15,9 @@ class OlLiveBusinessTests(unittest.TestCase):
   self.admin=authenticated_client(app.app,self.addCleanup)
   with app.app.app_context():st.init_database()
  def post(self,client,path,data):
+  if path=='/api/account/register':
+   from registration_support import registration_data
+   data=registration_data(client,data)
   csrf=client.get('/api/account/me').json['csrf']
   if path=='/api/live/founders/claim':data=dict(data,human_id=client.get('/api/account/human-check').json['id'],human_answer='OL234')
   return client.post(path,json=data,headers={'X-CSRF-Token':csrf})

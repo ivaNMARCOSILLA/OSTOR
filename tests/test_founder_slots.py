@@ -22,6 +22,9 @@ class FounderSlotsTests(unittest.TestCase):
  def clock(self,instant):
   with patch.object(m,'now_utc',return_value=instant),patch.object(live_access,'now_utc',return_value=instant),patch.object(founders,'now_utc',return_value=instant):yield
  def post(self,client,path,data):
+  if path=='/api/account/register':
+   from registration_support import registration_data
+   data=registration_data(client,data)
   csrf=client.get('/api/account/me').json['csrf']
   if path in ['/api/account/live-trial','/api/live/founders/claim']:
    data=dict(data,human_id=client.get('/api/account/human-check').json['id'],human_answer='OL234')

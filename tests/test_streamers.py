@@ -21,6 +21,9 @@ class StreamerTests(unittest.TestCase):
         self.env.start();self.addCleanup(self.env.stop)
 
     def post(self,client,path,data):
+        if path=='/api/account/register':
+         from registration_support import registration_data
+         data=registration_data(client,data)
         csrf=client.get('/api/account/me').json['csrf']
         return client.post(path,json=data,headers={'X-CSRF-Token':csrf})
 

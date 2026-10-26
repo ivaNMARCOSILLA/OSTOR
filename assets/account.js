@@ -7,13 +7,18 @@ const inviteToken = new URLSearchParams(location.hash.slice(1)).get('invite');
 if (inviteToken) { history.replaceState(null, '', '/account'); $('invitation').classList.remove('hidden'); $('credentials').classList.add('hidden'); }
 const date = value => value && new Date(value).getUTCFullYear()>9000 ? 'Sin vencimiento' : value ? new Date(value).toLocaleString('es-ES', {dateStyle:'medium',timeStyle:'short'}) : 'Sin activar';
 const text = (tag, value) => { const node = document.createElement(tag); node.textContent = value; return node; };
-function status(value) { $('account-status').textContent = value; }
-async function api(path, data) {
-  const response = await fetch(path, data === undefined ? {} : {method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify(data)});
-  const result = await response.json();
-  if (!response.ok){const error=new Error(result.error||'No se pudo completar la operación.');error.code=result.code;throw error;}
+function status(value) { $('account-status').textContent=value;const login=$('login-feedback');if(login&&!$('credentials').classList.contains('hidden'))login.textContent=value; }
+async function api(path,data,csrfRetry=true){
+ const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);
+ try{
+  const response=await fetch(path,data===undefined?{cache:'no-store',signal:controller.signal}:{method:'POST',signal:controller.signal,headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify(data)});
+  let result;try{result=await response.json();}catch{throw new Error('El servidor no ha respondido correctamente. Vuelve a intentarlo en unos instantes.');}
+  if(response.status===403&&result.code==='csrf_expired'&&csrfRetry&&data!==undefined){const fresh=await fetch('/api/account/me',{cache:'no-store',signal:controller.signal});if(fresh.ok){csrf=(await fresh.json()).csrf;return api(path,data,false);}}
+  if(!response.ok){const error=new Error(result.error||'No se pudo completar la operación.');error.code=result.code;throw error;}
   return result;
+ }catch(error){if(error.name==='AbortError')throw new Error('La conexión tarda demasiado. Si estabas creando tu cuenta, prueba a iniciar sesión antes de repetir el registro.');throw error;}finally{clearTimeout(timer);}
 }
+
 async function refresh() {
   const data = await api('/api/account/me'); csrf = data.csrf; current = data.user;
   $('credentials').classList.toggle('hidden', Boolean(current) || Boolean(inviteToken));
@@ -138,12 +143,27 @@ function renderCalendar() {
 }
 const today=new Date(); $('calendar-month').value=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
 $('calendar-month').addEventListener('change',renderCalendar);
-for (const [id,endpoint] of [['login-form','login'],['register-form','register'],['invite-form','accept-invite']]) {
-  $(id).addEventListener('submit',async event=>{event.preventDefault(); const button=$(id).querySelector('button');button.disabled=true; try {const data=Object.fromEntries(new FormData($(id)));if(endpoint==='accept-invite')data.token=inviteToken;await api(`/api/account/${endpoint}`,data);if(endpoint==='accept-invite'){location.assign('/account');return;}$(id).reset();await refresh();if((endpoint==='login'||endpoint==='register')&&streamReturn&&current){location.assign(streamReturn);return;}status('Sesión iniciada.');}catch(error){status(error.message);if(endpoint==='login'&&error.code==='two_factor_required'){$('login-second-factor').classList.remove('hidden');$('login-form').querySelector('[name=otp]').focus();}}finally{button.disabled=false;}});
+function registrationFeedback(message,error=false){const el=$('registration-feedback');el.textContent=message;el.classList.toggle('error',error);el.scrollIntoView({block:'nearest',behavior:'smooth'});}
+let registrationLoading=false;
+async function loadRegistrationCheck(){if(registrationLoading)return;registrationLoading=true;$('registration-human-status').textContent='Preparando el código…';try{const d=await api('/api/account/human-check');$('registration-human-id').value=d.id;$('registration-human-image').src=d.image;$('registration-human-image').hidden=false;$('registration-human-answer').value='';$('registration-human-status').textContent='Código válido durante 5 minutos. Puedes pedir otro si no se lee bien.';}catch(error){$('registration-human-status').textContent=error.message;registrationFeedback('No se pudo cargar la comprobación. Pulsa «Mostrar otro código» para reintentar.',true);}finally{registrationLoading=false;}}
+$('registration-human-refresh').addEventListener('click',loadRegistrationCheck);
+$('register-form').addEventListener('submit',async event=>{
+ event.preventDefault();const form=event.target,username=form.elements.username,password=form.elements.password,answer=form.elements.human_answer,button=$('registration-submit');
+ const name=username.value.trim();username.value=name;
+ if(!/^[a-zA-Z0-9_.-]{3,60}$/.test(name)){registrationFeedback('Elige un usuario de 3 a 60 letras, números, puntos o guiones. Sin espacios ni @.',true);username.focus();return;}
+ if(password.value.length<12||password.value.length>256){registrationFeedback('La contraseña debe tener entre 12 y 256 caracteres. Puedes usar una frase larga.',true);password.focus();return;}
+ if(!form.elements.human_id.value||answer.value.trim().length!==5){registrationFeedback('Escribe las cinco letras y números de la imagen para comprobar que eres una persona.',true);answer.focus();return;}
+ button.disabled=true;button.textContent='Creando tu cuenta…';registrationFeedback('Creando tu cuenta. No necesitas autorización ni pagar.');
+ try{await(window.OlAccountReady||Promise.resolve());await api('/api/account/register',Object.fromEntries(new FormData(form)));location.assign(streamReturn||'/account?registered=1');}
+ catch(error){registrationFeedback(error.message,true);if(error.code==='human_required')await loadRegistrationCheck();}
+ finally{button.disabled=false;button.textContent='Crear mi cuenta gratis';}
+});
+for (const [id,endpoint] of [['login-form','login'],['invite-form','accept-invite']]) {
+ $(id).addEventListener('submit',async event=>{event.preventDefault();const button=$(id).querySelector('button');button.disabled=true;try{const data=Object.fromEntries(new FormData($(id)));if(endpoint==='accept-invite')data.token=inviteToken;await api(`/api/account/${endpoint}`,data);location.assign(streamReturn||'/account');}catch(error){status(error.message);if(endpoint==='login'&&error.code==='two_factor_required'){$('login-second-factor').classList.remove('hidden');$('login-form').querySelector('[name=otp]').focus();}}finally{button.disabled=false;}});
 }
 $('logout').addEventListener('click',async()=>{try{await api('/api/account/logout',{});location.assign('/account');}catch(error){status(error.message);}});
 $('create-invite').addEventListener('submit',async event=>{event.preventDefault();try{const result=await api('/api/admin/invite',Object.fromEntries(new FormData(event.target)));const link=text('a',`${location.origin}${result.path}`);link.href=result.path;$('invite-result').replaceChildren(text('span','Acceso gratuito incluido. Comparte esta invitación privada con tu amigo (48 horas para aceptarla): '),link);event.target.reset();await loadAdmin();}catch(error){status(error.message);}});
-window.OlAccountReady=refresh().then(()=>{if(streamReturn&&current)location.assign(streamReturn);}).catch(error=>status(error.message));
+window.OlAccountReady=refresh().then(()=>{if(!current&&!inviteToken)loadRegistrationCheck();if(current&&new URLSearchParams(location.search).get('registered')==='1'){status('Cuenta creada. Ya estás dentro de Ol. No necesitas autorización.');$('member-title').scrollIntoView({block:'start'});}if(streamReturn&&current)location.assign(streamReturn);}).catch(error=>status(error.message));
 
 if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('/sw.js').catch(()=>{});
 

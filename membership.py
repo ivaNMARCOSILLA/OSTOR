@@ -236,7 +236,7 @@ def verify_csrf():
     if request.method in {'POST', 'PUT', 'PATCH', 'DELETE'} and request.path.startswith('/api/'):
         expected = session.get('csrf')
         if not expected or not secrets.compare_digest(request.headers.get('X-CSRF-Token', ''), expected):
-            return jsonify(error='La sesión ha caducado. Recarga la página.'), 403
+            return jsonify(error='La sesión ha caducado. Recarga la página.',code='csrf_expired'), 403
 
 
 def restrict_music():
@@ -307,6 +307,10 @@ def register():
         name = clean_username(data.get('username'))
         validate_password(data.get('password'))
         with database() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            from human_check import verify
+            if not verify(conn):
+                return jsonify(error='Completa la comprobación humana con el código de la imagen. Si ha caducado, pide otro.',code='human_required'),400
             ident = secrets.token_hex(16)
             conn.execute('INSERT INTO members(id,username,password_hash,created_at) VALUES(?,?,?,?)',
                          (ident, name, generate_password_hash(data['password']), stamp(now_utc())))
@@ -539,6 +543,8 @@ def install(app):
     with app.app_context():
         init_database()
     app.register_blueprint(bp)
+    from human_check import install as install_human_check
+    install_human_check(app)
     app.before_request(verify_csrf)
     app.before_request(restrict_music)
     @app.after_request

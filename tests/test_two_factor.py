@@ -13,6 +13,9 @@ class TwoFactorTests(unittest.TestCase):
   self.user=app.app.test_client();self.post(self.user,'/api/account/register',{'username':'secure-user','password':'secure-user-password-123'})
   self.tick=1000000;clock=patch.object(tf,'counter_now',side_effect=lambda:self.tick);clock.start();self.addCleanup(clock.stop)
  def post(self,client,path,data):
+  if path=='/api/account/register':
+   from registration_support import registration_data
+   data=registration_data(client,data)
   csrf=client.get('/api/account/me').json['csrf'];return client.post(path,json=data,headers={'X-CSRF-Token':csrf})
  def password(self,**extra):return dict(password='secure-user-password-123',**extra)
  def login(self,client,**extra):return self.post(client,'/api/account/login',dict(username='secure-user',**self.password(**extra)))

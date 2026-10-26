@@ -17,7 +17,7 @@ class PlaybackTests(unittest.TestCase):
         guest=app.app.test_client()
         self.assertEqual(guest.get('/api/play/audius_test').status_code,200)
         csrf=guest.get('/api/account/me').json['csrf']
-        guest.post('/api/account/register',json={'username':'audio-free','password':'password-test-123'},headers={'X-CSRF-Token':csrf})
+        guest.post('/api/account/register',json=__import__('registration_support').registration_data(guest,{'username':'audio-free','password':'password-test-123'}),headers={'X-CSRF-Token':csrf})
         self.assertEqual(guest.get('/api/play/audius_test').status_code,200)
         self.assertEqual(guest.get('/api/streamers').status_code,402)
 

@@ -7,7 +7,7 @@ def run():
  with sync_playwright() as p:
   browser=p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox']);context=browser.new_context(viewport={'width':1440,'height':1000});page=context.new_page();errors=[]
   page.on('pageerror',lambda e:errors.append(str(e)));csrf=context.request.get(BASE_URL+'/api/account/me').json()['csrf']
-  result=context.request.post(BASE_URL+'/api/account/register',headers={'X-CSRF-Token':csrf},data={'username':'founder-'+secrets.token_hex(4),'password':secrets.token_urlsafe(20)})
+  result=context.request.post(BASE_URL+'/api/account/register',headers={'X-CSRF-Token':csrf},data=__import__('registration_support').registration_data(context,{'username':'founder-'+secrets.token_hex(4),'password':secrets.token_urlsafe(20)}))
   assert result.ok,result.status
   page.goto(BASE_URL+'/live#founders');page.locator('#founder-claim:not([disabled])').wait_for()
   before=context.request.get(BASE_URL+'/api/live/founders').json()['claimed'];page.locator('#founder-claim').click();page.wait_for_function("document.querySelector('#founder-claim').textContent==='Confirmar mi plaza' && !document.querySelector('#human-answer').disabled");page.locator('#human-answer').fill('OL234')

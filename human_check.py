@@ -35,4 +35,5 @@ def challenge():
   conn.execute('INSERT INTO human_challenges(id,answer_hash,session_hash,expires_at) VALUES(?,?,?,?)',(nonce,digest(nonce,code),hashlib.sha256(session['csrf'].encode()).hexdigest(),stamp(now_utc()+timedelta(minutes=5))))
  return jsonify(id=nonce,image='data:image/png;base64,'+base64.b64encode(output.getvalue()).decode(),expires_seconds=300)
 
-def install(app):app.register_blueprint(bp)
+def install(app):
+ if bp.name not in app.blueprints:app.register_blueprint(bp)

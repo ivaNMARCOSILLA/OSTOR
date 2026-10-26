@@ -2,7 +2,7 @@
 const $=id=>document.getElementById(id);
 async function api(path,data){let options={cache:'no-store'};if(data!==undefined){const r=await fetch('/api/account/me',{cache:'no-store'}),a=await r.json();options={...options,method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':a.csrf},body:JSON.stringify(data)};}const r=await fetch(path,options),d=await r.json();if(!r.ok)throw Error((d.error||'No se pudo completar la operación.')+(d.code?' (Referencia: '+d.code+')':'')+(d.diagnostic?' · Stripe: '+d.diagnostic:''));return d;}
 let inspecting=false;
-async function inspect(){if(inspecting)return;inspecting=true;try{
+async function inspect(){if(inspecting)return;inspecting=true;try{await(window.OlAccountReady||window.MaggySession?.ready||Promise.resolve());
  const d=await api('/api/status');let banner=$('ol-maintenance-banner');if(!banner){banner=document.createElement('p');banner.id='ol-maintenance-banner';banner.setAttribute('role','status');document.body.prepend(banner);}banner.hidden=d.maintenance.scope==='off';banner.textContent=(d.maintenance.scope==='payments'?'Pagos de Ol Live en preparación · ':d.maintenance.scope==='live'?'Ol Live en preparación · ':'Ol en mantenimiento · ')+d.maintenance.message;
  document.querySelectorAll('[data-premiere-state]').forEach(el=>el.textContent=d.live_premiere?'Próximo estreno · pronto compartiremos nuestro mejor momento.':'Ol Live · consulta disponibilidad en tu cuenta.');
  const account=await api('/api/account/me'),admin=account.user?.role==='admin',manager=await api('/api/payments/status');

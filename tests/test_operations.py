@@ -8,6 +8,9 @@ class OperationsTests(unittest.TestCase):
   self.admin=authenticated_client(app.app,self.addCleanup)
   with app.app.app_context():st.init_database()
  def post(self,client,path,data):
+  if path=='/api/account/register':
+   from registration_support import registration_data
+   data=registration_data(client,data)
   token=client.get('/api/account/me').json['csrf'];return client.post(path,json=data,headers={'X-CSRF-Token':token})
  def test_maintenance_scopes_admin_recovery_and_no_lost_webhooks(self):
   public=app.app.test_client();data={'scope':'all','message':'Ol en mantenimiento. Volvemos pronto.'}

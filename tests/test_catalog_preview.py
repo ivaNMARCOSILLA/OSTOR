@@ -18,7 +18,7 @@ class PreviewTests(unittest.TestCase):
  @patch.object(app,'multi_search')
  def test_free_registration_needs_no_payment_for_music(self,search):
   search.return_value=[self.sample];csrf=self.guest.get('/api/account/me').json['csrf']
-  self.guest.post('/api/account/register',json={'username':'free-user','password':'preview-password-123'},headers={'X-CSRF-Token':csrf})
+  self.guest.post('/api/account/register',json=__import__('registration_support').registration_data(self.guest,{'username':'free-user','password':'preview-password-123'}),headers={'X-CSRF-Token':csrf})
   self.assertFalse(self.guest.get('/api/search?q=test').json[0]['locked'])
   self.assertEqual(self.guest.get('/api/resolve/audius_test').status_code,200)
   self.assertEqual(self.guest.get('/api/streamers').status_code,402)

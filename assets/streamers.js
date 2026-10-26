@@ -1,8 +1,8 @@
-import {openSubscription} from '/assets/subscriptions.js?v=9.8.1';
-import {founderBadge} from '/assets/badges.js?v=9.8.1';
+import {openSubscription} from '/assets/subscriptions.js?v=9.8.2';
+import {founderBadge} from '/assets/badges.js?v=9.8.2';
 'use strict';
-import {StreamCommunity} from '/assets/community.js?v=9.8.1';
-import {StudioTools} from '/assets/studio-tools.js?v=9.8.1';
+import {StreamCommunity} from '/assets/community.js?v=9.8.2';
+import {StudioTools} from '/assets/studio-tools.js?v=9.8.2';
 const $=id=>document.getElementById(id);
 let publicInfo=null,liveCategory='all';
 const categoryNames={videojuegos:'Videojuegos',musica:'Música',entretenimiento:'Entretenimiento',actualidad:'Actualidad'};

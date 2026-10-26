@@ -13,6 +13,9 @@ class AnalyticsTests(unittest.TestCase):
    import streamers
    streamers.init_database()
  def post(self,client,path,data=None):
+  if path=='/api/account/register':
+   from registration_support import registration_data
+   data=registration_data(client,data)
   token=client.get('/api/account/me').json['csrf']
   return client.post(path,json=data or {},headers={'X-CSRF-Token':token})
  def test_guests_members_deduplication_expiry_and_private_statistics(self):

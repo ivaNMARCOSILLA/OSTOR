@@ -12,6 +12,9 @@ class ManagedPaymentTests(unittest.TestCase):
   self.client=self.member('managed-viewer');self.ident=self.client.get('/api/account/me').json['user']['id']
   with app.app.app_context(),m.database() as c:c.execute('INSERT INTO live_entitlements(member_id,trial_started_at,trial_until) VALUES(?,?,?)',(self.ident,m.stamp(m.now_utc()-timedelta(days=100)),m.stamp(m.now_utc()-timedelta(days=8))))
  def post(self,client,path,data):
+  if path=='/api/account/register':
+   from registration_support import registration_data
+   data=registration_data(client,data)
   token=client.get('/api/account/me').json['csrf'];return client.post(path,json=data,headers={'X-CSRF-Token':token})
  def member(self,name,paid=False):
   client=app.app.test_client();self.assertEqual(self.post(client,'/api/account/register',{'username':name,'password':'local-managed-test-password-123'}).status_code,201)

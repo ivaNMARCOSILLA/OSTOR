@@ -3,6 +3,9 @@ from playwright.sync_api import sync_playwright
 from browser_support import BASE_URL,login_context
 
 def post(context,path,data):
+ if path=='/api/account/register':
+  from registration_support import registration_data
+  data=registration_data(context,data)
  csrf=context.request.get(BASE_URL+'/api/account/me').json()['csrf']
  return context.request.post(BASE_URL+path,data=data,headers={'X-CSRF-Token':csrf})
 
