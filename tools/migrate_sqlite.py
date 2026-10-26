@@ -12,6 +12,11 @@ TABLES={
     'members':['id','username','password_hash','role','created_at','access_until','welcome_used','session_version'],
     'member_two_factor':['member_id','nonce','enabled_at','key_id','last_counter','pending_nonce','pending_until'],
     'two_factor_recovery':['member_id','code_hash','used_at'],
+    'fan_aliases':['member_id','alias'],
+    'ol_operations':['id','scope','message','updated_by','updated_at'],
+    'ol_supervisors':['member_id','assigned_by','assigned_at','can_review','revoked_at'],
+    'stripe_accounts':['member_id','account_id','linked_at'],
+    'stripe_connect_states':['token_hash','member_id','expires_at'],
     'moderator_permissions':['member_id','permission','granted_by','granted_at'],
     'pricing_moderators':['member_id','assigned_by','assigned_at','revoked_at'],
     'live_launch':['id','started_at'],
@@ -31,6 +36,9 @@ TABLES={
     'subscription_agreements':['id','channel_id','version','creator_id','moderator_id','price_cents','period','benefits_json','paypal_url','created_at'],
     'subscription_approvals':['agreement_id','party','member_id','approved_at'],
     'channel_subscription_settings':['channel_id','agreement_id','subscriber_chat','exclusive_live'],
+    'stripe_orders':['id','member_id','kind','channel_id','agreement_id','account_id','amount_cents','currency','created_at','checkout_id','payment_intent','paid_at','reversed_at','state'],
+    'stripe_reversals':['payment_intent','account_id','reversed_at'],
+    'stripe_events':['id','event_type','received_at'],
     'creator_subscriptions':['id','channel_id','member_id','agreement_id','amount_cents','benefits_json','starts_at','ends_at','verified_at','verified_by','reference','revoked_at'],
     'community_messages':['id','channel_id','member_id','kind','body','category','blocked','created_at'],
     'community_audiences':['message_id','audience'],
@@ -53,7 +61,7 @@ def migrate(source,app):
         rows={}
         for table,columns in TABLES.items():
             actual=[row['name'] for row in original.execute('PRAGMA table_info('+table+')')]
-            if not actual and table in {'moderator_permissions','member_two_factor','two_factor_recovery','pricing_moderators','subscription_agreements','subscription_approvals','channel_subscription_settings','creator_subscriptions','community_audiences','founder_slot_history','live_launch','live_entitlements','founder_activity','creator_daily_activity','promotion_metrics','founder_signatures','live_founders','sticker_designs','member_rewards','friend_access','streamer_access','streamer_channels','community_messages','admin_notifications','live_channel_settings'}:
+            if not actual and table in {'fan_aliases','stripe_orders','stripe_accounts','stripe_connect_states','stripe_events','stripe_reversals','ol_operations','ol_supervisors','moderator_permissions','member_two_factor','two_factor_recovery','pricing_moderators','subscription_agreements','subscription_approvals','channel_subscription_settings','creator_subscriptions','community_audiences','founder_slot_history','live_launch','live_entitlements','founder_activity','creator_daily_activity','promotion_metrics','founder_signatures','live_founders','sticker_designs','member_rewards','friend_access','streamer_access','streamer_channels','community_messages','admin_notifications','live_channel_settings'}:
                 rows[table]=[];continue
             if set(actual)!=set(columns):raise ValueError('La estructura SQLite no es compatible: '+table)
             rows[table]=[dict(row) for row in original.execute('SELECT '+','.join(columns)+' FROM '+table)]

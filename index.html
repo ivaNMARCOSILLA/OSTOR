@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- Ol PRO 9.5.1 · Edición y mantenimiento: Iván Marcos Illa · 2026-10-24 -->
+<!-- Ol PRO 9.6.0 · Edición y mantenimiento: Iván Marcos Illa · 2026-10-24 -->
 <html lang="es">
 <head>
   <meta charset="UTF-8">
@@ -9,21 +9,21 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Ol">
   <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="apple-touch-icon" href="/assets/app-icon-192.png?v=9.5.1">
+  <link rel="apple-touch-icon" href="/assets/app-icon-192.png?v=9.6.0">
   <meta name="description" content="Ol: descubre y escucha música en Audius e Internet Archive. Guarda tus favoritos y consulta tu historial.">
   <link rel="canonical" href="https://electronicama.com/">
   <meta property="og:title" content="Ol · Tu música, otra órbita">
   <meta property="og:description" content="Tu estación musical personal en electronicama.com">
   <meta name="author" content="Iván Marcos Illa">
   <title>Ol · Music Universe</title>
-  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg?v=9.5.1">
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg?v=9.6.0">
   <link rel="preconnect" href="https://api.audius.co">
   <link rel="preconnect" href="https://creatornode.audius.co">
   <link rel="preconnect" href="https://archive.org">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/assets/styles.css?v=9.5.1">
+  <link rel="stylesheet" href="/assets/styles.css?v=9.6.0">
   <!-- Vercel Web Analytics: habilitar en Project > Analytics para recibir datos. -->
   <script>
     // La ruta de Web Analytics existe solo en Vercel, no en localhost.
@@ -34,10 +34,10 @@
       document.head.appendChild(analytics);
     }
   </script>
-  <script defer src="/assets/session.js?v=9.5.1"></script>
-  <script type="module" src="/assets/app.js?v=9.5.1"></script>
-  <script type="module" src="/assets/maggy.js?v=9.5.1"></script>
-<link rel="stylesheet" href="/assets/ol-theme.css?v=9.5.1"><script type="module" src="/assets/rewards.js?v=9.5.1"></script><script type="module" src="/assets/founders.js?v=9.5.1"></script><script defer src="/assets/presence.js?v=9.5.1"></script><script defer src="/assets/intro.js?v=9.5.1"></script></head>
+  <script defer src="/assets/session.js?v=9.6.0"></script>
+  <script type="module" src="/assets/app.js?v=9.6.0"></script>
+  <script type="module" src="/assets/maggy.js?v=9.6.0"></script>
+<link rel="stylesheet" href="/assets/ol-theme.css?v=9.6.0"><script type="module" src="/assets/rewards.js?v=9.6.0"></script><script type="module" src="/assets/founders.js?v=9.6.0"></script><script defer src="/assets/presence.js?v=9.6.0"></script><script defer src="/assets/intro.js?v=9.6.0"></script><script type="module" src="/assets/operations.js?v=9.6.0"></script></head>
 <body><div class="online-counter" data-online-counter role="status" aria-live="off">Comprobando personas en línea…</div>
   <div class="app-shell">
     <aside class="sidebar" aria-label="Navegación principal">
@@ -119,14 +119,14 @@
       <section class="maggy-section" id="mi-espacio" aria-labelledby="space-title">
         <span class="eyebrow">01 / TU ESTACIÓN</span><h2 id="space-title">Mi <em>espacio.</em></h2>
         <p>Un rincón propio en cada navegador. Tu nombre y ambiente se guardan aquí; los favoritos no se sincronizan entre dispositivos.</p>
-        <form id="profile-form" class="space-controls"><label>Tu nombre <input id="profile-name" maxlength="40" placeholder="¿Cómo te llamas?" autocomplete="nickname"></label><label>Ambiente <select id="space-theme"><option value="cosmos">Azul profundo</option><option value="aurora">Bruma verde</option><option value="solar">Luz cálida</option></select></label><button type="submit" class="ghost-button">Guardar mi espacio</button></form>
+        <form id="profile-form" class="space-controls"><label>Tu nombre <input id="profile-name" maxlength="40" placeholder="¿Cómo te llamas?" autocomplete="nickname"></label><button type="submit" class="ghost-button">Guardar mi espacio</button></form>
         <p id="space-status" role="status" aria-live="polite"></p>
         <h3>Mis canales</h3><p>Guarda tus favoritos actuales como un canal personal. Solo existe en este navegador: no se comparte con otros clientes ni dispositivos. Borrar los datos del navegador elimina tu espacio.</p>
         <form id="channel-form" class="space-controls"><label>Nombre del canal<input id="channel-name" maxlength="60" required placeholder="Mi viaje nocturno"></label><button type="submit" class="ghost-button">Crear con mis favoritos</button></form><p id="channel-status" role="status"></p><div id="channels-list" class="channels-list"></div>
         <details class="install-guide"><summary>Instalar Ol en tu dispositivo</summary><p>Android y Chrome/Edge: abre el menú del navegador y elige «Instalar aplicación». iPhone/iPad: Safari → Compartir → Añadir a pantalla de inicio. En escritorio, usa la opción de instalación del navegador. Requiere HTTPS; la música necesita conexión.</p><button id="install-app" class="ghost-button hidden" type="button">Instalar Ol</button></details>
         <p id="provider-status" class="provider-status" role="status"></p>
       </section>
-      <section class="maggy-section" id="planes" aria-labelledby="plans-title"><span class="eyebrow">OL DEL BUENO · UN SOLO ACCESO</span><h2 id="plans-title">Ol Live. <em class="gold-text">Tu mejor momento.</em></h2><p>La música y tu biblioteca son gratuitas. Ol Live incluye ver y emitir directos, comentarios, pantalla compartida y regalos directos a tu PayPal.</p><p class="friend-access-note">Tu acceso especial se gestiona desde tu cuenta.</p><div class="plans-grid"><article class="plan"><span>PRIMERO, DISFRUTA</span><h3>3 meses <small>de prueba</small></h3><p>Empiezan al activar la prueba cuando el vídeo esté disponible. Sin cobros ni renovación automática.</p><a href="/account">Ver mi prueba</a></article><article class="plan featured"><span>DESPUÉS, TÚ ELIGES</span><h3>25 € <small>pago único</small></h3><p>Todo Ol Live sin vencimiento ni cuotas mientras el servicio esté operativo. Sin cobros automáticos. Para conservar tu plaza, puedes confirmar voluntariamente los 25 € durante los últimos siete días de la prueba.</p><a href="/account">Consultar mi acceso</a></article><article class="plan"><span>LOS 100 PRIMEROS</span><h3>Una plaza <small>con actividad</small></h3><p>Reserva durante tres meses. Confirma 25 € al final para conservar el número; sin pago queda libre. Primer directo de 30 minutos y después 2 horas cada 30 días. Solo la n.º 1 podrá optar a una cesión futura; aún no hay ventas.</p><a href="#founders">Ver condiciones y reservar</a></article></div><p class="payment-note">La prueba y los cobros esperan a que el vídeo esté disponible. Solo hay pago si tú decides continuar. Administración comprueba el pago en PayPal; nunca se guarda tu tarjeta.</p></section>
+      <section class="maggy-section" id="planes" aria-labelledby="plans-title"><span class="eyebrow">OL DEL BUENO · UN SOLO ACCESO</span><h2 id="plans-title">Ol Live. <em class="gold-text">Tu mejor momento.</em></h2><p>La música y tu biblioteca son gratuitas. Ol Live incluye ver y emitir directos, comentarios, pantalla compartida y regalos directos a tu PayPal.</p><p class="friend-access-note">Tu acceso especial se gestiona desde tu cuenta.</p><div class="plans-grid"><article class="plan"><span>PRIMERO, DISFRUTA</span><h3>3 meses <small>de prueba</small></h3><p>Empiezan al activar la prueba cuando el vídeo esté disponible. Sin cobros ni renovación automática.</p><a href="/account">Ver mi prueba</a></article><article class="plan featured"><span>DESPUÉS, TÚ ELIGES</span><h3>25 € <small>pago único</small></h3><p>Todo Ol Live sin vencimiento ni cuotas mientras el servicio esté operativo. Sin cobros automáticos. Para conservar tu plaza, puedes confirmar voluntariamente los 25 € durante los últimos siete días de la prueba.</p><a href="/account">Consultar mi acceso</a></article><article class="plan"><span>LOS 100 PRIMEROS</span><h3>Una plaza <small>con actividad</small></h3><p>Reserva durante tres meses. Confirma 25 € durante los últimos siete días de la prueba para conservar el número; sin pago queda libre. Primer directo de 30 minutos y después 2 horas cada 30 días. Solo la n.º 1 podrá optar a una cesión futura; aún no hay ventas.</p><a href="#founders">Ver condiciones y reservar</a></article></div><p class="payment-note">La prueba y los cobros esperan a que el vídeo esté disponible. Solo hay pago si tú decides continuar. Administración comprueba el pago en el gestor de pagos; nunca se guarda tu tarjeta.</p></section>
       <section class="maggy-section" id="spotify-premium" aria-labelledby="spotify-premium-title"><span class="eyebrow">03 / SERVICIO EXTERNO · CONTRATACIÓN SEPARADA</span><h2 id="spotify-premium-title">Spotify <em>Premium.</em></h2><p>Consulta el precio vigente y contrata directamente con Spotify. Cada cliente utiliza su propia cuenta y paga a Spotify según sus condiciones. Su música se escucha en Spotify.</p><p><strong>Ol Live Premium no incluye Spotify Premium.</strong> Los pagos a Spotify y a Ol Live son independientes. Ol es independiente y no está afiliado ni patrocinado por Spotify.</p><a class="ghost-button" href="https://www.spotify.com/es/premium/" target="_blank" rel="noopener noreferrer">Ver planes y contratar en Spotify ↗</a></section>
       <footer class="site-footer"><span>Ol <b>✦</b> electronicama.com · Edición © 2026 Iván Marcos Illa</span><nav class="legal-links" aria-label="Información legal"><button type="button" id="privacy-button">Preferencias de cookies</button><a href="/legal/cookies.html">Política de cookies</a><a href="/legal/privacidad.html">Privacidad</a><a href="/legal/aviso-legal.html">Aviso legal</a></nav></footer>
     </main>
@@ -145,7 +145,7 @@
     <button id="player-close" class="player-close" aria-label="Cerrar reproductor" title="Cerrar">✕</button>
   </section>
 
-  <dialog id="unlock-dialog" class="unlock-dialog" aria-labelledby="unlock-title" aria-describedby="unlock-description"><button id="unlock-close" class="unlock-close" type="button" aria-label="Cerrar">✕</button><span class="eyebrow">OL LIVE · ACCESO PREMIUM</span><h2 id="unlock-title">Ol Live es tu próximo escenario.</h2><p id="unlock-description">La música y tu biblioteca son gratuitas. Ol Live incluye ver y emitir, con tres meses de prueba.</p><div class="unlock-plans"><strong id="unlock-welcome-plan">3 meses <small>de prueba</small></strong><strong>25 € <small>pago único después, si quieres continuar</small></strong></div><a class="unlock-primary" href="/account">Crear cuenta o iniciar sesión ↗</a><p class="unlock-note">Sin cobros automáticos. Para conservar tu plaza, puedes confirmar voluntariamente los 25 € durante los últimos siete días de la prueba. Después, si eliges continuar, administración confirma tu pago único en PayPal. Sin renovación automática.</p></dialog>
+  <dialog id="unlock-dialog" class="unlock-dialog" aria-labelledby="unlock-title" aria-describedby="unlock-description"><button id="unlock-close" class="unlock-close" type="button" aria-label="Cerrar">✕</button><span class="eyebrow">OL LIVE · ACCESO PREMIUM</span><h2 id="unlock-title">Ol Live es tu próximo escenario.</h2><p id="unlock-description">La música y tu biblioteca son gratuitas. Ol Live incluye ver y emitir, con tres meses de prueba.</p><div class="unlock-plans"><strong id="unlock-welcome-plan">3 meses <small>de prueba</small></strong><strong>25 € <small>pago único después, si quieres continuar</small></strong></div><a class="unlock-primary" href="/account">Crear cuenta o iniciar sesión ↗</a><p class="unlock-note">Sin cobros automáticos. Para conservar tu plaza, puedes confirmar voluntariamente los 25 € durante los últimos siete días de la prueba. Después, si eliges continuar, el gestor confirma tu pago único. Sin renovación automática.</p></dialog>
   <div class="consent-dialog hidden" id="consent-dialog" role="dialog" aria-modal="true" aria-labelledby="consent-title" aria-describedby="consent-description">
     <div class="consent-panel">
       <span class="eyebrow">PRIVACIDAD Y COOKIES</span>

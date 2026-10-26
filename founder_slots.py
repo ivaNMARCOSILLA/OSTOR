@@ -53,7 +53,7 @@ def reservation(conn,member_id):
  row=conn.execute('SELECT f.*,e.trial_until,e.paid_at FROM live_founders f LEFT JOIN live_entitlements e ON e.member_id=f.member_id WHERE f.member_id=?',(member_id,)).fetchone()
  if not row:return None
  until=deadline(conn,row)
- return dict(number=row['number'],trial_until=until,confirmed=bool(row['paid_at']),payment_required=not bool(row['paid_at']),payment_opens_at=stamp(datetime.fromisoformat(until)-timedelta(days=PAYMENT_NOTICE_DAYS)) if until else None)
+ return dict(payment_due_at=until,payment_confirmation_days=PAYMENT_NOTICE_DAYS,number=row['number'],trial_until=until,confirmed=bool(row['paid_at']),payment_required=not bool(row['paid_at']),payment_opens_at=stamp(datetime.fromisoformat(until)-timedelta(days=PAYMENT_NOTICE_DAYS)) if until else None)
 
 def payment_allowed(entitlement,slot):
  until=entitlement.get('trial_until') or (slot or {}).get('trial_until')

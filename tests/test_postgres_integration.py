@@ -26,11 +26,12 @@ class PostgresMembershipTests(unittest.TestCase):
             raise RuntimeError('The application is not connected to the selected test database.')
 
     def setUp(self):
+        legacy=patch.dict(os.environ,{'OL_PAYMENT_PROVIDER':'legacy_paypal'});legacy.start();self.addCleanup(legacy.stop)
         code=patch("human_check.new_code",return_value="OL234");code.start();self.addCleanup(code.stop)
         ready=patch('streamers.streamer_sales_ready',return_value=True);ready.start();self.addCleanup(ready.stop)
         self.app=application.app
         with self.app.app_context(),m.database() as connection:
-            for table in ['moderator_permissions','two_factor_recovery','member_two_factor','community_audiences','creator_subscriptions','channel_subscription_settings','subscription_approvals','subscription_agreements','pricing_moderators','founder_slot_history','live_launch','creator_daily_activity','founder_activity','live_entitlements','human_challenges','promotion_metrics','online_presence','founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:
+            for table in ['fan_aliases','stripe_reversals','stripe_events','stripe_orders','stripe_connect_states','stripe_accounts','ol_supervisors','ol_operations','moderator_permissions','two_factor_recovery','member_two_factor','community_audiences','creator_subscriptions','channel_subscription_settings','subscription_approvals','subscription_agreements','pricing_moderators','founder_slot_history','live_launch','creator_daily_activity','founder_activity','live_entitlements','human_challenges','promotion_metrics','online_presence','founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:
                 connection.execute('DELETE FROM '+table)
         with self.app.app_context():
             m.create_admin('pg-admin','postgres-admin-password-123')
@@ -72,6 +73,25 @@ class PostgresMembershipTests(unittest.TestCase):
             retry=self.post(self.client,'/api/account/live-trial',{})
             self.assertTrue(retry.json['already_started'])
             self.assertIsNone(retry.json['founder_number'])
+
+    def test_managed_platform_payment_signed_receipt_survives_retries(self):
+        import payments as gateway
+        import hashlib,hmac,json,time
+        with self.app.app_context(),m.database() as conn:
+            conn.execute('INSERT INTO live_entitlements(member_id,trial_started_at,trial_until) VALUES(?,?,?)',(self.member['id'],m.stamp(m.now_utc()-m.timedelta(days=100)),m.stamp(m.now_utc()-m.timedelta(days=1))))
+        with patch.dict(os.environ,{'OL_PAYMENT_PROVIDER':'stripe','STRIPE_WEBHOOK_SECRET':'whsec_postgres_local_test'}),patch.object(gateway,'ready',return_value=True),patch.object(gateway,'stripe',return_value={'id':'cs_postgres_local_test','url':'https://checkout.stripe.com/c/pay/local-test'}):
+            result=self.post(self.client,'/api/payments/checkout',{})
+            self.assertEqual(result.status_code,200)
+            with self.app.app_context(),m.database() as conn:order=conn.execute('SELECT * FROM stripe_orders WHERE checkout_id=?',('cs_postgres_local_test',)).fetchone()
+            event={'id':'evt_postgres_local_test','livemode':True,'type':'checkout.session.completed','data':{'object':{'id':order['checkout_id'],'payment_status':'paid','amount_total':2500,'currency':'eur','metadata':{'ol_order':order['id']},'payment_intent':'pi_postgres_local_test'}}}
+            raw=json.dumps(event).encode();timestamp=str(int(time.time()));sig=hmac.new(b'whsec_postgres_local_test',timestamp.encode()+b'.'+raw,hashlib.sha256).hexdigest();headers={'Content-Type':'application/json','Stripe-Signature':'t='+timestamp+',v1='+sig}
+            first=self.app.test_client().post('/api/payments/webhook/platform',data=raw,headers=headers)
+            self.assertEqual(first.status_code,200)
+            second=self.app.test_client().post('/api/payments/webhook/platform',data=raw,headers=headers)
+            self.assertTrue(second.json['duplicate'])
+            me=self.client.get('/api/account/me').json
+            self.assertTrue(me['user']['live_lifetime']);self.assertEqual(len(me['payments']),1)
+            with self.app.app_context(),m.database() as conn:self.assertEqual(conn.execute('SELECT COUNT(*) AS n FROM stripe_events').fetchone()['n'],1)
 
     def test_creator_agreement_receipt_and_private_benefits_persist(self):
         with self.app.app_context(),m.database() as conn:
@@ -215,7 +235,7 @@ class PostgresMembershipTests(unittest.TestCase):
                 legacy_payment(source,admin,ident,'welcome','SQLITE-MIGRATE-001')
                 expected=client.get('/api/account/me').json['user']['access_until']
             with self.app.app_context(),m.database() as connection:
-                for table in ['moderator_permissions','two_factor_recovery','member_two_factor','community_audiences','creator_subscriptions','channel_subscription_settings','subscription_approvals','subscription_agreements','pricing_moderators','founder_slot_history','live_launch','creator_daily_activity','founder_activity','live_entitlements','human_challenges','promotion_metrics','founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:connection.execute('DELETE FROM '+table)
+                for table in ['fan_aliases','stripe_reversals','stripe_events','stripe_orders','stripe_connect_states','stripe_accounts','ol_supervisors','ol_operations','moderator_permissions','two_factor_recovery','member_two_factor','community_audiences','creator_subscriptions','channel_subscription_settings','subscription_approvals','subscription_agreements','pricing_moderators','founder_slot_history','live_launch','creator_daily_activity','founder_activity','live_entitlements','human_challenges','promotion_metrics','founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:connection.execute('DELETE FROM '+table)
             counts=migrate(Path(folder)/'members.sqlite3',self.app)
             self.assertEqual(counts['members'],2);self.assertEqual(counts['payments'],1)
             migrated=self.app.test_client()

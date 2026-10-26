@@ -81,7 +81,7 @@ Los stickers pronuncian frases positivas mediante la voz española del dispositi
 
 Iniciar una nueva prueba reserva atómicamente el menor número libre entre 1 y 100, después de la comprobación visual. Si están ocupados los cien, no se consume la prueba. Una reserva previa a la activación real de vídeo no consume días; su periodo comienza al estar disponible Ol Live.
 
-Para conservar el número se deben confirmar 25 € antes del vencimiento. Se permite el pago voluntario durante los últimos siete días para dar tiempo a la comprobación manual de PayPal; no se producen cargos automáticos. Si vence sin confirmación, la siguiente comprobación del sistema libera la plaza antes de asignar o contabilizar reservas. No hace falta que el antiguo usuario vuelva a entrar. El número, fechas y diseño anterior se archivan en un historial privado de 25 registros por página.
+Para conservar el número se deben confirmar 25 € antes del vencimiento. Se permite el pago voluntario durante los últimos siete días para confirmar la operación mediante el gestor; no se producen cargos automáticos. Si vence sin confirmación, la siguiente comprobación del sistema libera la plaza antes de asignar o contabilizar reservas. No hace falta que el antiguo usuario vuelva a entrar. El número, fechas y diseño anterior se archivan en un historial privado de 25 registros por página.
 
 El antiguo titular pierde la insignia y no puede iniciar otra prueba ni recuperar automáticamente el número. Puede pagar 25 € para continuar en Ol Live y, si queda una plaza libre, solicitar otra con el acceso pagado. La misma plaza nunca tiene dos titulares actuales: pagos, vencimientos y asignaciones utilizan la misma transacción serializada. Un pago confirmado a tiempo conserva el número tras la prueba. La posible cesión futura de la plaza n.º 1 sigue sin estar habilitada.
 
@@ -106,3 +106,8 @@ El secreto del autenticador se deriva mediante HMAC con separación de dominio, 
 
 ### Permisos de Gref
 Designar la cuenta no concede permisos. Desde «Suscripciones de creadores → Permisos del moderador», solo administración puede permitir ver propuestas y, por separado, aprobar precios y beneficios. Aprobar exige poder ver. «Retirar todos los permisos» bloquea la siguiente petición incluso con sesiones abiertas. Sin permiso de aprobación se pausan nuevas suscripciones; los recibos y beneficios adquiridos se conservan. No concede clientes, pagos, estadísticas, suspensiones ni gestión de permisos. Una nueva designación tras revocación requiere autorizar de nuevo.
+
+
+La versión 9.6 usa Stripe como gestor preparado para cobros nuevos, con activación todavía condicionada a la configuración y prueba real. Los enlaces PayPal del creador quedan para regalos; las confirmaciones manuales conservan soporte de historial únicamente en el modo legado. La plaza se confirma durante los últimos siete días dentro de los tres meses; al vencer la prueba sin pago se libera el número, sin plazo adicional ni precio de reserva. Véase [pagos y Play Store](PAGOS_Y_PLAY_STORE.md). Rubi tiene un control de supervisión de solo lectura separado de Gref, sin activación automática. El aviso de mantenimiento está en el panel de operaciones.
+
+Los apodos opcionales de afición «Lola», «Lolo» y «Loles» se guardan en la cuenta y se muestran junto al usuario en comentarios. No cambian el inicio de sesión ni los permisos. La frase del sticker del creador no se cambia por estos apodos.

@@ -1,0 +1,21 @@
+{
+  "packageId": "com.electronicama.ol",
+  "host": "electronicama.com",
+  "name": "Ol · Música y Ol Live",
+  "launcherName": "Ol",
+  "display": "standalone",
+  "themeColor": "#f4f6fb",
+  "backgroundColor": "#f4f6fb",
+  "navigationColor": "#f4f6fb",
+  "enableNotifications": false,
+  "startUrl": "/?distribution=googleplay",
+  "iconUrl": "https://electronicama.com/assets/app-icon-512.png",
+  "maskableIconUrl": "https://electronicama.com/assets/app-icon-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "appVersionCode": 1,
+  "appVersionName": "9.6.0",
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "fallbackType": "customtabs",
+  "orientation": "default"
+}

@@ -144,6 +144,9 @@ def init_database():
           GROUP BY m.id ON CONFLICT(member_id) DO NOTHING''')
 
 
+    from operations import init_database as init_operations
+    init_operations()
+
 def create_admin(username, password):
     username = clean_username(username)
     validate_password(password)
@@ -229,6 +232,7 @@ def csrf_token():
 
 
 def verify_csrf():
+    if request.path in {'/api/payments/webhook/platform','/api/payments/webhook/connect'}:return  # Verified by timestamped Stripe signature; never session auth.
     if request.method in {'POST', 'PUT', 'PATCH', 'DELETE'} and request.path.startswith('/api/'):
         expected = session.get('csrf')
         if not expected or not secrets.compare_digest(request.headers.get('X-CSRF-Token', ''), expected):
@@ -238,7 +242,7 @@ def verify_csrf():
 def restrict_music():
     # Music is free. Account collections require login; Ol Live requires premium.
     path=request.path
-    if not path.startswith('/api/') or path.startswith(('/api/account/','/api/admin/','/api/play/','/api/resolve/','/api/channel-subscriptions/')) or path in {'/api/search','/api/trending','/api/proxy','/api/promotion/event','/api/presence','/api/live/catalogue','/api/live/founders','/api/live/founders/claim'}:
+    if not path.startswith('/api/') or path.startswith(('/api/account/','/api/admin/','/api/play/','/api/resolve/','/api/channel-subscriptions/','/api/payments/')) or path in {'/api/status','/api/search','/api/trending','/api/proxy','/api/promotion/event','/api/presence','/api/live/catalogue','/api/live/founders','/api/live/founders/claim'}:
         return None
     if path.startswith('/api/stickers/') and path.endswith('/phrase'):return None
     if path.endswith('/sound.wav') and path.startswith(('/api/stickers/','/api/live/founders/')):return None
@@ -448,6 +452,8 @@ def accept_invite():
 @bp.post('/api/admin/confirm-payment')
 @require_admin
 def confirm_payment():
+    from payments import provider
+    if provider()=='stripe':return jsonify(error='Los pagos nuevos se confirman automáticamente mediante Stripe. Consulta allí los cobros; no se activan manualmente.'),409
     data = payload()
     plan = data.get('plan')
     reference = str(data.get('reference', '')).strip()
@@ -490,6 +496,7 @@ def revoke():
         conn.execute('UPDATE members SET access_until=?,session_version=session_version+1 WHERE id=? AND role!=?',
                      (stamp(now_utc()), str(payload().get('member_id', '')), 'admin'))
         conn.execute('UPDATE pricing_moderators SET revoked_at=? WHERE member_id=?',(stamp(now_utc()),str(payload().get('member_id',''))))
+        conn.execute('UPDATE ol_supervisors SET revoked_at=?,can_review=0 WHERE member_id=?',(stamp(now_utc()),str(payload().get('member_id',''))))
         conn.execute('UPDATE live_entitlements SET revoked_at=? WHERE member_id=?',(stamp(now_utc()),str(payload().get('member_id',''))))
         conn.execute('UPDATE live_founders SET revoked_at=? WHERE member_id=?',(stamp(now_utc()),str(payload().get('member_id',''))))
         conn.execute('UPDATE friend_access SET revoked_at=? WHERE member_id=?',(stamp(now_utc()),str(payload().get('member_id',''))))

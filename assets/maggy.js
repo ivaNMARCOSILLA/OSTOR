@@ -2,19 +2,16 @@
 await window.MaggySession.ready;
 const storageKey = name => window.MaggySession ? window.MaggySession.key(name) : name;
 const $ = id => document.getElementById(id);
-const themes = ['cosmos', 'aurora', 'solar'];
 function applyProfile(profile) {
-  const theme = themes.includes(profile.theme) ? profile.theme : 'cosmos';
-  document.documentElement.dataset.ambience = theme;
+  delete document.documentElement.dataset.ambience;
   $('profile-name').value = String(profile.name || '').slice(0, 40);
-  $('space-theme').value = theme;
   $('space-status').textContent = profile.name ? `Bienvenido a tu estación, ${String(profile.name).slice(0, 40)}.` : 'Tu próximo descubrimiento empieza aquí.';
 }
 try { applyProfile(JSON.parse(localStorage.getItem(storageKey('maggy_profile_v1')) || '{}')); } catch { applyProfile({}); }
 $('profile-form').addEventListener('submit', event => {
   event.preventDefault();
   if (window.MaggySession && !window.MaggySession.requireAccess()) return;
-  const profile = { name: $('profile-name').value.trim(), theme: $('space-theme').value };
+  const profile = { name: $('profile-name').value.trim() };
   applyProfile(profile);
   try { localStorage.setItem(storageKey('maggy_profile_v1'), JSON.stringify(profile)); } catch { $('space-status').textContent = 'El navegador no permite guardar tus preferencias.'; }
 });

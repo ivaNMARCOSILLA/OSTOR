@@ -33,6 +33,10 @@ def init_database():
    message_id TEXT PRIMARY KEY REFERENCES community_messages(id) ON DELETE CASCADE,audience TEXT NOT NULL
   );''')
 
+ from payments import init_database as init_payments
+ init_payments()
+
+# Payment orders reference the agreement tables initialized above.
 MODERATOR_PERMISSIONS={'review_agreements':'Ver propuestas y sus condiciones','approve_agreements':'Aprobar precios y beneficios'}
 
 def moderator(conn,user,permission='review_agreements'):
@@ -73,7 +77,10 @@ def public_agreement(conn,row,private=False):
  title=conn.execute('SELECT c.title,m.username FROM streamer_channels c JOIN members m ON m.id=c.member_id WHERE c.id=?',(row['channel_id'],)).fetchone()
  result.update(title=title['title'],creator_name=title['username'])
  result.update(benefits=json.loads(row['benefits_json']),approvals={party:any(a['party']==party for a in approvals) for party in ['creator','admin','moderator']})
- if private:result.update(creator_id=row['creator_id'],moderator_id=row['moderator_id'],paypal_url=row['paypal_url'])
+ if private:
+  result.update(creator_id=row['creator_id'],moderator_id=row['moderator_id'])
+  if row['paypal_url'].startswith('stripe:'):result.update(payment_provider='stripe',payout_account=row['paypal_url'][7:])
+  else:result['paypal_url']=row['paypal_url']
  return result
 
 def approvals_valid(conn,row):
@@ -87,13 +94,15 @@ def approvals_valid(conn,row):
 def reviewer_status():
  user=get_user()
  with database() as conn:
+  from operations import supervisor_review
+  is_supervisor=supervisor_review(conn,user)
   is_mod=moderator(conn,user)
   assigned=conn.execute('SELECT m.id,m.username,(m.password_hash IS NOT NULL) AS activated FROM pricing_moderators p JOIN members m ON m.id=p.member_id WHERE p.revoked_at IS NULL ORDER BY p.assigned_at DESC LIMIT 1').fetchone() if user and user['role']=='admin' else None
   assigned=dict(assigned) if assigned else None
   target=assigned['id'] if assigned else user['id'] if user else None
   permissions=[r['permission'] for r in conn.execute('SELECT permission FROM moderator_permissions WHERE member_id=?',(target,)).fetchall()] if target else []
   if assigned:assigned.pop('id')
- return jsonify(member_id=user['id'] if user else None,moderator=is_mod,admin=bool(user and user['role']=='admin'),assigned=assigned,permissions=permissions,available_permissions=MODERATOR_PERMISSIONS)
+ return jsonify(member_id=user['id'] if user else None,supervisor=is_supervisor,moderator=is_mod,admin=bool(user and user['role']=='admin'),assigned=assigned,permissions=permissions,available_permissions=MODERATOR_PERMISSIONS)
 
 @bp.post('/api/admin/subscription-moderator')
 @require_admin
@@ -144,14 +153,19 @@ def propose():
  if type(cents) is not int or not 1<=cents<=99999999 or period not in {'month','once'} or not isinstance(benefits,list) or not benefits or len(benefits)>3 or any(type(b) is not str or b not in BENEFITS for b in benefits):return jsonify(error='Indica un precio positivo en euros, periodo y beneficios válidos.'),400
  with database() as conn:
   conn.execute('BEGIN IMMEDIATE');channel=conn.execute('SELECT * FROM streamer_channels WHERE member_id=?',(user['id'],)).fetchone()
-  if not channel or not channel['paypal_url']:return jsonify(error='Guarda antes tu canal y tu enlace PayPal.me para recibir suscripciones.'),409
+  from payments import provider,account_for
+  if not channel:return jsonify(error='Guarda antes tu canal.'),409
+  account=account_for(conn,user['id']) if provider()=='stripe' else None
+  payout='stripe:'+account if account else channel['paypal_url']
+  if provider()=='stripe' and not account:return jsonify(error='Conecta primero tu cuenta Stripe desde tu canal. Las tres partes deben aprobar el destinatario.'),409
+  if not payout:return jsonify(error='Guarda antes el destinatario de las suscripciones.'),409
   mod=conn.execute('SELECT p.member_id FROM pricing_moderators p JOIN members m ON m.id=p.member_id WHERE p.revoked_at IS NULL AND LOWER(m.username)=? ORDER BY p.assigned_at DESC LIMIT 1',('gref',)).fetchone()
   if not mod:return jsonify(error='Administración debe designar primero la cuenta de Gref como moderador de acuerdos.'),409
   if mod['member_id']==user['id']:return jsonify(error='El creador y el moderador deben usar cuentas distintas.'),409
   mode=settings(conn,channel['id'])
   if (mode['subscriber_chat'] and 'subscriber_chat' not in benefits) or (mode['exclusive_live'] and 'exclusive_live' not in benefits):return jsonify(error='Desactiva expresamente los modos exclusivos antes de quitar esos beneficios del siguiente acuerdo.'),409
   version=conn.execute('SELECT COALESCE(MAX(version),0)+1 AS n FROM subscription_agreements WHERE channel_id=?',(channel['id'],)).fetchone()['n'];ident=secrets.token_hex(16)
-  conn.execute('INSERT INTO subscription_agreements(id,channel_id,version,creator_id,moderator_id,price_cents,period,benefits_json,paypal_url,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)',(ident,channel['id'],version,user['id'],mod['member_id'],cents,period,json.dumps(sorted(set(benefits))),channel['paypal_url'],stamp(now_utc())))
+  conn.execute('INSERT INTO subscription_agreements(id,channel_id,version,creator_id,moderator_id,price_cents,period,benefits_json,paypal_url,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)',(ident,channel['id'],version,user['id'],mod['member_id'],cents,period,json.dumps(sorted(set(benefits))),payout,stamp(now_utc())))
  from notifications import notify
  notify('creator_offer','Nueva propuesta de suscripción',f'Hay una nueva propuesta de precio y beneficios, versión {version}, pendiente de las tres aprobaciones. Revisa el acuerdo en tu panel.',event_key='creator-offer:'+ident)
  return jsonify(ok=True,agreement_id=ident,version=version,published=False)
@@ -160,15 +174,17 @@ def propose():
 def review_queue():
  user=get_user()
  with database() as conn:
-  if not user or (user['role']!='admin' and not moderator(conn,user)):return jsonify(error='Este panel es solo para administración y el moderador designado.'),403
+  from operations import supervisor_review
+  supervising=supervisor_review(conn,user)
+  if not user or (user['role']!='admin' and not moderator(conn,user) and not supervising):return jsonify(error='Este panel es solo para administración y el moderador designado.'),403
   try:page=max(1,int(request.args.get('page',1)))
   except ValueError:page=1
-  where='' if user['role']=='admin' else ' AND a.moderator_id=?';params=() if user['role']=='admin' else (user['id'],)
+  where='' if user['role']=='admin' or supervising else ' AND a.moderator_id=?';params=() if user['role']=='admin' or supervising else (user['id'],)
   base='FROM subscription_agreements a WHERE a.version=(SELECT MAX(b.version) FROM subscription_agreements b WHERE b.channel_id=a.channel_id)'+where
   total=conn.execute('SELECT COUNT(*) AS n '+base,params).fetchone()['n']
   rows=conn.execute('SELECT a.* '+base+' ORDER BY a.created_at DESC LIMIT 25 OFFSET ?',params+((page-1)*25,)).fetchall()
   result=[public_agreement(conn,row,True) for row in rows]
- return jsonify(agreements=result,page=page,pages=max(1,(total+24)//25),total=total,party='admin' if user['role']=='admin' else 'moderator',benefits=BENEFITS)
+ return jsonify(agreements=result,page=page,pages=max(1,(total+24)//25),total=total,party='admin' if user['role']=='admin' else 'supervisor' if supervising else 'moderator',benefits=BENEFITS)
 
 @bp.post('/api/channel-subscriptions/approve')
 def approve():
@@ -196,8 +212,10 @@ def offer(channel_id):
   valid=bool(row and approvals_valid(conn,row));benefits=active_benefits(conn,channel_id,user['id'] if user else None)
   from streamers import streamer_sales_ready
   enabled=bool(valid and streamer_sales_ready() and row['paypal_url']==channel['paypal_url'] and user and user_public(user)['active'] and user['id']!=channel['member_id'])
-  link=(row['paypal_url']+f"/{row['price_cents']//100}.{row['price_cents']%100:02d}EUR") if enabled else None
-  return jsonify(channel_id=channel_id,title=channel['title'],subscriber_count=count(conn,channel_id),agreement=public_agreement(conn,row) if valid else None,benefits=BENEFITS,mine=sorted(benefits),payments_enabled=enabled,payment_url=link,exclusive_live=bool(mode['exclusive_live']),subscriber_chat=bool(mode['subscriber_chat']),payment_mode='creator_verified_external_paypal',commission_cents=0)
+  from payments import provider,ready,account_for
+  if provider()=='stripe':enabled=bool(valid and ready() and row['paypal_url']=='stripe:'+str(account_for(conn,channel['member_id'])) and user and user_public(user)['active'] and user['id']!=channel['member_id'])
+  link=(row['paypal_url']+f"/{row['price_cents']//100}.{row['price_cents']%100:02d}EUR") if enabled and provider()!='stripe' else None
+  return jsonify(checkout_available=enabled and provider()=='stripe',channel_id=channel_id,title=channel['title'],subscriber_count=count(conn,channel_id),agreement=public_agreement(conn,row) if valid else None,benefits=BENEFITS,mine=sorted(benefits),payments_enabled=enabled,payment_url=link,exclusive_live=bool(mode['exclusive_live']),subscriber_chat=bool(mode['subscriber_chat']),payment_mode='stripe' if provider()=='stripe' else 'creator_verified_external_paypal',commission_cents=0)
 
 @bp.post('/api/channel-subscriptions/<channel_id>/mode')
 def update_mode(channel_id):
@@ -215,6 +233,8 @@ def update_mode(channel_id):
 
 @bp.post('/api/channel-subscriptions/<channel_id>/confirm')
 def confirm_subscription(channel_id):
+ from payments import provider
+ if provider()=='stripe':return jsonify(error='Las suscripciones nuevas se confirman mediante el gestor de pagos, no manualmente.'),409
  user=get_user();data=payload();reference=str(data.get('reference','')).strip()
  if not user or data.get('verified_receipt') is not True or not 4<=len(reference)<=120:return jsonify(error='El creador debe comprobar el ingreso en su PayPal e indicar una referencia única.'),400
  from streamers import streamer_sales_ready

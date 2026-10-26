@@ -24,3 +24,6 @@ Las primeras 100 plazas disponibles se reservan con la prueba de tres meses. Par
 Las suscripciones opcionales a creadores tienen precio, periodo, beneficios y PayPal aprobados por tres cuentas: creador, administración y moderador Gref. Incluyen los beneficios acordados de insignia, chat y directos exclusivos; los pagos externos al creador se activan mediante comprobación manual del ingreso, separados de los regalos y del acceso general a Ol Live. No se habilitan cobros sin acuerdo completo ni vídeo disponible.
 
 La cuenta permite activar voluntariamente verificación de dos factores TOTP con una app autenticadora y ocho códigos de recuperación de un solo uso. No se activa automáticamente ni requiere SMS. Conserva el mismo secreto de servidor al migrar cuentas que tengan 2FA activa.
+
+
+Pagos, mantenimiento, supervisión y preparación Android: [guía de activación](docs/PAGOS_Y_PLAY_STORE.md). La PWA ya se instala desde el navegador. No se afirma publicación en Google Play ni cobros reales sin completar la configuración del gestor.
