@@ -8,7 +8,7 @@
 await window.MaggySession.ready;
 const storageKey = name => window.MaggySession ? window.MaggySession.key(name) : name;
 
-const VERSION = '9.3.1';
+const VERSION = '9.3.2';
 const KEY = Object.freeze({ favorites: storageKey('electronicama_v7_favorites'), history: storageKey('electronicama_v7_history'), ads: storageKey('electronicama_ads_consent_v1') });
 const MAX_FAVORITES = 160;
 const MAX_HISTORY = 75;
@@ -73,7 +73,7 @@ function toggleFavorite(track) {
   render();
 }
 function maggyCover() {
-  const img = document.createElement('img'); img.src = '/assets/app-icon-192.png?v=9.3.1'; img.alt = 'Logo de Ol'; img.loading = 'lazy';
+  const img = document.createElement('img'); img.src = '/assets/app-icon-192.png?v=9.3.2'; img.alt = 'Logo de Ol'; img.loading = 'lazy';
   img.addEventListener('error', () => img.replaceWith(emptyNode('span', 'cover-fallback', 'Ol')), {once:true});
   return img;
 }
@@ -117,6 +117,7 @@ function trackCard(track, list) {
 }
 function render() {
   if (window.MaggySession?.active === false && state.view !== 'discover') state.view = 'discover';
+  document.querySelectorAll('[data-view]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.view===state.view)));
   const list = filteredTracks();
   const grid = byId('track-grid');
   grid.replaceChildren();
@@ -157,13 +158,18 @@ function render() {
   byId('load-more').classList.toggle('hidden', state.source === 'MIX' ? !list.length || state.mixPage >= 10 : state.view !== 'discover' || state.results.length === 0 || state.page >= 10);
   if (state.source === 'MIX') byId('load-more').disabled = state.mixLoading;
 }
+function closeMobileMenu(){
+  byId('mobile-nav').classList.add('hidden');
+  byId('mobile-menu').setAttribute('aria-expanded','false');
+  byId('mobile-menu').setAttribute('aria-label','Abrir menú de navegación');
+  byId('mobile-menu-label').textContent='Menú';
+}
 function goView(view) {
   if (!['discover', 'favorites', 'history'].includes(view)) return;
   if (view !== 'discover' && window.MaggySession && !window.MaggySession.requireAccess()) return;
   state.view = view;
   if (view !== 'discover' && state.source === 'MIX') state.source = 'ALL';
-  byId('mobile-nav').classList.add('hidden');
-  byId('mobile-menu').setAttribute('aria-expanded', 'false');
+  closeMobileMenu();
   message(view === 'favorites' ? 'Tus canciones guardadas en este dispositivo.' : view === 'history' ? 'Las últimas canciones que has escuchado.' : `Explorando: ${state.query}`);
   render();
   byId('library').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -422,9 +428,15 @@ function init() {
     requestSearch(button.dataset.query);
   }));
   byId('mobile-menu').addEventListener('click', () => {
-    const hidden = byId('mobile-nav').classList.toggle('hidden');
-    byId('mobile-menu').setAttribute('aria-expanded', String(!hidden));
+    const open=byId('mobile-nav').classList.contains('hidden');
+    byId('mobile-nav').classList.toggle('hidden',!open);
+    byId('mobile-menu').setAttribute('aria-expanded',String(open));
+    byId('mobile-menu').setAttribute('aria-label',open?'Cerrar menú de navegación':'Abrir menú de navegación');
+    byId('mobile-menu-label').textContent=open?'Cerrar':'Menú';
   });
+  byId('mobile-nav').addEventListener('click',event=>{if(event.target.closest('a,button'))closeMobileMenu();});
+  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!byId('mobile-nav').classList.contains('hidden')){closeMobileMenu();byId('mobile-menu').focus();}});
+  document.addEventListener('click',event=>{if(!event.target.closest('#mobile-nav,#mobile-menu'))closeMobileMenu();});
   byId('search-input').addEventListener('input', event => updateExternalSearch(event.target.value));
   byId('search-form').addEventListener('submit', event => { event.preventDefault(); requestSearch(byId('search-input').value); });
   byId('mix-search-form').addEventListener('submit', event => { event.preventDefault(); requestMixSearch(byId('mix-query').value); });
@@ -454,7 +466,7 @@ function init() {
   byId('player-close').addEventListener('click', closePlayer);
   byId('player-favorite').addEventListener('click', () => { if (state.currentTrack) toggleFavorite(state.currentTrack); });
   byId('privacy-button').addEventListener('click', () => byId('consent-dialog').classList.remove('hidden'));
-  byId('cookie-settings').addEventListener('click', () => byId('consent-dialog').classList.remove('hidden'));
+  document.querySelectorAll('#cookie-settings,[data-cookie-preferences]').forEach(button=>button.addEventListener('click',()=>{byId('consent-dialog').classList.remove('hidden');byId('consent-decline').focus();}));
   byId('consent-decline').addEventListener('click', () => advertisingConsent(false));
   byId('consent-accept').addEventListener('click', () => advertisingConsent(true));
   document.addEventListener('keydown', e => { if (e.key !== 'Escape') return; if (!byId('consent-dialog').classList.contains('hidden')) advertisingConsent(false); else closePlayer(); });
