@@ -1,6 +1,6 @@
 /* Shared operational state; public status is never a payment confirmation. */
 const $=id=>document.getElementById(id);
-async function api(path,data){let options={cache:'no-store'};if(data!==undefined){const r=await fetch('/api/account/me',{cache:'no-store'}),a=await r.json();options={...options,method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':a.csrf},body:JSON.stringify(data)};}const r=await fetch(path,options),d=await r.json();if(!r.ok)throw Error(d.error||'No se pudo completar la operación.');return d;}
+async function api(path,data){let options={cache:'no-store'};if(data!==undefined){const r=await fetch('/api/account/me',{cache:'no-store'}),a=await r.json();options={...options,method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':a.csrf},body:JSON.stringify(data)};}const r=await fetch(path,options),d=await r.json();if(!r.ok)throw Error((d.error||'No se pudo completar la operación.')+(d.code?' (Referencia: '+d.code+')':''));return d;}
 let inspecting=false;
 async function inspect(){if(inspecting)return;inspecting=true;try{
  const d=await api('/api/status');let banner=$('ol-maintenance-banner');if(!banner){banner=document.createElement('p');banner.id='ol-maintenance-banner';banner.setAttribute('role','status');document.body.prepend(banner);}banner.hidden=d.maintenance.scope==='off';banner.textContent='Ol en mantenimiento · '+d.maintenance.message;

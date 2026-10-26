@@ -56,7 +56,7 @@ def run():
   creator.locator('#creator-exclusive-form > label').first.locator('input').check()
   creator.locator('#creator-exclusive-form button').click()
   creator.wait_for_function("document.querySelector('#creator-offer-status').textContent.includes('Modos del canal guardados')")
-  creator.evaluate("async id=>{const ui=await import('/assets/subscriptions.js?v=9.6.1');await ui.openSubscription(id)}",channel)
+  creator.evaluate("async id=>{const ui=await import('/assets/subscriptions.js?v=9.6.2');await ui.openSubscription(id)}",channel)
   assert creator.locator('#creator-subscription-dialog').is_visible()
   assert '4,50' in creator.locator('#creator-subscription-details').inner_text()
   assert creator.locator('#creator-subscription-details a').count()==0

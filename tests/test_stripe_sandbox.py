@@ -35,4 +35,14 @@ class StripeSandboxTests(unittest.TestCase):
   order=self.checkout();self.assertEqual(self.event(order,scope='platform').status_code,400)
   with app.app.app_context(),m.database() as c:self.assertIsNone(c.execute('SELECT paid_at FROM stripe_orders').fetchone()['paid_at'])
  def test_pending_sandbox_checkout_prevents_duplicate_sessions(self):
-  self.checkout();self.assertEqual(self.admin.post('/api/admin/payments/test-checkout',json={}).status_code,409)
+  self.checkout()
+  with patch.object(p,'stripe',return_value={'id':'cs_test_local_only','status':'open','url':'https://checkout.stripe.com/c/pay/local-test'}) as remote:
+   result=self.admin.post('/api/admin/payments/test-checkout',json={});self.assertEqual(result.status_code,200);self.assertTrue(result.json['resumed']);self.assertEqual(remote.call_args.args[0],'GET')
+  with app.app.app_context(),m.database() as c:self.assertEqual(c.execute('SELECT COUNT(*) AS n FROM stripe_orders').fetchone()['n'],1)
+
+ def test_definitive_failure_exposes_safe_code_and_does_not_lock_out_retry(self):
+  with patch.object(p,'stripe',side_effect=p.PaymentError('Stripe necesita completar el negocio.','business_profile_required')):
+   result=self.admin.post('/api/admin/payments/test-checkout',json={})
+   self.assertEqual(result.status_code,409);self.assertEqual(result.json['code'],'business_profile_required')
+  with app.app.app_context(),m.database() as c:self.assertEqual(c.execute('SELECT state FROM stripe_orders').fetchone()['state'],'failed')
+  self.checkout()

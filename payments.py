@@ -6,7 +6,10 @@ from flask import Blueprint,jsonify,request,redirect,current_app,session
 from membership import database,get_user,user_public,payload,stamp,now_utc,end_of_plan,allow_attempt,require_admin
 bp=Blueprint('payments',__name__)
 ORIGIN='https://electronicama.com'
-class PaymentError(Exception):pass
+class PaymentError(Exception):
+ def __init__(self,message,code='provider_unavailable'):
+  super().__init__(message);self.code=code
+
 
 def provider():return os.getenv('OL_PAYMENT_PROVIDER','stripe')
 def configured():return bool(os.getenv('STRIPE_SECRET_KEY','').startswith('sk_live_') and os.getenv('STRIPE_WEBHOOK_SECRET','').startswith('whsec_') and os.getenv('STRIPE_CONNECT_WEBHOOK_SECRET','').startswith('whsec_') and os.getenv('OL_PAYMENTS_ENABLED')=='1')
@@ -42,7 +45,16 @@ def stripe(method,path,data=None,account=None,idempotency=None,oauth=False,sandb
  url=('https://connect.stripe.com' if oauth else 'https://api.stripe.com/v1')+path
  try:
   response=requests.request(method,url,data=data,headers=headers,timeout=(3,15),allow_redirects=False)
-  if response.status_code not in (200,201):raise PaymentError('El gestor no pudo completar la operación. Revisa su panel privado o inténtalo más tarde.')
+  if response.status_code not in (200,201):
+   try:error=response.json().get('error',{})
+   except ValueError:error={}
+   code=str(error.get('code') or error.get('type') or 'request_rejected')
+   messages={'api_key_expired':'La clave de Stripe ha caducado. Actualiza la clave secreta de pruebas en Vercel.', 'invalid_api_key':'Stripe rechaza la clave secreta. Revisa que corresponda al mismo entorno de pruebas.', 'account_invalid':'Stripe no reconoce la cuenta asociada a esa clave.', 'permission_error':'La clave restringida no tiene los permisos de Checkout necesarios.', 'idempotency_error':'Stripe conserva un intento anterior distinto. Contacta con administración para revisar la sesión.', 'rate_limit':'Stripe está limitando las peticiones. Espera un minuto.'}
+   if response.status_code==401:code='invalid_api_key'
+   elif response.status_code==403 and code=='request_rejected':code='permission_error'
+   message=str(error.get('message','')).lower()
+   if 'business name' in message or 'account name' in message:code='business_profile_required';messages[code]='Stripe necesita que completes el nombre del negocio en su configuración antes de abrir Checkout.'
+   raise PaymentError(messages.get(code,'Stripe ha rechazado la creación del pago. Revisa las tareas pendientes de tu cuenta en su panel.'),code if re.fullmatch(r'[a-z_]{1,60}',code) else 'request_rejected')
   return response.json()
  except (requests.RequestException,ValueError):raise PaymentError('El gestor de pagos no está disponible. No se ha confirmado ningún pago.') from None
 
@@ -65,19 +77,30 @@ def test_status():return jsonify(configured=sandbox_configured(),mode='test',gra
 @require_admin
 def test_checkout():
  if not sandbox_configured():return jsonify(error='Añade las dos variables privadas de pruebas en Vercel: STRIPE_TEST_SECRET_KEY y STRIPE_TEST_WEBHOOK_SECRET.'),409
- if not allow_attempt('stripe-admin-test',limit=4):return jsonify(error='Espera unos minutos antes de repetir la prueba.'),429
  ident=secrets.token_hex(16);user=get_user()
  with database() as c:
   c.execute('BEGIN IMMEDIATE')
-  pending=c.execute("SELECT id FROM stripe_orders WHERE member_id=? AND kind='test' AND state='open' AND created_at>?",(user['id'],stamp(now_utc()-timedelta(minutes=31)))).fetchone()
-  if pending:return jsonify(error='Ya existe una sesión de prueba pendiente. Complétala o espera a su caducidad.'),409
-  c.execute("INSERT INTO stripe_orders(id,member_id,kind,account_id,amount_cents,currency,created_at,state) VALUES(?,?,'test','',2500,'eur',?,'open')",(ident,user['id'],stamp(now_utc())))
+  pending=c.execute("SELECT * FROM stripe_orders WHERE member_id=? AND kind='test' AND state='open' AND created_at>?",(user['id'],stamp(now_utc()-timedelta(minutes=31)))).fetchone()
+  if pending:ident=pending['id']
+  else:c.execute("INSERT INTO stripe_orders(id,member_id,kind,account_id,amount_cents,currency,created_at,state) VALUES(?,?,'test','',2500,'eur',?,'open')",(ident,user['id'],stamp(now_utc())))
  try:
+  if pending and pending['checkout_id']:
+   resumed=stripe('GET','/checkout/sessions/'+pending['checkout_id'],sandbox=True)
+   if resumed.get('status')=='open' and str(resumed.get('url','')).startswith('https://checkout.stripe.com/'):
+    return jsonify(url=resumed['url'],mode='test',grants_access=False,resumed=True)
+   return jsonify(error='La sesión anterior ya se completó o caducó. Actualiza la página para comprobarla.'),409
+  if not allow_attempt('stripe-admin-sandbox-v2',limit=8):return jsonify(error='Se han repetido varias solicitudes. Espera 15 minutos; no se ha creado otro pago.',code='attempt_limit'),429
+  if pending:
+   with database() as c:c.execute("UPDATE stripe_orders SET state='abandoned' WHERE id=? AND checkout_id IS NULL",(ident,))
+   ident=secrets.token_hex(16)
+   with database() as c:c.execute("INSERT INTO stripe_orders(id,member_id,kind,account_id,amount_cents,currency,created_at,state) VALUES(?,?,'test','',2500,'eur',?,'open')",(ident,user['id'],stamp(now_utc())))
   result=stripe('POST','/checkout/sessions',{'mode':'payment','success_url':ORIGIN+'/account?test_payment=processing','cancel_url':ORIGIN+'/account?test_payment=cancelled','metadata[ol_order]':ident,'client_reference_id':ident,'line_items[0][quantity]':'1','line_items[0][price_data][currency]':'eur','line_items[0][price_data][unit_amount]':'2500','line_items[0][price_data][product_data][name]':'Ol · PRUEBA SIN DINERO REAL · no activa acceso','payment_method_types[0]':'card','expires_at':str(int(time.time())+1800)},idempotency='ol-test-'+ident,sandbox=True)
   if not str(result.get('id','')).startswith('cs_test_') or not str(result.get('url','')).startswith('https://checkout.stripe.com/'):raise PaymentError('Stripe no devolvió una sesión válida de pruebas.')
   with database() as c:c.execute('UPDATE stripe_orders SET checkout_id=? WHERE id=?',(result['id'],ident))
   return jsonify(url=result['url'],mode='test',grants_access=False)
- except PaymentError as e:return jsonify(error=str(e)),409
+ except PaymentError as e:
+  with database() as c:c.execute("UPDATE stripe_orders SET state='failed' WHERE id=? AND checkout_id IS NULL",(ident,))
+  return jsonify(error=str(e),code=e.code),409
 
 @bp.post('/api/payments/connect')
 def connect():
