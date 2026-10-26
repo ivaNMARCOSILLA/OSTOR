@@ -39,7 +39,7 @@ Administración → Mantenimiento, gestor y supervisión muestra cada variable p
 
 ```sh
 python tools/build_release.py
-python tools/verify_release.py ../artifacts/OL_9_7_0.zip
+python tools/verify_release.py ../artifacts/OL_9_7_1.zip
 ```
 
 Para instalar la web/PWA no hace falta compilar. Google Play requiere un paquete firmado, cuenta del titular y revisión; véanse `android/twa-manifest.template.json` y `docs/PAGOS_Y_PLAY_STORE.md`. Las políticas de compras digitales deben resolverse antes de publicar ventas en la app.

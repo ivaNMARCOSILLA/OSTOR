@@ -82,3 +82,10 @@ class ManagedPaymentTests(unittest.TestCase):
  def test_play_distribution_never_enables_web_checkout(self):
   self.client.get('/?distribution=googleplay')
   with patch.dict('os.environ',{'OL_PAYMENTS_ENABLED':'1','STRIPE_SECRET_KEY':'sk_live_local_only'}),patch.object(st,'streamer_sales_ready',return_value=True):self.assertFalse(self.client.get('/api/payments/status').json['enabled'])
+
+ def test_restricted_live_key_is_recognized_without_enabling_video_or_sales(self):
+  with patch.dict('os.environ',{'STRIPE_SECRET_KEY':'rk_live_local_only','STRIPE_WEBHOOK_SECRET':'whsec_local_only','STRIPE_CONNECT_WEBHOOK_SECRET':'whsec_connect_local','OL_PAYMENTS_ENABLED':'1'}),patch.object(st,'streamer_sales_ready',return_value=False):
+   self.assertTrue(p.configured())
+   result=self.client.get('/api/payments/status');self.assertFalse(result.json['enabled'])
+   self.assertTrue(self.admin.get('/api/admin/launch-readiness').json['checks']['payments']['STRIPE_SECRET_KEY'])
+  with patch.dict('os.environ',{'STRIPE_SECRET_KEY':'pk_live_local_only'}):self.assertFalse(p.configured())

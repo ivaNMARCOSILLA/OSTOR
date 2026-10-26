@@ -63,7 +63,7 @@ def launch_readiness():
  with database() as c:
   test=c.execute("SELECT COUNT(*) AS n FROM stripe_orders WHERE kind='test' AND state='test_paid' AND paid_at IS NOT NULL").fetchone()['n']
  checks={'video':video_configuration_checks(),'payments':{
-  'STRIPE_SECRET_KEY':os.getenv('STRIPE_SECRET_KEY','').startswith('sk_live_'),
+  'STRIPE_SECRET_KEY':os.getenv('STRIPE_SECRET_KEY','').startswith(('sk_live_','rk_live_')),
   'STRIPE_WEBHOOK_SECRET':os.getenv('STRIPE_WEBHOOK_SECRET','').startswith('whsec_'),
   'STRIPE_CONNECT_CLIENT_ID':os.getenv('STRIPE_CONNECT_CLIENT_ID','').startswith('ca_'),
   'STRIPE_CONNECT_WEBHOOK_SECRET':os.getenv('STRIPE_CONNECT_WEBHOOK_SECRET','').startswith('whsec_'),

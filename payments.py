@@ -12,7 +12,7 @@ class PaymentError(Exception):
 
 
 def provider():return os.getenv('OL_PAYMENT_PROVIDER','stripe')
-def configured():return bool(os.getenv('STRIPE_SECRET_KEY','').startswith('sk_live_') and os.getenv('STRIPE_WEBHOOK_SECRET','').startswith('whsec_') and os.getenv('STRIPE_CONNECT_WEBHOOK_SECRET','').startswith('whsec_') and os.getenv('OL_PAYMENTS_ENABLED')=='1')
+def configured():return bool(os.getenv('STRIPE_SECRET_KEY','').startswith(('sk_live_','rk_live_')) and os.getenv('STRIPE_WEBHOOK_SECRET','').startswith('whsec_') and os.getenv('STRIPE_CONNECT_WEBHOOK_SECRET','').startswith('whsec_') and os.getenv('OL_PAYMENTS_ENABLED')=='1')
 def ready():
  from streamers import streamer_sales_ready
  from operations import state

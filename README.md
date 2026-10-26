@@ -29,4 +29,4 @@ La cuenta permite activar voluntariamente verificación de dos factores TOTP con
 Pagos, mantenimiento, supervisión y preparación Android: [guía de activación](docs/PAGOS_Y_PLAY_STORE.md). La PWA ya se instala desde el navegador. No se afirma publicación en Google Play ni cobros reales sin completar la configuración del gestor.
 
 
-Construir el paquete fuente: `python tools/build_release.py`. Comprobar su contenido y SHA-256: `python tools/verify_release.py ../artifacts/OL_9_7_0.zip`. El ZIP usa la carpeta `Ol`, excluye cuentas y secretos y sirve para web/PWA; la plantilla Android no es una publicación en Play Store.
+Construir el paquete fuente: `python tools/build_release.py`. Comprobar su contenido y SHA-256: `python tools/verify_release.py ../artifacts/OL_9_7_1.zip`. El ZIP usa la carpeta `Ol`, excluye cuentas y secretos y sirve para web/PWA; la plantilla Android no es una publicación en Play Store.
