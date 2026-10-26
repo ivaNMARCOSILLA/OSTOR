@@ -12,6 +12,7 @@ TABLES={
     'members':['id','username','password_hash','role','created_at','access_until','welcome_used','session_version'],
     'member_two_factor':['member_id','nonce','enabled_at','key_id','last_counter','pending_nonce','pending_until'],
     'two_factor_recovery':['member_id','code_hash','used_at'],
+    'moderator_permissions':['member_id','permission','granted_by','granted_at'],
     'pricing_moderators':['member_id','assigned_by','assigned_at','revoked_at'],
     'live_launch':['id','started_at'],
     'live_entitlements':['member_id','trial_started_at','trial_until','paid_at','revoked_at'],
@@ -52,7 +53,7 @@ def migrate(source,app):
         rows={}
         for table,columns in TABLES.items():
             actual=[row['name'] for row in original.execute('PRAGMA table_info('+table+')')]
-            if not actual and table in {'member_two_factor','two_factor_recovery','pricing_moderators','subscription_agreements','subscription_approvals','channel_subscription_settings','creator_subscriptions','community_audiences','founder_slot_history','live_launch','live_entitlements','founder_activity','creator_daily_activity','promotion_metrics','founder_signatures','live_founders','sticker_designs','member_rewards','friend_access','streamer_access','streamer_channels','community_messages','admin_notifications','live_channel_settings'}:
+            if not actual and table in {'moderator_permissions','member_two_factor','two_factor_recovery','pricing_moderators','subscription_agreements','subscription_approvals','channel_subscription_settings','creator_subscriptions','community_audiences','founder_slot_history','live_launch','live_entitlements','founder_activity','creator_daily_activity','promotion_metrics','founder_signatures','live_founders','sticker_designs','member_rewards','friend_access','streamer_access','streamer_channels','community_messages','admin_notifications','live_channel_settings'}:
                 rows[table]=[];continue
             if set(actual)!=set(columns):raise ValueError('La estructura SQLite no es compatible: '+table)
             rows[table]=[dict(row) for row in original.execute('SELECT '+','.join(columns)+' FROM '+table)]

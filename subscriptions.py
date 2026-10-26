@@ -9,7 +9,10 @@ BENEFITS={'badge':'Insignia de suscriptor','subscriber_chat':'Chat para suscript
 
 def init_database():
  with database() as conn:
-  conn.executescript('''CREATE TABLE IF NOT EXISTS subscription_agreements (
+  conn.executescript('''CREATE TABLE IF NOT EXISTS moderator_permissions (
+   member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,permission TEXT NOT NULL,
+   granted_by TEXT NOT NULL REFERENCES members(id),granted_at TEXT NOT NULL,PRIMARY KEY(member_id,permission)
+  );CREATE TABLE IF NOT EXISTS subscription_agreements (
    id TEXT PRIMARY KEY,channel_id TEXT NOT NULL REFERENCES streamer_channels(id),version INTEGER NOT NULL,
    creator_id TEXT NOT NULL REFERENCES members(id),moderator_id TEXT NOT NULL REFERENCES members(id),
    price_cents INTEGER NOT NULL,period TEXT NOT NULL,benefits_json TEXT NOT NULL,paypal_url TEXT NOT NULL,
@@ -30,8 +33,10 @@ def init_database():
    message_id TEXT PRIMARY KEY REFERENCES community_messages(id) ON DELETE CASCADE,audience TEXT NOT NULL
   );''')
 
-def moderator(conn,user):
- return bool(user and conn.execute('SELECT p.member_id FROM pricing_moderators p JOIN members m ON m.id=p.member_id WHERE p.member_id=? AND p.revoked_at IS NULL AND m.password_hash IS NOT NULL',(user['id'],)).fetchone())
+MODERATOR_PERMISSIONS={'review_agreements':'Ver propuestas y sus condiciones','approve_agreements':'Aprobar precios y beneficios'}
+
+def moderator(conn,user,permission='review_agreements'):
+ return bool(user and conn.execute('SELECT p.member_id FROM pricing_moderators p JOIN members m ON m.id=p.member_id WHERE p.member_id=? AND p.revoked_at IS NULL AND m.password_hash IS NOT NULL AND EXISTS (SELECT 1 FROM moderator_permissions x WHERE x.member_id=p.member_id AND x.permission=?)',(user['id'],permission)).fetchone())
 
 def active_benefits(conn,channel_id,member_id):
  if not member_id:return set()
@@ -76,15 +81,19 @@ def approvals_valid(conn,row):
  if set(approvals)!={'creator','admin','moderator'} or len(set(approvals.values()))!=3:return False
  if approvals['creator']!=row['creator_id'] or approvals['moderator']!=row['moderator_id']:return False
  if not conn.execute("SELECT id FROM members WHERE id=? AND role='admin'",(approvals['admin'],)).fetchone():return False
- return bool(conn.execute('SELECT p.member_id FROM pricing_moderators p JOIN members m ON m.id=p.member_id WHERE p.member_id=? AND p.revoked_at IS NULL AND m.password_hash IS NOT NULL',(approvals['moderator'],)).fetchone())
+ return moderator(conn,{'id':approvals['moderator']},'approve_agreements')
 
 @bp.get('/api/channel-subscriptions/reviewer')
 def reviewer_status():
  user=get_user()
  with database() as conn:
   is_mod=moderator(conn,user)
-  assigned=conn.execute('SELECT m.username,(m.password_hash IS NOT NULL) AS activated FROM pricing_moderators p JOIN members m ON m.id=p.member_id WHERE p.revoked_at IS NULL ORDER BY p.assigned_at DESC LIMIT 1').fetchone() if user and user['role']=='admin' else None
- return jsonify(member_id=user['id'] if user else None,moderator=is_mod,admin=bool(user and user['role']=='admin'),assigned=dict(assigned) if assigned else None)
+  assigned=conn.execute('SELECT m.id,m.username,(m.password_hash IS NOT NULL) AS activated FROM pricing_moderators p JOIN members m ON m.id=p.member_id WHERE p.revoked_at IS NULL ORDER BY p.assigned_at DESC LIMIT 1').fetchone() if user and user['role']=='admin' else None
+  assigned=dict(assigned) if assigned else None
+  target=assigned['id'] if assigned else user['id'] if user else None
+  permissions=[r['permission'] for r in conn.execute('SELECT permission FROM moderator_permissions WHERE member_id=?',(target,)).fetchall()] if target else []
+  if assigned:assigned.pop('id')
+ return jsonify(member_id=user['id'] if user else None,moderator=is_mod,admin=bool(user and user['role']=='admin'),assigned=assigned,permissions=permissions,available_permissions=MODERATOR_PERMISSIONS)
 
 @bp.post('/api/admin/subscription-moderator')
 @require_admin
@@ -95,9 +104,26 @@ def assign_moderator():
   conn.execute('BEGIN IMMEDIATE');row=conn.execute('SELECT id,password_hash,role FROM members WHERE LOWER(username)=?',(name,)).fetchone()
   if not row:return jsonify(error='Crea primero la cuenta o una invitación privada de Gref desde administración.'),404
   if row['role']=='admin':return jsonify(error='La cuenta del moderador debe ser distinta de la administración.'),409
+  previous=conn.execute('SELECT revoked_at FROM pricing_moderators WHERE member_id=?',(row['id'],)).fetchone()
+  if not previous or previous['revoked_at']:conn.execute('DELETE FROM moderator_permissions WHERE member_id=?',(row['id'],))
   conn.execute('UPDATE pricing_moderators SET revoked_at=? WHERE member_id!=?',(stamp(now_utc()),row['id']))
+  conn.execute('DELETE FROM moderator_permissions WHERE member_id!=?',(row['id'],))
   conn.execute('INSERT INTO pricing_moderators(member_id,assigned_by,assigned_at) VALUES(?,?,?) ON CONFLICT(member_id) DO UPDATE SET assigned_by=excluded.assigned_by,assigned_at=excluded.assigned_at,revoked_at=NULL',(row['id'],get_user()['id'],stamp(now_utc())))
  return jsonify(ok=True,username='Gref',activated=bool(row['password_hash']))
+
+@bp.post('/api/admin/moderator-permissions')
+@require_admin
+def update_moderator_permissions():
+ permissions=payload().get('permissions')
+ if not isinstance(permissions,list) or any(not isinstance(p,str) or p not in MODERATOR_PERMISSIONS for p in permissions):return jsonify(error='Permisos no válidos.'),400
+ if 'approve_agreements' in permissions and 'review_agreements' not in permissions:return jsonify(error='Para aprobar acuerdos debes permitir también verlos.'),400
+ with database() as conn:
+  conn.execute('BEGIN IMMEDIATE')
+  row=conn.execute('SELECT member_id FROM pricing_moderators WHERE revoked_at IS NULL ORDER BY assigned_at DESC LIMIT 1').fetchone()
+  if not row:return jsonify(error='Designa primero la cuenta del moderador.'),409
+  conn.execute('DELETE FROM moderator_permissions WHERE member_id=?',(row['member_id'],))
+  for permission in set(permissions):conn.execute('INSERT INTO moderator_permissions(member_id,permission,granted_by,granted_at) VALUES(?,?,?,?)',(row['member_id'],permission,get_user()['id'],stamp(now_utc())))
+ return jsonify(ok=True,permissions=sorted(set(permissions)))
 
 @bp.get('/api/channel-subscriptions/creator')
 def creator_dashboard():
@@ -151,7 +177,7 @@ def approve():
  with database() as conn:
   conn.execute('BEGIN IMMEDIATE');row=conn.execute('SELECT * FROM subscription_agreements WHERE id=?',(str(data.get('agreement_id','')),)).fetchone()
   if not row:return jsonify(error='El acuerdo no existe.'),404
-  allowed=(party=='creator' and user['id']==row['creator_id']) or (party=='admin' and user['role']=='admin' and user['id'] not in {row['creator_id'],row['moderator_id']}) or (party=='moderator' and user['id']==row['moderator_id'] and user['id']!=row['creator_id'] and moderator(conn,user))
+  allowed=(party=='creator' and user['id']==row['creator_id']) or (party=='admin' and user['role']=='admin' and user['id'] not in {row['creator_id'],row['moderator_id']}) or (party=='moderator' and user['id']==row['moderator_id'] and user['id']!=row['creator_id'] and moderator(conn,user,'approve_agreements'))
   if not allowed:return jsonify(error='Cada parte debe aprobar desde su propia cuenta autorizada.'),403
   latest=conn.execute('SELECT MAX(version) AS n FROM subscription_agreements WHERE channel_id=?',(row['channel_id'],)).fetchone()['n']
   if row['version']!=latest:return jsonify(error='Este acuerdo fue sustituido. Revisa la versión actual.'),409

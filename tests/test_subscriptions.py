@@ -15,6 +15,7 @@ class CreatorSubscriptionTests(unittest.TestCase):
   self.viewer=self.member('channel-viewer')
   self.other=self.member('other-viewer')
   self.assertEqual(self.post(self.admin,'/api/admin/subscription-moderator',{'username':'Gref'}).status_code,200)
+  self.assertEqual(self.post(self.admin,'/api/admin/moderator-permissions',{'permissions':['review_agreements','approve_agreements']}).status_code,200)
   result=self.post(self.creator,'/api/streamers/me',{'title':'Mi canal Ol','paypal_url':'https://paypal.me/CreatorOnly','owns_paypal':True})
   self.channel=result.json['channel']['id']
  def post(self,client,path,data):
@@ -105,3 +106,28 @@ class CreatorSubscriptionTests(unittest.TestCase):
   with patch.object(st,'streamer_sales_ready',return_value=True):self.assertFalse(self.viewer.get('/api/channel-subscriptions/'+self.channel).json['payments_enabled'])
   self.assertEqual(self.confirm(reference='NEW-RECEIPT-002').status_code,409)
   self.assertIn('badge',self.viewer.get('/api/channel-subscriptions/'+self.channel).json['mine'])
+
+ def test_admin_alone_grants_reviews_approvals_and_revokes_immediately(self):
+  endpoint='/api/admin/moderator-permissions'
+  ident=self.proposal()
+  self.assertEqual(self.post(self.admin,endpoint,{'permissions':[]}).status_code,200)
+  self.assertEqual(self.mod.get('/api/channel-subscriptions/review').status_code,403)
+  self.assertEqual(self.post(self.mod,endpoint,{'permissions':['review_agreements','approve_agreements']}).status_code,403)
+  self.assertEqual(self.post(self.viewer,endpoint,{'permissions':[]}).status_code,403)
+  self.assertEqual(self.post(self.admin,endpoint,{'permissions':['approve_agreements']}).status_code,400)
+  self.assertEqual(self.post(self.admin,endpoint,{'permissions':['admin']}).status_code,400)
+  self.assertEqual(self.post(self.admin,endpoint,{'permissions':['review_agreements']}).status_code,200)
+  self.assertEqual(self.mod.get('/api/channel-subscriptions/review').status_code,200)
+  self.assertEqual(self.post(self.mod,'/api/channel-subscriptions/approve',{'agreement_id':ident,'party':'moderator'}).status_code,403)
+  self.post(self.admin,endpoint,{'permissions':['review_agreements','approve_agreements']})
+  self.approve_all(ident)
+  self.post(self.admin,endpoint,{'permissions':[]})
+  with patch.object(st,'streamer_sales_ready',return_value=True):self.assertIsNone(self.viewer.get('/api/channel-subscriptions/'+self.channel).json['payment_url'])
+  self.post(self.admin,'/api/admin/subscription-moderator',{'username':'Gref'})
+  self.assertEqual(self.mod.get('/api/channel-subscriptions/review').status_code,403)
+
+ def test_designation_alone_never_grants_permissions(self):
+  with app.app.app_context(),m.database() as conn:conn.execute('DELETE FROM moderator_permissions')
+  self.post(self.admin,'/api/admin/subscription-moderator',{'username':'Gref'})
+  self.assertEqual(self.mod.get('/api/channel-subscriptions/reviewer').json['permissions'],[])
+  self.assertEqual(self.mod.get('/api/channel-subscriptions/review').status_code,403)

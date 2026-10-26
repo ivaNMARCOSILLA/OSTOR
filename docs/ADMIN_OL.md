@@ -102,3 +102,7 @@ Cuenta → Seguridad → Verificación de dos factores permite preparar una clav
 Después, iniciar sesión requiere contraseña y un código nuevo de la app o un código de recuperación. No se aceptan códigos TOTP ya utilizados y los intentos están limitados. Desactivar requiere contraseña y un segundo factor válido, e invalida las otras sesiones. No hay SMS ni costes de proveedor de códigos.
 
 El secreto del autenticador se deriva mediante HMAC con separación de dominio, el identificador de cuenta y un nonce aleatorio; la base guarda el nonce y una huella del secreto de servidor, no la clave manual. Los códigos de recuperación se guardan como resúmenes HMAC. Es imprescindible conservar el mismo MAGGY_SESSION_SECRET al migrar: la herramienta rechaza migraciones con 2FA activa si la huella no coincide. No rotar ese secreto sin planificar la migración de credenciales y sesiones. Los códigos y claves no deben copiarse a Git, registros, correos ni al chat.
+
+
+### Permisos de Gref
+Designar la cuenta no concede permisos. Desde «Suscripciones de creadores → Permisos del moderador», solo administración puede permitir ver propuestas y, por separado, aprobar precios y beneficios. Aprobar exige poder ver. «Retirar todos los permisos» bloquea la siguiente petición incluso con sesiones abiertas. Sin permiso de aprobación se pausan nuevas suscripciones; los recibos y beneficios adquiridos se conservan. No concede clientes, pagos, estadísticas, suspensiones ni gestión de permisos. Una nueva designación tras revocación requiere autorizar de nuevo.

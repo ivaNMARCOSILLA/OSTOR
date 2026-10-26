@@ -19,6 +19,23 @@ def run():
   mod=browser.new_context();register(mod,'gref')
   admin=browser.new_context();login_context(admin)
   assert post(admin,'/api/admin/subscription-moderator',{'username':'Gref'}).ok
+  assert mod.request.get(BASE_URL+'/api/channel-subscriptions/review').status==403
+  controls=admin.new_page();controls.goto(BASE_URL+'/account')
+  controls.locator('#subscription-review-panel > summary').click()
+  assert not controls.locator('#moderator-review').is_checked()
+  assert not controls.locator('#moderator-approve').is_checked()
+  controls.locator('#moderator-approve').check()
+  assert controls.locator('#moderator-review').is_checked()
+  controls.locator('#moderator-permissions-form button[type=submit]').click()
+  controls.wait_for_function("document.querySelector('#moderator-permissions-status').textContent.includes('Permisos guardados')")
+  assert mod.request.get(BASE_URL+'/api/channel-subscriptions/review').status==200
+  controls.locator('#moderator-revoke-all').click()
+  controls.wait_for_function("document.querySelector('#moderator-permissions-status').textContent.includes('Todos los permisos retirados')")
+  assert mod.request.get(BASE_URL+'/api/channel-subscriptions/review').status==403
+  controls.locator('#moderator-approve').check()
+  controls.locator('#moderator-permissions-form button[type=submit]').click()
+  controls.wait_for_function("document.querySelector('#moderator-permissions-status').textContent.includes('Permisos guardados')")
+  controls.close()
   creator=owner.new_page();creator.on('pageerror',lambda e:errors.append(str(e)));creator.goto(BASE_URL+'/live')
   creator.locator('#creator-subscriptions').wait_for(state='visible')
   creator.locator('#creator-offer-price').fill('4,50');creator.locator('#creator-offer-form button').click()
@@ -39,7 +56,7 @@ def run():
   creator.locator('#creator-exclusive-form > label').first.locator('input').check()
   creator.locator('#creator-exclusive-form button').click()
   creator.wait_for_function("document.querySelector('#creator-offer-status').textContent.includes('Modos del canal guardados')")
-  creator.evaluate("async id=>{const ui=await import('/assets/subscriptions.js?v=9.5.0');await ui.openSubscription(id)}",channel)
+  creator.evaluate("async id=>{const ui=await import('/assets/subscriptions.js?v=9.5.1');await ui.openSubscription(id)}",channel)
   assert creator.locator('#creator-subscription-dialog').is_visible()
   assert '4,50' in creator.locator('#creator-subscription-details').inner_text()
   assert creator.locator('#creator-subscription-details a').count()==0
