@@ -77,4 +77,4 @@ class LegalStructureStaticTests(unittest.TestCase):
             self.assertIn('/legal/' + filename, (base / 'index.html').read_text('utf-8'))
         js = (base / 'assets' / 'app.js').read_text('utf-8')
         self.assertIn('cookie-settings', js)
-        self.assertIn('window.location.reload()', js)
+        self.assertNotIn('googletagmanager.com/gtag/js', js)

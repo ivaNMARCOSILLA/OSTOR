@@ -1,0 +1,11 @@
+/* Verified ordinal and optional decoration; audio only starts through native controls. */
+export function founderBadge(number,signature={}){
+ const card=document.createElement('details');card.className='founder-signature-card';const heading=document.createElement('summary');const icon=document.createElement('img');icon.src='/assets/founder-badge.svg';icon.alt='Insignia de los 100 primeros';icon.width=26;icon.height=29;heading.append(icon,document.createTextNode('Fundador n.º '+number));card.append(heading);
+ const emblem=document.createElement('div');emblem.className='founder-personal-emblem';emblem.textContent=signature.mode==='letra'?signature.letter:signature.mode==='cancion'||signature.mode==='sonido'?'♪':String(number);const phrase=document.createElement('p');phrase.textContent=signature.caption||'Buen rollo';const official=document.createElement('small');official.textContent='Ol Live · plaza oficial n.º '+number;card.append(emblem,phrase,official);
+ const sound=signature.audio;if(sound){const audio=document.createElement('audio');audio.controls=true;audio.preload='none';audio.className='founder-signature-audio';audio.volume=.4;
+  if(sound.kind==='tone')audio.src='/api/live/founders/'+number+'/sound.wav?voice='+encodeURIComponent(sound.voice);
+  else if(sound.kind==='track'&&sound.track?.id){audio.src='/api/play/'+encodeURIComponent(sound.track.id);const title=document.createElement('p');title.textContent=sound.track.title+' · '+(sound.track.channel||'Artista');card.append(title);for(const [url,label] of [[sound.track.page_url||sound.track.url,'Fuente original ↗'],[sound.track.license_url,'Licencia ↗']]){try{const safe=new URL(url);if(safe.protocol!=='https:')continue;const link=document.createElement('a');link.href=safe.href;link.target='_blank';link.rel='noopener noreferrer';link.textContent=label;card.append(link);}catch{}}if(sound.track.attribution){const credit=document.createElement('small');credit.textContent=sound.track.attribution;card.append(credit);}}
+  if(audio.getAttribute('src')){const label=document.createElement('small');label.textContent='Firma sonora gratuita · pulsa reproducir';card.append(label,audio);}audio.addEventListener('play',()=>{document.querySelectorAll('.founder-signature-audio').forEach(other=>{if(other!==audio)other.pause();});});
+ }
+ return card;
+}

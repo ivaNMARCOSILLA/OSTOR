@@ -8,8 +8,8 @@ def run():
   context=browser.new_context();login_context(context);page=context.new_page();errors=[]
   page.on('pageerror',lambda e:errors.append(str(e)))
   page.goto(BASE_URL+'/account');page.locator('#admin-panel').wait_for(state='visible')
-  page.locator('#sticker-manager summary').click();page.locator('#admin-sticker-list article').first.wait_for()
-  initial=page.locator('#admin-sticker-list article').count();assert initial>=12
+  page.locator('#sticker-manager > summary').click();page.locator('#admin-sticker-list article').first.wait_for()
+  initial=context.request.get(BASE_URL+'/api/admin/stickers').json()['total'];assert page.locator('#admin-sticker-list article').count()<=24
   page.locator('#sticker-design-target').select_option('hello')
   assert page.locator('#sticker-design-points').is_disabled()
   assert page.locator('#sticker-design-points').input_value()=='0'
@@ -20,7 +20,8 @@ def run():
   page.locator('#sticker-design-preview').wait_for(state='visible')
   page.locator('#sticker-design-form button').click()
   page.wait_for_function("document.querySelector('#sticker-design-status').textContent.includes('Diseño guardado')")
-  assert page.locator('#admin-sticker-list article').count()==initial+1
+  assert context.request.get(BASE_URL+'/api/admin/stickers').json()['total']==initial+1
+  assert page.locator('#admin-sticker-list article').count()<=24
   for width in [1440,768,390,320]:
    page.set_viewport_size({'width':width,'height':900});assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+2'),width
   assert not errors,errors;browser.close()

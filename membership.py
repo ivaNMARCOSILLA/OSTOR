@@ -56,6 +56,14 @@ def init_database():
           created_at TEXT NOT NULL, access_until TEXT,
           welcome_used INTEGER NOT NULL DEFAULT 0, session_version INTEGER NOT NULL DEFAULT 0
         );
+        CREATE TABLE IF NOT EXISTS live_founders (
+          member_id TEXT PRIMARY KEY REFERENCES members(id),number INTEGER NOT NULL UNIQUE CHECK(number>=1 AND number<=100),
+          claimed_at TEXT NOT NULL,revoked_at TEXT
+        );
+        CREATE TABLE IF NOT EXISTS founder_signatures (
+          member_id TEXT PRIMARY KEY REFERENCES live_founders(member_id) ON DELETE CASCADE,
+          mode TEXT NOT NULL,letter TEXT NOT NULL DEFAULT '',caption TEXT NOT NULL DEFAULT '',audio_json TEXT,updated_at TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS friend_access (
           member_id TEXT PRIMARY KEY REFERENCES members(id), granted_at TEXT NOT NULL,
           granted_by TEXT REFERENCES members(id), revoked_at TEXT
@@ -135,17 +143,19 @@ def validate_password(value):
 
 def user_public(user):
     complimentary = bool('friend_granted_at' in user.keys() and user['friend_granted_at'] and not user['friend_revoked_at'])
-    active = user['role'] == 'admin' or complimentary or bool(user['access_until'] and datetime.fromisoformat(user['access_until']) > now_utc())
+    founder_number=user['founder_number'] if 'founder_number' in user.keys() else None
+    founder_active=bool(founder_number and not user['founder_revoked_at']) if 'founder_revoked_at' in user.keys() else False
+    active = user['role'] == 'admin' or complimentary or founder_active or bool(user['access_until'] and datetime.fromisoformat(user['access_until']) > now_utc())
     streamer_until=user['streamer_until'] if 'streamer_until' in user.keys() else None
-    streamer_active=active and (user['role']=='admin' or bool(streamer_until and datetime.fromisoformat(streamer_until)>now_utc()))
-    return {key: user[key] for key in ('id', 'username', 'role', 'access_until', 'welcome_used')} | {'active': active, 'complimentary':complimentary, 'streamer_until':streamer_until, 'streamer_active':streamer_active}
+    streamer_active=active and (user['role']=='admin' or founder_active or bool(streamer_until and datetime.fromisoformat(streamer_until)>now_utc()))
+    return {key: user[key] for key in ('id', 'username', 'role', 'access_until', 'welcome_used')} | {'active': active, 'complimentary':complimentary,'founder_number':founder_number,'founder_active':founder_active, 'streamer_until':streamer_until, 'streamer_active':streamer_active}
 
 
 def get_user():
     if hasattr(g, 'member'):
         return g.member
     with database() as conn:
-        row = conn.execute('SELECT m.*,s.until_at AS streamer_until,f.granted_at AS friend_granted_at,f.revoked_at AS friend_revoked_at FROM members m LEFT JOIN streamer_access s ON s.member_id=m.id LEFT JOIN friend_access f ON f.member_id=m.id WHERE m.id=?', (session.get('member_id', ''),)).fetchone()
+        row = conn.execute('SELECT m.*,s.until_at AS streamer_until,f.granted_at AS friend_granted_at,f.revoked_at AS friend_revoked_at,l.number AS founder_number,l.revoked_at AS founder_revoked_at FROM members m LEFT JOIN streamer_access s ON s.member_id=m.id LEFT JOIN friend_access f ON f.member_id=m.id LEFT JOIN live_founders l ON l.member_id=m.id WHERE m.id=?', (session.get('member_id', ''),)).fetchone()
     g.member = row if row and row['session_version'] == session.get('session_version') else None
     return g.member
 
@@ -174,12 +184,17 @@ def verify_csrf():
 
 
 def restrict_music():
-    # Public storefront/catalogue; resolution and playback remain protected.
-    if not request.path.startswith('/api/') or request.path.startswith(('/api/account/', '/api/admin/')) or request.path in {'/api/search', '/api/trending'}:
+    # Music is free. Account collections require login; Ol Live requires premium.
+    path=request.path
+    if not path.startswith('/api/') or path.startswith(('/api/account/','/api/admin/','/api/play/','/api/resolve/')) or path in {'/api/search','/api/trending','/api/proxy','/api/live/catalogue','/api/live/founders','/api/live/founders/claim'}:
         return None
-    user = get_user()
+    if path.endswith('/sound.wav') and path.startswith(('/api/stickers/','/api/live/founders/')):return None
+    user=get_user()
+    if path.startswith(('/api/rewards','/api/stickers/')):
+        if not user:return jsonify(error='Inicia sesión con una cuenta gratuita para guardar tu colección.',code='login_required'),401
+        return None
     if not user or not user_public(user)['active']:
-        return jsonify(error='Desbloquea Ol para escuchar música.', code='membership_required'), 402 if user else 401
+        return jsonify(error='Ver y participar en Ol Live requiere acceso premium. La música sigue siendo gratuita.',code='premium_required'),402 if user else 401
 
 
 def payload():
@@ -213,7 +228,7 @@ def account_me():
     with database() as conn:
         payments = [dict(row) for row in conn.execute('SELECT plan,amount_cents,starts_at,ends_at,verified_at FROM payments WHERE member_id=? ORDER BY ends_at DESC', (user['id'] if user else '',))]
     from streamers import streamer_sales_ready
-    return jsonify(user=user_public(user) if user else None, csrf=csrf_token(), payments=payments, payment_mode='manual_verified', streamer_available=streamer_sales_ready())
+    return jsonify(user=user_public(user) if user else None, csrf=csrf_token(), payments=payments, payment_mode='manual_verified', streamer_available=streamer_sales_ready(),premium_available=streamer_sales_ready(),music_free=True)
 
 
 @bp.post('/api/account/register')
@@ -266,7 +281,7 @@ def logout():
 @require_admin
 def list_members():
     with database() as conn:
-        users = [user_public(row) for row in conn.execute('SELECT m.*,s.until_at AS streamer_until,f.granted_at AS friend_granted_at,f.revoked_at AS friend_revoked_at FROM members m LEFT JOIN streamer_access s ON s.member_id=m.id LEFT JOIN friend_access f ON f.member_id=m.id ORDER BY m.created_at DESC')]
+        users = [user_public(row) for row in conn.execute('SELECT m.*,s.until_at AS streamer_until,f.granted_at AS friend_granted_at,f.revoked_at AS friend_revoked_at,l.number AS founder_number,l.revoked_at AS founder_revoked_at FROM members m LEFT JOIN streamer_access s ON s.member_id=m.id LEFT JOIN friend_access f ON f.member_id=m.id LEFT JOIN live_founders l ON l.member_id=m.id ORDER BY m.created_at DESC')]
         payments = [dict(row) for row in conn.execute('SELECT p.*,m.username FROM payments p JOIN members m ON m.id=p.member_id ORDER BY verified_at DESC LIMIT 300')]
     return jsonify(members=users, payments=payments)
 
@@ -373,9 +388,8 @@ def confirm_payment():
     reference = str(data.get('reference', '')).strip()
     if plan not in PLANS or not 4 <= len(reference) <= 120:
         return jsonify(error='Indica plan y referencia única del pago comprobado en PayPal.'), 400
-    if plan == 'streamer':
-        from streamers import streamer_sales_ready
-        if not streamer_sales_ready(): return jsonify(error='No se puede activar ni cobrar el plan Streamer hasta conectar las emisiones.'),409
+    from streamers import streamer_sales_ready
+    if not streamer_sales_ready():return jsonify(error='Los cobros de Ol Live están bloqueados hasta que la emisión esté disponible. Escuchar música es gratuito.'),409
     try:
         with database() as conn:
             conn.execute('BEGIN IMMEDIATE')
@@ -408,6 +422,7 @@ def revoke():
         conn.execute('BEGIN IMMEDIATE')
         conn.execute('UPDATE members SET access_until=?,session_version=session_version+1 WHERE id=? AND role!=?',
                      (stamp(now_utc()), str(payload().get('member_id', '')), 'admin'))
+        conn.execute('UPDATE live_founders SET revoked_at=? WHERE member_id=?',(stamp(now_utc()),str(payload().get('member_id',''))))
         conn.execute('UPDATE friend_access SET revoked_at=? WHERE member_id=?',(stamp(now_utc()),str(payload().get('member_id',''))))
         conn.execute('DELETE FROM streamer_access WHERE member_id IN (SELECT id FROM members WHERE id=? AND role!=?)',(str(payload().get('member_id','')),'admin'))
     return jsonify(ok=True)

@@ -25,9 +25,10 @@ class PostgresMembershipTests(unittest.TestCase):
             raise RuntimeError('The application is not connected to the selected test database.')
 
     def setUp(self):
+        ready=patch('streamers.streamer_sales_ready',return_value=True);ready.start();self.addCleanup(ready.stop)
         self.app=application.app
         with self.app.app_context(),m.database() as connection:
-            for table in ['sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:
+            for table in ['founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:
                 connection.execute('DELETE FROM '+table)
         with self.app.app_context():
             m.create_admin('pg-admin','postgres-admin-password-123')
@@ -47,6 +48,26 @@ class PostgresMembershipTests(unittest.TestCase):
 
     def grant(self,client,plan,reference):
         return self.post(client,'/api/admin/confirm-payment',{'member_id':self.member['id'],'plan':plan,'reference':reference})
+
+    def test_founder_last_slot_is_serialized_and_signature_persists(self):
+        with self.app.app_context(),m.database() as connection:
+            for number in range(1,100):
+                ident='pg-founder-'+str(number)
+                connection.execute('INSERT INTO members(id,username,created_at) VALUES(?,?,?)',(ident,ident,m.stamp(m.now_utc())))
+                connection.execute('INSERT INTO live_founders(member_id,number,claimed_at) VALUES(?,?,?)',(ident,number,m.stamp(m.now_utc())))
+        other=self.app.test_client()
+        self.assertEqual(self.post(other,'/api/account/register',{'username':'pg-other-founder','password':'postgres-other-password-123'}).status_code,201)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures=[pool.submit(self.post,client,'/api/live/founders/claim',{}) for client in [self.client,other]]
+            results=[future.result() for future in futures]
+        self.assertEqual(sorted(result.status_code for result in results),[200,409])
+        winner=self.client if results[0].status_code==200 else other
+        self.assertEqual(self.post(winner,'/api/live/founders/signature',{'mode':'letra','letter':'O','caption':'Buenas vibras'}).status_code,200)
+        mine=winner.get('/api/live/founders').json['mine']
+        self.assertEqual(mine['number'],100)
+        self.assertEqual(mine['signature']['letter'],'O')
+        self.assertTrue(winner.get('/api/account/me').json['user']['streamer_active'])
+        self.assertEqual(winner.get('/api/account/me').json['payments'],[])
 
     def test_streamer_eight_euro_upgrade_and_revocation(self):
         with patch.dict(os.environ,{'LIVEKIT_URL':'wss://test.example.org','LIVEKIT_API_KEY':'test-key','LIVEKIT_API_SECRET':'x'*40,'MAGGY_STREAMERS_ENABLED':'1','MAGGY_STREAMER_SALES_ENABLED':'1'}):
@@ -69,7 +90,7 @@ class PostgresMembershipTests(unittest.TestCase):
             self.assertTrue(self.client.get('/api/account/me').json['user']['active'])
         with patch.object(m,'now_utc',return_value=datetime(2027,3,28,12,tzinfo=timezone.utc)):
             self.assertFalse(self.client.get('/api/account/me').json['user']['active'])
-            self.assertEqual(self.client.get('/api/resolve/archive_test').status_code,402)
+            self.assertEqual(self.client.get('/api/streamers').status_code,402)
 
     def test_concurrent_welcome_cannot_grant_twice(self):
         devices=[self.admin_client(),self.admin_client()]
@@ -109,7 +130,7 @@ class PostgresMembershipTests(unittest.TestCase):
                 self.post(admin,'/api/admin/confirm-payment',{'member_id':ident,'plan':'welcome','reference':'SQLITE-MIGRATE-001'})
                 expected=client.get('/api/account/me').json['user']['access_until']
             with self.app.app_context(),m.database() as connection:
-                for table in ['sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:connection.execute('DELETE FROM '+table)
+                for table in ['founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:connection.execute('DELETE FROM '+table)
             counts=migrate(Path(folder)/'members.sqlite3',self.app)
             self.assertEqual(counts['members'],2);self.assertEqual(counts['payments'],1)
             migrated=self.app.test_client()
@@ -136,7 +157,7 @@ class PostgresMembershipTests(unittest.TestCase):
         self.assertTrue(self.client.get('/api/account/me').json['user']['active'])
         self.post(self.admin,'/api/admin/revoke',{'member_id':self.member['id']})
         self.assertIsNone(self.client.get('/api/account/me').json['user'])
-        self.assertEqual(self.client.get('/api/resolve/archive_test').status_code,401)
+        self.assertEqual(self.client.get('/api/streamers').status_code,401)
 
 
     def test_friend_access_is_free_persistent_and_independently_revocable(self):

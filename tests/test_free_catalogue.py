@@ -17,7 +17,8 @@ class FreeCatalogueTests(unittest.TestCase):
         with patch.object(app,'_safe_upstream',return_value=upstream):
             response=self.client.get('/api/play/commons_123',headers={'Range':'bytes=0-3'})
             self.assertEqual(response.status_code,206);self.assertEqual(response.data,b'OggS')
-        self.assertEqual(app.app.test_client().get('/api/play/commons_123').status_code,401)
+        upstream.iter_content.return_value=iter([b'OggS'])
+        with patch.object(app,'_safe_upstream',return_value=upstream):self.assertEqual(app.app.test_client().get('/api/play/commons_123').status_code,206)
         page['imageinfo'][0]['mime']='video/webm';self.assertIsNone(app.commons_track(page))
         page['imageinfo'][0]['mime']='audio/ogg';page['imageinfo'][0]['extmetadata']['LicenseShortName']['value']='All rights reserved'
         self.assertIsNone(app.commons_track(page))
@@ -31,8 +32,8 @@ class FreeCatalogueTests(unittest.TestCase):
 
     @patch.object(app,'search_radio',return_value=[{'id':'radio_test','title':'Piano','source':'RADIO','stream_url':'secret'}])
     @patch.object(app,'search_commons',return_value=[{'id':'commons_1','title':'Piano','source':'COMMONS','license':'CC0','attribution':'Composer','stream_url':'secret'}])
-    def test_mix_uses_other_sources_and_preview_preserves_credits_without_audio(self,commons,radio):
+    def test_free_mix_preserves_audio_and_credits_for_everyone(self,commons,radio):
         response=app.app.test_client().get('/api/search?q=piano&source=MIX')
         self.assertEqual({x['source'] for x in response.json},{'COMMONS','RADIO'})
-        self.assertTrue(all('stream_url' not in x for x in response.json))
+        self.assertTrue(all('stream_url' in x and not x['locked'] for x in response.json))
         self.assertEqual(next(x for x in response.json if x['source']=='COMMONS')['attribution'],'Composer')

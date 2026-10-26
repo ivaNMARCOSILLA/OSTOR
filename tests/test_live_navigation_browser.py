@@ -9,10 +9,10 @@ def run():
   visitor.locator('.hero-actions a[href="#live-catalogue"]').click()
   assert visitor.locator('#live-catalogue').is_visible()
   assert visitor.evaluate('document.activeElement.id')=='catalogue-title'
-  assert 'Inicia sesión' in visitor.locator('#catalogue-status').inner_text()
+  assert 'Ol Live' in visitor.locator('#catalogue-status').inner_text() or 'emisiones' in visitor.locator('#catalogue-status').inner_text()
   visitor.locator('.header-live').click()
   assert visitor.locator('#stream-access').is_visible()
-  assert 'next=%2Fstreamers%23stream-studio' in visitor.locator('#stream-access a').get_attribute('href')
+  assert 'next=%2Flive%23stream-studio' in visitor.locator('#stream-access a').get_attribute('href')
   context=browser.new_context(viewport={'width':1440,'height':960});login_context(context)
   page=context.new_page();token_calls=[];errors=[]
   page.on('pageerror',lambda e:errors.append(str(e)))

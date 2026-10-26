@@ -11,12 +11,15 @@ class PlaybackTests(unittest.TestCase):
         app._archive_cache.clear()
         app._search_cache.clear()
 
-    def test_media_redirect_requires_paid_access(self):
-        guest = app.app.test_client()
-        self.assertEqual(guest.get('/api/play/audius_test').status_code, 401)
-        csrf = guest.get('/api/account/me').json['csrf']
-        guest.post('/api/account/register', json={'username':'no-audio-plan','password':'password-test-123'}, headers={'X-CSRF-Token':csrf})
-        self.assertEqual(guest.get('/api/play/archive_test').status_code, 402)
+    @patch.object(app,'relay_audio')
+    def test_media_playback_is_free_without_a_subscription(self,relay):
+        relay.return_value=app.Response(b'free-audio',mimetype='audio/mpeg')
+        guest=app.app.test_client()
+        self.assertEqual(guest.get('/api/play/audius_test').status_code,200)
+        csrf=guest.get('/api/account/me').json['csrf']
+        guest.post('/api/account/register',json={'username':'audio-free','password':'password-test-123'},headers={'X-CSRF-Token':csrf})
+        self.assertEqual(guest.get('/api/play/audius_test').status_code,200)
+        self.assertEqual(guest.get('/api/streamers').status_code,402)
 
     @patch.object(app, '_safe_upstream')
     def test_audius_relay_preserves_range_and_checks_fixed_origins(self, fetch):

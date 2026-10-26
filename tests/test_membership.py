@@ -10,6 +10,7 @@ import membership as m
 
 class MembershipTests(unittest.TestCase):
     def setUp(self):
+        ready=patch('streamers.streamer_sales_ready',return_value=True);ready.start();self.addCleanup(ready.stop)
         self.app = application.app
         self.temp = tempfile.TemporaryDirectory()
         self.original = self.app.config['MEMBERSHIP_DATABASE']
@@ -33,13 +34,11 @@ class MembershipTests(unittest.TestCase):
     def grant(self, plan, reference='PAYPAL-TEST-001'):
         return self.post(self.admin, '/api/admin/confirm-payment', {'member_id':self.member['id'], 'plan':plan, 'reference':reference})
 
-    def test_no_free_access_and_no_self_grant(self):
-        self.assertEqual(self.member['role'], 'member')
-        self.assertFalse(self.member['active'])
-        with self.client.get('/') as response: self.assertEqual(response.status_code, 200)
-        for path in ['/api/resolve/archive_test','/api/resolve/audius_test','/api/proxy?url=https://archive.org/test']:
-            self.assertEqual(self.client.get(path).status_code, 402)
-        self.assertEqual(self.post(self.client, '/api/admin/confirm-payment', {}).status_code, 403)
+    def test_music_is_free_but_ol_live_cannot_be_self_granted(self):
+        self.assertEqual(self.member['role'],'member');self.assertFalse(self.member['active'])
+        self.assertEqual(self.client.get('/api/resolve/audius_test').status_code,200)
+        self.assertEqual(self.client.get('/api/streamers').status_code,402)
+        self.assertEqual(self.post(self.client,'/api/admin/confirm-payment',{}).status_code,403)
 
     def test_welcome_is_fourteen_days_and_single_use(self):
         instant = datetime(2026, 10, 25, 12, tzinfo=timezone.utc)
@@ -66,7 +65,7 @@ class MembershipTests(unittest.TestCase):
         with patch.object(m,'now_utc',return_value=instant): self.grant('welcome')
         with patch.object(m,'now_utc',return_value=instant+timedelta(days=14)):
             self.assertFalse(self.client.get('/api/account/me').json['user']['active'])
-            self.assertEqual(self.client.get('/api/resolve/archive_test').status_code,402)
+            self.assertEqual(self.client.get('/api/streamers').status_code,402)
 
     def test_revoke_invalidates_another_device_session(self):
         self.grant('monthly')
@@ -76,7 +75,7 @@ class MembershipTests(unittest.TestCase):
         self.post(self.admin,'/api/admin/revoke',{'member_id':self.member['id']})
         self.assertIsNone(device.get('/api/account/me').json['user'])
         self.assertIsNone(self.client.get('/api/account/me').json['user'])
-        self.assertEqual(device.get('/api/resolve/archive_test').status_code,401)
+        self.assertEqual(device.get('/api/streamers').status_code,401)
 
     def test_admin_multi_device_login(self):
         device=self.app.test_client()

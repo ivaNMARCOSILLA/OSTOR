@@ -55,6 +55,8 @@ class StreamerTests(unittest.TestCase):
         client,ident=self.member('viewer')
         self.assertFalse(client.get('/api/account/me').json['streamer_available'])
         self.assertEqual(self.pay(ident,'streamer','STREAMER-NOT-ACTIVE').status_code,409)
+        self.assertEqual(self.pay(ident,'monthly','VIEWER-NOT-READY').status_code,409)
+        self.enable()
         self.assertEqual(self.pay(ident,'monthly','VIEWER-OK-001').status_code,200)
         self.assertFalse(client.get('/api/account/me').json['user']['streamer_active'])
         self.assertEqual(self.post(client,'/api/streamers/me',{'title':'No rights'}).status_code,403)
@@ -81,7 +83,7 @@ class StreamerTests(unittest.TestCase):
 
     @patch.object(st.requests,'post')
     def test_service_probe_requires_admin(self,post):
-        client,ident=self.member('probe-viewer');self.pay(ident,'monthly','PROBE-VIEWER-001')
+        self.enable();client,ident=self.member('probe-viewer');self.pay(ident,'monthly','PROBE-VIEWER-001')
         self.assertEqual(self.post(client,'/api/streamers/admin/check-video',{}).status_code,403)
         post.assert_not_called()
 

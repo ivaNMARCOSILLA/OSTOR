@@ -18,6 +18,7 @@ from membership import database, get_user, now_utc, stamp, user_public
 bp=Blueprint('streamers',__name__)
 STREAMER_MONTHLY_CENTS=800
 GIFT_COMMISSION_BPS=0
+LIVE_CATEGORIES={'videojuegos':'Videojuegos','musica':'Música','entretenimiento':'Entretenimiento','actualidad':'Actualidad'}
 
 
 def video_configuration_checks():
@@ -48,6 +49,9 @@ def init_database():
             id TEXT PRIMARY KEY, member_id TEXT NOT NULL UNIQUE REFERENCES members(id),
             title TEXT NOT NULL, bio TEXT NOT NULL DEFAULT '', paypal_url TEXT NOT NULL DEFAULT '',
             room_name TEXT NOT NULL UNIQUE, live_until TEXT, updated_at TEXT NOT NULL
+        ); CREATE TABLE IF NOT EXISTS live_channel_settings (
+            channel_id TEXT PRIMARY KEY REFERENCES streamer_channels(id) ON DELETE CASCADE,
+            category TEXT NOT NULL DEFAULT 'entretenimiento',featured INTEGER NOT NULL DEFAULT 0
         )''')
     from community import init_database as init_community_database
     init_community_database()
@@ -65,12 +69,13 @@ def paypal_link(value):
 
 
 def channel_public(row):
-    return {key:row[key] for key in ['id','title','bio','username','paypal_url']} | {'live':bool(row['live_until'] and row['live_until']>stamp(now_utc()))}
+    from founders import signature_from_row
+    return {key:row[key] for key in ['id','title','bio','username','paypal_url']} | {'live':bool(row['live_until'] and row['live_until']>stamp(now_utc())),'category':row['category'] if 'category' in row.keys() and row['category'] else 'entretenimiento','featured':bool(row['featured']) if 'featured' in row.keys() else False,'founder_number':row['founder_number'] if 'founder_number' in row.keys() else None,'founder_signature':signature_from_row(row) if 'founder_number' in row.keys() and row['founder_number'] else None}
 
 
 def own_channel():
     with database() as conn:
-        row=conn.execute('SELECT c.*,m.username FROM streamer_channels c JOIN members m ON m.id=c.member_id WHERE c.member_id=?',(get_user()['id'],)).fetchone()
+        row=conn.execute('SELECT c.*,m.username,o.category,o.featured,f.number AS founder_number,sg.mode AS badge_mode,sg.letter AS badge_letter,sg.caption AS badge_caption,sg.audio_json AS badge_audio FROM streamer_channels c JOIN members m ON m.id=c.member_id LEFT JOIN live_channel_settings o ON o.channel_id=c.id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN founder_signatures sg ON sg.member_id=m.id WHERE c.member_id=?',(get_user()['id'],)).fetchone()
     return row
 
 
@@ -129,16 +134,55 @@ def rate_limit():
         return jsonify(error='Espera un momento antes de volver a intentarlo.'),429
 
 
+@bp.get('/live')
 @bp.get('/streamers')
 def page():
     return current_app.send_static_file('streamers.html')
+
+
+@bp.get('/api/live/catalogue')
+def public_directory():
+    with database() as conn:
+        rows=conn.execute('SELECT c.*,m.username,o.category,o.featured,f.number AS founder_number,sg.mode AS badge_mode,sg.letter AS badge_letter,sg.caption AS badge_caption,sg.audio_json AS badge_audio FROM streamer_channels c JOIN members m ON m.id=c.member_id LEFT JOIN live_channel_settings o ON o.channel_id=c.id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN founder_signatures sg ON sg.member_id=m.id WHERE c.live_until>? ORDER BY COALESCE(o.featured,0) DESC,c.updated_at DESC LIMIT 100',(stamp(now_utc()),)).fetchall()
+    return jsonify(video_ready=live_ready(),channels=[channel_public(row) for row in rows if not is_abusive(row['title']+' '+row['bio']+' '+row['username'])],categories=LIVE_CATEGORIES)
+
+
+@bp.get('/api/admin/live-channels')
+def admin_live_channels():
+    from membership import require_admin
+    return require_admin(_admin_live_channels)()
+
+
+def _admin_live_channels():
+    try:page=max(1,int(request.args.get('page','1')))
+    except ValueError:page=1
+    with database() as conn:
+        total=conn.execute('SELECT COUNT(*) AS n FROM streamer_channels').fetchone()['n'];pages=max(1,(total+24)//25);page=min(page,pages)
+        rows=conn.execute('SELECT c.*,m.username,o.category,o.featured,f.number AS founder_number,sg.mode AS badge_mode,sg.letter AS badge_letter,sg.caption AS badge_caption,sg.audio_json AS badge_audio FROM streamer_channels c JOIN members m ON m.id=c.member_id LEFT JOIN live_channel_settings o ON o.channel_id=c.id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN founder_signatures sg ON sg.member_id=m.id ORDER BY c.updated_at DESC LIMIT 25 OFFSET ?',((page-1)*25,)).fetchall()
+    return jsonify(channels=[channel_public(row) for row in rows],page=page,pages=pages,total=total,categories=LIVE_CATEGORIES)
+
+
+@bp.post('/api/admin/live-channels/feature')
+def feature_channel():
+    from membership import require_admin
+    return require_admin(_feature_channel)()
+
+
+def _feature_channel():
+    data=request.get_json(silent=True) or {}
+    if not isinstance(data.get('featured'),bool):return jsonify(error='Indica si deseas destacar el canal.'),400
+    with database() as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        if not conn.execute('SELECT id FROM streamer_channels WHERE id=?',(str(data.get('channel_id','')),)).fetchone():return jsonify(error='El canal no existe.'),404
+        conn.execute("INSERT INTO live_channel_settings(channel_id,category,featured) VALUES(?,'entretenimiento',?) ON CONFLICT(channel_id) DO UPDATE SET featured=excluded.featured",(data['channel_id'],int(data['featured'])))
+    return jsonify(ok=True)
 
 
 @bp.get('/api/streamers')
 def channels():
     user=get_user()
     with database() as conn:
-        rows=conn.execute('SELECT c.*,m.username FROM streamer_channels c JOIN members m ON m.id=c.member_id WHERE c.live_until>? ORDER BY c.updated_at DESC LIMIT 60',(stamp(now_utc()),)).fetchall()
+        rows=conn.execute('SELECT c.*,m.username,o.category,o.featured,f.number AS founder_number,sg.mode AS badge_mode,sg.letter AS badge_letter,sg.caption AS badge_caption,sg.audio_json AS badge_audio FROM streamer_channels c JOIN members m ON m.id=c.member_id LEFT JOIN live_channel_settings o ON o.channel_id=c.id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN founder_signatures sg ON sg.member_id=m.id WHERE c.live_until>? ORDER BY COALESCE(o.featured,0) DESC,c.updated_at DESC LIMIT 60',(stamp(now_utc()),)).fetchall()
     own=own_channel()
     return jsonify(video_ready=live_ready(),streamer_active=publisher_allowed(),streamer_monthly_cents=800,gift_commission_bps=0,
                    channels=[channel_public(row) for row in rows if not is_abusive(row['title']+' '+row['bio']+' '+row['username'])],mine=channel_public(own) if own else None,
@@ -150,9 +194,10 @@ def channels():
 
 @bp.post('/api/streamers/me')
 def save_channel():
-    if not publisher_allowed(): return jsonify(error='Emitir requiere el plan Streamer de 8 € por un mes.'),403
+    if not publisher_allowed(): return jsonify(error='Emitir requiere el plan Ol Live Creador de 8 € por un mes.'),403
     data=request.get_json(silent=True) or {}
-    title=str(data.get('title','')).strip();bio=str(data.get('bio','')).strip()
+    title=str(data.get('title','')).strip();bio=str(data.get('bio','')).strip();category=data.get('category','entretenimiento')
+    if category not in LIVE_CATEGORIES:return jsonify(error='Elige una categoría válida para Ol Live.'),400
     if not 3<=len(title)<=80 or len(bio)>400: return jsonify(error='Indica un título de 3 a 80 caracteres y una presentación de hasta 400.'),400
     try: validate_public_text(title+' '+bio)
     except ValueError as exc: return jsonify(error=str(exc)),400
@@ -169,26 +214,28 @@ def save_channel():
             ident=secrets.token_hex(16)
             conn.execute('INSERT INTO streamer_channels(id,member_id,title,bio,paypal_url,room_name,updated_at) VALUES(?,?,?,?,?,?,?)',
                          (ident,user['id'],title,bio,paypal,'maggy-'+ident,stamp(now_utc())))
+        own=conn.execute('SELECT id FROM streamer_channels WHERE member_id=?',(user['id'],)).fetchone()
+        conn.execute('INSERT INTO live_channel_settings(channel_id,category) VALUES(?,?) ON CONFLICT(channel_id) DO UPDATE SET category=excluded.category',(own['id'],category))
     return jsonify(ok=True,channel=channel_public(own_channel()))
 
 
 @bp.post('/api/streamers/<channel_id>/token')
 def token(channel_id):
-    if not live_ready(): return jsonify(error='Las emisiones todavía no están activadas. No se ha cobrado ningún alta de streamer.',code='live_not_configured'),503
+    if not live_ready(): return jsonify(error='Las emisiones todavía no están activadas. No se ha cobrado ningún alta de Ol Live Creador.',code='live_not_configured'),503
     with database() as conn:
         channel=conn.execute('SELECT * FROM streamer_channels WHERE id=?',(channel_id,)).fetchone()
     if channel and is_abusive(channel['title']+' '+channel['bio']): return jsonify(error='El canal debe corregir su título o presentación antes de emitir.'),409
     if not channel: return jsonify(error='Este canal no existe.'),404
     publish=(request.get_json(silent=True) or {}).get('publish') is True
     user=get_user()
-    if publish and (channel['member_id']!=user['id'] or not publisher_allowed()): return jsonify(error='Solo el creador con plan Streamer activo puede emitir en este canal.'),403
+    if publish and (channel['member_id']!=user['id'] or not publisher_allowed()): return jsonify(error='Solo el creador con plan Ol Live Creador activo puede emitir en este canal.'),403
     if not publish and not (channel['live_until'] and channel['live_until']>stamp(now_utc())): return jsonify(error='Este canal no está en directo.'),404
     return jsonify(url=os.environ['LIVEKIT_URL'].strip(),token=mint_token(user,channel,publish))
 
 
 @bp.post('/api/streamers/me/live')
 def presence():
-    if not publisher_allowed(): return jsonify(error='Tu plan Streamer no está activo.'),403
+    if not publisher_allowed(): return jsonify(error='Tu plan Ol Live Creador no está activo.'),403
     live=(request.get_json(silent=True) or {}).get('live') is True
     if live and not live_ready(): return jsonify(error='Las emisiones no están activadas.'),503
     with database() as conn:
@@ -202,10 +249,10 @@ def gift_link(channel_id):
     amount=(request.get_json(silent=True) or {}).get('amount_cents')
     if isinstance(amount,bool) or not isinstance(amount,int) or not 100<=amount<=100000: return jsonify(error='Introduce entre 1 y 1.000 €, con un máximo de dos decimales.'),400
     with database() as conn:
-        row=conn.execute('SELECT c.*,m.username,m.role,m.access_until,s.until_at AS streamer_until FROM streamer_channels c JOIN members m ON m.id=c.member_id LEFT JOIN streamer_access s ON s.member_id=m.id WHERE c.id=?',(channel_id,)).fetchone()
+        row=conn.execute('SELECT c.*,m.username,m.role,m.access_until,s.until_at AS streamer_until,f.number AS founder_number,f.revoked_at AS founder_revoked_at FROM streamer_channels c JOIN members m ON m.id=c.member_id LEFT JOIN streamer_access s ON s.member_id=m.id LEFT JOIN live_founders f ON f.member_id=m.id WHERE c.id=?',(channel_id,)).fetchone()
     if not row or not row['paypal_url']: return jsonify(error='Este creador no tiene enlace para recibir regalos.'),404
-    active_creator=row['role']=='admin' or bool(row['access_until'] and row['access_until']>stamp(now_utc()) and row['streamer_until'] and row['streamer_until']>stamp(now_utc()))
-    if not active_creator: return jsonify(error='Este canal no tiene plan Streamer activo.'),409
+    active_creator=row['role']=='admin' or bool(row['founder_number'] and not row['founder_revoked_at']) or bool(row['access_until'] and row['access_until']>stamp(now_utc()) and row['streamer_until'] and row['streamer_until']>stamp(now_utc()))
+    if not active_creator: return jsonify(error='Este canal no tiene plan Ol Live Creador activo.'),409
     return jsonify(url=paypal_link(row['paypal_url'])+f'/{amount//100}.{amount%100:02d}EUR',creator=row['username'],amount_cents=amount,
                    maggy_commission_cents=0,mode='external_paypal_link',payment_confirmed=False)
 

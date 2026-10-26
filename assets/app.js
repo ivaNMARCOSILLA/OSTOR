@@ -8,7 +8,7 @@
 await window.MaggySession.ready;
 const storageKey = name => window.MaggySession ? window.MaggySession.key(name) : name;
 
-const VERSION = '9.2.0';
+const VERSION = '9.3.0';
 const KEY = Object.freeze({ favorites: storageKey('electronicama_v7_favorites'), history: storageKey('electronicama_v7_history'), ads: storageKey('electronicama_ads_consent_v1') });
 const MAX_FAVORITES = 160;
 const MAX_HISTORY = 75;
@@ -73,7 +73,7 @@ function toggleFavorite(track) {
   render();
 }
 function maggyCover() {
-  const img = document.createElement('img'); img.src = '/assets/app-icon-192.png?v=9.2.0'; img.alt = 'Logo de Ol'; img.loading = 'lazy';
+  const img = document.createElement('img'); img.src = '/assets/app-icon-192.png?v=9.3.0'; img.alt = 'Logo de Ol'; img.loading = 'lazy';
   img.addEventListener('error', () => img.replaceWith(emptyNode('span', 'cover-fallback', 'Ol')), {once:true});
   return img;
 }
@@ -410,48 +410,9 @@ function closePlayer() {
   sleepDeadline = 0; byId('sleep-timer').value = '0'; byId('sleep-status').textContent = '';
 }
 
-function advertisingConsent(value) {
-  let previous = null;
-  try {
-    previous = localStorage.getItem(KEY.ads);
-    localStorage.setItem(KEY.ads, value ? 'accepted' : 'rejected');
-  } catch { /* Si el navegador bloquea storage, prevalece denegación */ }
+function advertisingConsent(){try{localStorage.setItem(KEY.ads,'rejected');}catch{}byId('consent-dialog').classList.add('hidden');}
+function consentInit(){let stored=null;try{stored=localStorage.getItem(KEY.ads);if(stored==='accepted')localStorage.setItem(KEY.ads,'rejected');}catch{}if(!stored)byId('consent-dialog').classList.remove('hidden');}
 
-  window.dataLayer = window.dataLayer || [];
-  window.gtag = window.gtag || function () { window.dataLayer.push(arguments); };
-  window.gtag('consent', 'update', {
-    ad_storage: value ? 'granted' : 'denied',
-    ad_user_data: value ? 'granted' : 'denied',
-    ad_personalization: value ? 'granted' : 'denied',
-    analytics_storage: 'denied'
-  });
-
-  if (value && !document.getElementById('electronicama-ads-script')) {
-    const script = document.createElement('script');
-    script.id = 'electronicama-ads-script';
-    script.async = true;
-    script.src = 'https://www.googletagmanager.com/gtag/js?id=AW-18507562663';
-    document.head.append(script);
-    window.gtag('js', new Date());
-    window.gtag('config', 'AW-18507562663');
-  }
-  byId('consent-dialog').classList.add('hidden');
-  // Un script de terceros ya cargado no puede desinstalarse limpiamente:
-  // al revocar consentimiento recargamos con el estado denegado almacenado.
-  if (!value && previous === 'accepted') window.location.reload();
-}
-function consentInit() {
-  window.dataLayer = window.dataLayer || [];
-  window.gtag = window.gtag || function () { window.dataLayer.push(arguments); };
-  window.gtag('consent', 'default', {
-    ad_storage: 'denied', ad_user_data: 'denied',
-    ad_personalization: 'denied', analytics_storage: 'denied', wait_for_update: 500
-  });
-  let stored = null;
-  try { stored = localStorage.getItem(KEY.ads); } catch { /* Denegado por defecto */ }
-  if (stored === 'accepted') advertisingConsent(true);
-  else if (stored !== 'rejected') byId('consent-dialog').classList.remove('hidden');
-}
 function init() {
   byId('favorites-count').textContent = String(state.favorites.filter(supportedTrack).length);
   document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => goView(button.dataset.view)));

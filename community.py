@@ -33,12 +33,16 @@ def comments(channel_id):
     with database() as conn:
         if not live_channel(conn,channel_id):return jsonify(error='Este canal no está en directo.'),404
         purge(conn)
-        rows=conn.execute("SELECT c.id,c.body,c.kind,c.created_at,m.username FROM community_messages c JOIN members m ON m.id=c.member_id WHERE c.channel_id=? AND c.kind IN ('comment','sticker') AND c.blocked=0 ORDER BY c.created_at DESC,c.id DESC LIMIT 50",(channel_id,)).fetchall()
+        rows=conn.execute("SELECT c.id,c.body,c.kind,c.created_at,m.username,f.number AS founder_number,sg.mode AS badge_mode,sg.letter AS badge_letter,sg.caption AS badge_caption FROM community_messages c JOIN members m ON m.id=c.member_id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN founder_signatures sg ON sg.member_id=m.id WHERE c.channel_id=? AND c.kind IN ('comment','sticker') AND c.blocked=0 ORDER BY c.created_at DESC,c.id DESC LIMIT 50",(channel_id,)).fetchall()
     from rewards import catalog
     designs={item['id']:item for item in catalog(0)}
     comments=[dict(row) for row in reversed(rows)]
     for comment in comments:
-        if comment['kind']=='sticker':comment['sticker']=designs.get(comment['body'])
+        if comment.get('founder_number'):
+            from founders import signature_from_row
+            comment['founder_signature']=signature_from_row(comment)
+        for key in ['badge_mode','badge_letter','badge_caption']:comment.pop(key,None)
+        if comment['kind']=='sticker':comment['sticker']={key:designs[comment['body']][key] for key in ['id','name','image']} if comment['body'] in designs else None
     return jsonify(comments=comments)
 
 

@@ -2,13 +2,16 @@
 import base64
 import binascii
 import io
+import json
+from pathlib import Path
+from functools import lru_cache
 import re
 import secrets
 from PIL import Image, UnidentifiedImageError
 from datetime import datetime
 from flask import Blueprint,jsonify,request,Response
 from membership import database,get_user,now_utc,stamp,require_admin
-from moderation import validate_public_text
+from moderation import validate_public_text,normalized
 
 bp=Blueprint('rewards',__name__)
 STICKERS=[
@@ -27,21 +30,45 @@ def init_database():
   )''')
 
 
+@lru_cache(maxsize=1)
+def illustrated_catalogue():
+ path=Path(__file__).parent/'assets'/'stickers'/'catalogue.json'
+ return json.loads(path.read_text()) if path.exists() else []
+
+
+def page_options():
+ try:page=max(1,int(request.args.get('page','1')))
+ except ValueError:page=1
+ return page,request.args.get('q','')[:80],request.args.get('series','')[:60],request.args.get('owned')=='1'
+
+
+def paged(items,page=1,query='',series='',owned=False):
+ query=normalized(query)
+ matches=[item for item in items if (not owned or item['unlocked']) and (not series or item.get('series')==series) and (not query or (item['number']==int(query) if query.isdecimal() else query in normalized(item['name']+' '+item.get('series',''))))]
+ pages=max(1,(len(matches)+23)//24);page=min(max(1,page),pages)
+ return dict(stickers=matches[(page-1)*24:page*24],page=page,pages=pages,filtered_total=len(matches),total=len(items),series=sorted({item.get('series','Ol') for item in items}))
+
+
 def catalog(seconds,conn=None):
  if conn is None:
   with database() as connection:return catalog(seconds,connection)
  items={ident:{'id':ident,'name':name,'minutes':minutes,'points':minutes*10,'image':'/assets/stickers/'+ident+'.svg'} for ident,name,minutes in STICKERS}
- items['hello']['image']='/assets/stickers/creator.webp'
+ items['hello']['image']='/assets/stickers/creator.webp';items['hello']['series']='Ol'
+ illustrated=illustrated_catalogue()
+ if illustrated:
+  items={'hello':items['hello']}
+  items.update({item['id']:dict(item) for item in illustrated})
  for row in conn.execute('SELECT id,name,points,updated_at FROM sticker_designs ORDER BY updated_at,id'):
-  items[row['id']]={'id':row['id'],'name':row['name'],'minutes':row['points']//10,'points':row['points'],'image':'/api/stickers/'+row['id']+'/image?v='+row['updated_at']}
+  items[row['id']]={'id':row['id'],'name':row['name'],'minutes':row['points']//10,'points':row['points'],'image':'/api/stickers/'+row['id']+'/image?v='+row['updated_at'],'series':items.get(row['id'],{}).get('series','Personalizados')}
  ordered=sorted(items.values(),key=lambda item:(item['id']!='hello',item['points'],item['name']))
+ for item in ordered:item.setdefault('series','Ol')
  for number,item in enumerate(ordered,1):item.update(number=number,unlocked=(seconds//60)*10>=item['points'])
  return ordered
 
 
-def state(seconds):
- minutes=seconds//60;stickers=catalog(seconds);unlocked=sum(s['unlocked'] for s in stickers)
- return dict(active_seconds=seconds,minutes=minutes,points=minutes*10,level=1+minutes//60,stickers=stickers,unlocked=unlocked,total=len(stickers),next_sticker=next((s for s in stickers if not s['unlocked']),None))
+def state(seconds,page=1,query='',series='',owned=False):
+ minutes=seconds//60;stickers=catalog(seconds);unlocked=[s for s in stickers if s['unlocked']]
+ return dict(active_seconds=seconds,minutes=minutes,points=minutes*10,level=1+minutes//60,unlocked=len(unlocked),owned_preview=unlocked[:24],last_milestone_minutes=max((s['minutes'] for s in unlocked),default=0),next_sticker=next((s for s in stickers if not s['unlocked']),None),**paged(stickers,page,query,series,owned))
 
 
 def owns_sticker(conn,member_id,ident):
@@ -53,7 +80,7 @@ def owns_sticker(conn,member_id,ident):
 @bp.get('/api/rewards')
 def rewards():
  with database() as conn:row=conn.execute('SELECT active_seconds FROM member_rewards WHERE member_id=?',(get_user()['id'],)).fetchone()
- return jsonify(state(row['active_seconds'] if row else 0))
+ return jsonify(state(row['active_seconds'] if row else 0,*page_options()))
 
 
 @bp.post('/api/rewards/heartbeat')
@@ -69,7 +96,13 @@ def heartbeat():
    if 0<elapsed<=90:seconds+=elapsed
    if elapsed>0:conn.execute('UPDATE member_rewards SET active_seconds=?,last_seen=? WHERE member_id=?',(seconds,stamp(instant),user['id']))
   else:conn.execute('INSERT INTO member_rewards(member_id,active_seconds,last_seen) VALUES(?,?,?)',(user['id'],0,stamp(instant)))
- return jsonify(state(seconds))
+ return jsonify(state(seconds,*page_options()))
+
+
+@bp.get('/api/rewards/collections')
+def collection_sheets():
+ path=Path(__file__).parent/'assets'/'stickers'/'sheets'/'index.json'
+ return jsonify(collections=json.loads(path.read_text()) if path.exists() else [])
 
 
 @bp.get('/api/stickers/<ident>/image')
@@ -82,7 +115,7 @@ def sticker_image(ident):
 @bp.get('/api/admin/stickers')
 @require_admin
 def admin_stickers():
- return jsonify(stickers=catalog(0))
+ return jsonify(paged(catalog(0),*page_options()))
 
 
 @bp.post('/api/admin/stickers')
@@ -106,7 +139,7 @@ def save_design():
   conn.execute('BEGIN IMMEDIATE');existing={item['id']:item for item in catalog(0,conn)}
   if ident in existing and points!=existing[ident]['points']:
    return jsonify(error='Un diseño existente conserva sus puntos para respetar las colecciones. Crea uno nuevo para elegir otro umbral.'),409
-  if ident not in existing and conn.execute('SELECT COUNT(*) AS n FROM sticker_designs').fetchone()['n']>=100:return jsonify(error='El catálogo admite hasta 100 diseños personalizados.'),409
+  if ident not in existing and conn.execute('SELECT COUNT(*) AS n FROM sticker_designs').fetchone()['n']>=1000:return jsonify(error='El catálogo admite hasta 1000 diseños personalizados.'),409
   conn.execute('INSERT INTO sticker_designs(id,name,points,image_data,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,image_data=excluded.image_data,updated_at=excluded.updated_at',(ident,name.strip(),points,output,stamp(now_utc())))
  return jsonify(ok=True,id=ident)
 
