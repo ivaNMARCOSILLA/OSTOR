@@ -24,3 +24,14 @@ python tests/run_browsers.py test_registration_browser.py test_email_browser.py 
 ```
 
 Los informes JSON de revisión local no se incluyen en Git. Los datos privados de cuentas, correos y enlaces capturados no se incorporan al ZIP de distribución.
+
+## Activación del remitente en GoDaddy
+
+Los servidores DNS actuales del dominio son ns27.domaincontrol.com y ns28.domaincontrol.com (GoDaddy). No se deben cambiar por los de Vercel ni alterar los registros de la web.
+
+1. En Resend → Domains, abrir o añadir `electronicama.com` y copiar los registros que indique Resend. Usar sus valores exactos; este documento no inventa claves DKIM, SPF ni prioridades MX.
+2. En GoDaddy → Mis productos → electronicama.com → DNS, añadir esos registros con su tipo, nombre, valor, TTL y prioridad. Cuando GoDaddy ya añade el dominio al nombre, introducir solo el prefijo que corresponda. No duplicar un registro SPF existente ni reemplazar los MX del dominio raíz sin revisar el alcance.
+3. Volver a Resend y verificar el dominio hasta que figure como Verified. Los registros de recepción de correo o funciones opcionales no deben añadirse por simple deducción: seguir la finalidad indicada por Resend.
+4. El remitente de producción está preparado como `Ol <cuentas@electronicama.com>`. La entrega pública sigue pendiente de verificar el dominio y comprobar un envío real. No usar Gmail como remitente de Resend.
+
+El registro por usuario y contraseña permanece disponible mientras se completa esta verificación. El indicador de configuración no equivale a una entrega confirmada.

@@ -69,3 +69,11 @@ class EmailSecurityTests(unittest.TestCase):
   self.verify();csrf=self.user.get('/api/account/me').json['csrf'];self.send.reset_mock()
   result=self.user.post('/api/account/password/request',json={'email':'private@example.test'},headers={'X-CSRF-Token':csrf});self.assertEqual(result.status_code,400);self.send.assert_not_called()
   self.assertEqual(self.user.post('/api/account/password/reset',json={'token':'fake','password':'valid-test-password-123'}).status_code,403)
+ def test_resend_gmail_sender_is_not_claimed_ready_for_clients(self):
+  with patch.dict('os.environ',{'RESEND_API_KEY':'local-only-mail-test','OL_EMAIL_FROM':'Ol <sender@gmail.com>'}):
+   result=self.admin.get('/api/admin/email-health').json
+   self.assertFalse(result['customer_sender_configured']);self.assertFalse(result['provider_delivery_verified'])
+  with patch.dict('os.environ',{'RESEND_API_KEY':'local-only-mail-test','OL_EMAIL_FROM':'Ol <cuentas@electronicama.com>'}):
+   result=self.admin.get('/api/admin/email-health').json
+   self.assertTrue(result['customer_sender_configured']);self.assertFalse(result['provider_delivery_verified'])
+  self.assertEqual(app.app.test_client().get('/api/admin/email-health').status_code,403)
