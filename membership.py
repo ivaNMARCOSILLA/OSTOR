@@ -71,6 +71,18 @@ def init_database():
           created_at TEXT NOT NULL, access_until TEXT,
           welcome_used INTEGER NOT NULL DEFAULT 0, session_version INTEGER NOT NULL DEFAULT 0
         );
+        CREATE TABLE IF NOT EXISTS member_two_factor (
+          member_id TEXT PRIMARY KEY REFERENCES members(id) ON DELETE CASCADE,nonce TEXT,enabled_at TEXT,key_id TEXT,
+          last_counter INTEGER NOT NULL DEFAULT -1,pending_nonce TEXT,pending_until TEXT
+        );
+        CREATE TABLE IF NOT EXISTS two_factor_recovery (
+          member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,code_hash TEXT NOT NULL,used_at TEXT,
+          PRIMARY KEY(member_id,code_hash)
+        );
+        CREATE TABLE IF NOT EXISTS pricing_moderators (
+          member_id TEXT PRIMARY KEY REFERENCES members(id) ON DELETE CASCADE,
+          assigned_by TEXT NOT NULL REFERENCES members(id),assigned_at TEXT NOT NULL,revoked_at TEXT
+        );
         CREATE TABLE IF NOT EXISTS live_entitlements (
           member_id TEXT PRIMARY KEY REFERENCES members(id) ON DELETE CASCADE,trial_started_at TEXT,trial_until TEXT,paid_at TEXT,revoked_at TEXT
         );
@@ -226,7 +238,7 @@ def verify_csrf():
 def restrict_music():
     # Music is free. Account collections require login; Ol Live requires premium.
     path=request.path
-    if not path.startswith('/api/') or path.startswith(('/api/account/','/api/admin/','/api/play/','/api/resolve/')) or path in {'/api/search','/api/trending','/api/proxy','/api/promotion/event','/api/presence','/api/live/catalogue','/api/live/founders','/api/live/founders/claim'}:
+    if not path.startswith('/api/') or path.startswith(('/api/account/','/api/admin/','/api/play/','/api/resolve/','/api/channel-subscriptions/')) or path in {'/api/search','/api/trending','/api/proxy','/api/promotion/event','/api/presence','/api/live/catalogue','/api/live/founders','/api/live/founders/claim'}:
         return None
     if path.startswith('/api/stickers/') and path.endswith('/phrase'):return None
     if path.endswith('/sound.wav') and path.startswith(('/api/stickers/','/api/live/founders/')):return None
@@ -315,6 +327,8 @@ def login():
     encoded = user['password_hash'] if user and user['password_hash'] else current_app.config['MEMBERSHIP_DUMMY_HASH']
     if not check_password_hash(encoded, valid_password) or not user or not user['password_hash']:
         return jsonify(error='Usuario o contraseña incorrectos.'), 401
+    from two_factor import login_factor
+    if not login_factor(user,data):return jsonify(error='Introduce un código nuevo de la app autenticadora o un código de recuperación.',code='two_factor_required'),401
     session.clear()
     session.update(member_id=user['id'], session_version=user['session_version'],csrf=secrets.token_urlsafe(32))
     session.permanent = True
@@ -475,6 +489,7 @@ def revoke():
         conn.execute('BEGIN IMMEDIATE')
         conn.execute('UPDATE members SET access_until=?,session_version=session_version+1 WHERE id=? AND role!=?',
                      (stamp(now_utc()), str(payload().get('member_id', '')), 'admin'))
+        conn.execute('UPDATE pricing_moderators SET revoked_at=? WHERE member_id=?',(stamp(now_utc()),str(payload().get('member_id',''))))
         conn.execute('UPDATE live_entitlements SET revoked_at=? WHERE member_id=?',(stamp(now_utc()),str(payload().get('member_id',''))))
         conn.execute('UPDATE live_founders SET revoked_at=? WHERE member_id=?',(stamp(now_utc()),str(payload().get('member_id',''))))
         conn.execute('UPDATE friend_access SET revoked_at=? WHERE member_id=?',(stamp(now_utc()),str(payload().get('member_id',''))))

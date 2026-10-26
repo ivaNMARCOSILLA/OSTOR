@@ -144,7 +144,8 @@ def page():
 def public_directory():
     with database() as conn:
         rows=conn.execute('SELECT c.*,m.username,o.category,o.featured,f.number AS founder_number,sg.mode AS badge_mode,sg.letter AS badge_letter,sg.caption AS badge_caption,sg.audio_json AS badge_audio FROM streamer_channels c JOIN members m ON m.id=c.member_id LEFT JOIN live_channel_settings o ON o.channel_id=c.id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN founder_signatures sg ON sg.member_id=m.id WHERE c.live_until>? ORDER BY COALESCE(o.featured,0) DESC,c.updated_at DESC LIMIT 100',(stamp(now_utc()),)).fetchall()
-    return jsonify(video_ready=live_ready(),channels=[channel_public(row) for row in rows if not is_abusive(row['title']+' '+row['bio']+' '+row['username'])],categories=LIVE_CATEGORIES)
+    from subscriptions import decorate
+    return jsonify(video_ready=live_ready(),channels=decorate([channel_public(row) for row in rows if not is_abusive(row['title']+' '+row['bio']+' '+row['username'])]),categories=LIVE_CATEGORIES)
 
 
 @bp.get('/api/admin/live-channels')
@@ -184,8 +185,9 @@ def channels():
     with database() as conn:
         rows=conn.execute('SELECT c.*,m.username,o.category,o.featured,f.number AS founder_number,sg.mode AS badge_mode,sg.letter AS badge_letter,sg.caption AS badge_caption,sg.audio_json AS badge_audio FROM streamer_channels c JOIN members m ON m.id=c.member_id LEFT JOIN live_channel_settings o ON o.channel_id=c.id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN founder_signatures sg ON sg.member_id=m.id WHERE c.live_until>? ORDER BY COALESCE(o.featured,0) DESC,c.updated_at DESC LIMIT 60',(stamp(now_utc()),)).fetchall()
     own=own_channel()
+    from subscriptions import decorate
     return jsonify(video_ready=live_ready(),streamer_active=publisher_allowed(),live_price_cents=2500,live_trial_months=3,gift_commission_bps=0,
-                   channels=[channel_public(row) for row in rows if not is_abusive(row['title']+' '+row['bio']+' '+row['username'])],mine=channel_public(own) if own else None,
+                   channels=decorate([channel_public(row) for row in rows if not is_abusive(row['title']+' '+row['bio']+' '+row['username'])]),mine=channel_public(own) if own else None,
                    user={'id':user['id'],'username':user['username']},
                    setup_checks=video_configuration_checks() if user['role']=='admin' else None,
                    streamer_sales_available=streamer_sales_ready(),
@@ -230,6 +232,10 @@ def token(channel_id):
     user=get_user()
     if publish and (channel['member_id']!=user['id'] or not publisher_allowed()): return jsonify(error='Solo el creador con plan Ol Live Creador activo puede emitir en este canal.'),403
     if not publish and not (channel['live_until'] and channel['live_until']>stamp(now_utc())): return jsonify(error='Este canal no está en directo.'),404
+    if not publish:
+        from subscriptions import watch_allowed
+        with database() as conn:
+            if not watch_allowed(conn,channel,user):return jsonify(error='Este directo está reservado a suscriptores del creador.',code='creator_subscription_required'),403
     return jsonify(url=os.environ['LIVEKIT_URL'].strip(),token=mint_token(user,channel,publish))
 
 

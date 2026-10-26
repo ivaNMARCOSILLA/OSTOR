@@ -1,7 +1,8 @@
-import {founderBadge} from '/assets/badges.js?v=9.4.1';
+import {openSubscription} from '/assets/subscriptions.js?v=9.5.0';
+import {founderBadge} from '/assets/badges.js?v=9.5.0';
 'use strict';
-import {StreamCommunity} from '/assets/community.js?v=9.4.1';
-import {StudioTools} from '/assets/studio-tools.js?v=9.4.1';
+import {StreamCommunity} from '/assets/community.js?v=9.5.0';
+import {StudioTools} from '/assets/studio-tools.js?v=9.5.0';
 const $=id=>document.getElementById(id);
 let publicInfo=null,liveCategory='all';
 const categoryNames={videojuegos:'Videojuegos',musica:'Música',entretenimiento:'Entretenimiento',actualidad:'Actualidad'};
@@ -49,7 +50,9 @@ function renderCatalogue(){
   const visual=node('div');visual.className='channel-video-cover';const image=node('img');image.src='/assets/ol-infinity.svg';image.alt='';const badge=node('span','EN DIRECTO · VÍDEO');badge.className='channel-live-badge';visual.append(image,badge);
   const button=node('button','Ver vídeo en directo');button.type='button';button.setAttribute('aria-label',`Ver vídeo en directo de ${channel.title}`);button.addEventListener('click',()=>{if(!window.MaggySession.premium){navigateSection('#stream-studio');return;}connect(channel,false);});
   const tags=node('div');tags.className='channel-tags';tags.append(node('span',categoryNames[channel.category]||'Entretenimiento'));if(channel.featured){const badge=node('span','Destacado');badge.className='featured-tag';tags.append(badge);}if(channel.founder_number){tags.append(founderBadge(channel.founder_number,channel.founder_signature||{}));}
-  card.append(visual,tags,node('h3',channel.title),node('p',channel.username),node('p',channel.bio),button);list.append(card);
+  const subscribe=node('button','Suscripción y beneficios');subscribe.type='button';subscribe.className='secondary';subscribe.addEventListener('click',()=>openSubscription(channel.id));
+  if(channel.subscribers_only)tags.append(node('span','Directo para suscriptores'));
+  card.append(visual,tags,node('h3',channel.title),node('p',channel.username),node('p',channel.bio),node('p',(channel.subscriber_count||0)+' suscriptores activos'),button,subscribe);list.append(card);
  }
 }
 function focusSection(section,heading){section.classList.remove('hidden');section.scrollIntoView({behavior:'smooth',block:'start'});heading?.focus({preventScroll:true});}
@@ -149,7 +152,7 @@ $('creator-form').addEventListener('submit',async event=>{
  if($('creator-paypal').value.trim()&&!$('owns-paypal').checked){creatorStatus('Marca la casilla que confirma que el enlace de PayPal te pertenece, o deja el enlace vacío para guardar sin regalos.',true);return;}
  const button=$('save-channel');button.disabled=true;button.textContent='Guardando…';creatorStatus('Guardando tu canal…');
  try{const saved=await api('/api/streamers/me',{title:$('channel-title').value,category:$('creator-category').value,bio:$('channel-bio').value,paypal_url:$('creator-paypal').value,owns_paypal:$('owns-paypal').checked});
- info.mine=saved.channel;creatorStatus('Canal guardado. Ya puedes entrar al estudio.');status('Canal guardado.');showStudio();
+ info.mine=saved.channel;window.dispatchEvent(new Event('ol:channel-saved'));creatorStatus('Canal guardado. Ya puedes entrar al estudio.');status('Canal guardado.');showStudio();
  refresh().catch(()=>{$('studio-service-status').textContent='Tu canal se ha guardado, pero no se pudo actualizar la conexión. Puedes usar la vista privada de cámara y reintentar después.';});
  }catch(error){creatorStatus(error.message+' Tus datos siguen en el formulario.',true);status(error.message);}
  finally{button.disabled=false;button.textContent='Guardar y entrar al estudio';}

@@ -10,6 +10,9 @@ from urllib.parse import quote
 ROOT=Path(__file__).resolve().parents[1]
 TABLES={
     'members':['id','username','password_hash','role','created_at','access_until','welcome_used','session_version'],
+    'member_two_factor':['member_id','nonce','enabled_at','key_id','last_counter','pending_nonce','pending_until'],
+    'two_factor_recovery':['member_id','code_hash','used_at'],
+    'pricing_moderators':['member_id','assigned_by','assigned_at','revoked_at'],
     'live_launch':['id','started_at'],
     'live_entitlements':['member_id','trial_started_at','trial_until','paid_at','revoked_at'],
     'founder_activity':['member_id','total_seconds','session_seconds','last_verified_at','qualification_until','first_completed_at'],
@@ -24,7 +27,12 @@ TABLES={
     'streamer_access':['member_id','until_at'],
     'streamer_channels':['id','member_id','title','bio','paypal_url','room_name','live_until','updated_at'],
     'live_channel_settings':['channel_id','category','featured'],
+    'subscription_agreements':['id','channel_id','version','creator_id','moderator_id','price_cents','period','benefits_json','paypal_url','created_at'],
+    'subscription_approvals':['agreement_id','party','member_id','approved_at'],
+    'channel_subscription_settings':['channel_id','agreement_id','subscriber_chat','exclusive_live'],
+    'creator_subscriptions':['id','channel_id','member_id','agreement_id','amount_cents','benefits_json','starts_at','ends_at','verified_at','verified_by','reference','revoked_at'],
     'community_messages':['id','channel_id','member_id','kind','body','category','blocked','created_at'],
+    'community_audiences':['message_id','audience'],
     'payments':['id','member_id','plan','amount_cents','starts_at','ends_at','verified_at','verified_by','reference'],
     'invitations':['token_hash','member_id','expires_at','used_at'],
     'admin_notifications':['id','kind','title','detail','event_key','created_at','status','attempts','last_attempt','sent_at'],
@@ -44,11 +52,13 @@ def migrate(source,app):
         rows={}
         for table,columns in TABLES.items():
             actual=[row['name'] for row in original.execute('PRAGMA table_info('+table+')')]
-            if not actual and table in {'founder_slot_history','live_launch','live_entitlements','founder_activity','creator_daily_activity','promotion_metrics','founder_signatures','live_founders','sticker_designs','member_rewards','friend_access','streamer_access','streamer_channels','community_messages','admin_notifications','live_channel_settings'}:
+            if not actual and table in {'member_two_factor','two_factor_recovery','pricing_moderators','subscription_agreements','subscription_approvals','channel_subscription_settings','creator_subscriptions','community_audiences','founder_slot_history','live_launch','live_entitlements','founder_activity','creator_daily_activity','promotion_metrics','founder_signatures','live_founders','sticker_designs','member_rewards','friend_access','streamer_access','streamer_channels','community_messages','admin_notifications','live_channel_settings'}:
                 rows[table]=[];continue
             if set(actual)!=set(columns):raise ValueError('La estructura SQLite no es compatible: '+table)
             rows[table]=[dict(row) for row in original.execute('SELECT '+','.join(columns)+' FROM '+table)]
         with app.app_context():
+            from two_factor import key_id
+            if any(row['enabled_at'] and row['key_id']!=key_id() for row in rows['member_two_factor']):raise ValueError('Para conservar 2FA debes configurar en el destino el mismo MAGGY_SESSION_SECRET del origen antes de migrar.')
             from streamers import init_database as init_streamer_database
             init_streamer_database()
         with app.app_context(),database() as connection:

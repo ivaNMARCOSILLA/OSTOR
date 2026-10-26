@@ -20,3 +20,7 @@ Para pruebas, instala también requirements-dev.txt y ejecuta `python -m unittes
 La transcripción de voz de Ol Live depende del navegador y puede fallar; la interfaz muestra su estado. Los documentos legales siguen siendo provisionales.
 
 Las primeras 100 plazas disponibles se reservan con la prueba de tres meses. Para conservar el número se debe confirmar un único pago de 25 €; se habilita de forma voluntaria en los últimos siete días. Al vencer sin pago, la plaza vuelve a estar disponible y su historial se archiva en privado. No se reinicia la prueba de la cuenta y pagar tarde no garantiza recuperar el número anterior. Si las 100 plazas están ocupadas, no se inicia una nueva prueba con plaza hasta que se libere una.
+
+Las suscripciones opcionales a creadores tienen precio, periodo, beneficios y PayPal aprobados por tres cuentas: creador, administración y moderador Gref. Incluyen los beneficios acordados de insignia, chat y directos exclusivos; los pagos externos al creador se activan mediante comprobación manual del ingreso, separados de los regalos y del acceso general a Ol Live. No se habilitan cobros sin acuerdo completo ni vídeo disponible.
+
+La cuenta permite activar voluntariamente verificación de dos factores TOTP con una app autenticadora y ocho códigos de recuperación de un solo uso. No se activa automáticamente ni requiere SMS. Conserva el mismo secreto de servidor al migrar cuentas que tengan 2FA activa.

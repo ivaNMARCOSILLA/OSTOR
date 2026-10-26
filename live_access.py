@@ -68,7 +68,13 @@ def verified_broadcast(channel,user):
   with requests.post('https://'+urlparse(os.environ['LIVEKIT_URL']).netloc+'/twirp/livekit.RoomService/ListParticipants',json={'room':channel['room_name']},headers={'Authorization':'Bearer '+token},timeout=(2,4),allow_redirects=False) as response:
    if response.status_code!=200:return False
    data=response.json()
-   return any(str(p.get('identity','')).startswith('maggy-'+user['id']+'-') and any(t.get('source') in (1,3,'CAMERA','SCREEN_SHARE') and not t.get('muted',False) for t in p.get('tracks',[])) for p in data.get('participants',[]))
+   participants=data.get('participants',[])
+   if not isinstance(participants,list):return False
+   publishing=any(str(p.get('identity','')).startswith('maggy-'+user['id']+'-') and any(t.get('source') in (1,3,'CAMERA','SCREEN_SHARE') and not t.get('muted',False) for t in p.get('tracks',[])) for p in participants)
+   if publishing:
+    from subscriptions import enforce_room_subscribers
+    return enforce_room_subscribers(channel,participants,'https://'+urlparse(os.environ['LIVEKIT_URL']).netloc,{'Authorization':'Bearer '+token})
+   return False
  except (requests.RequestException,ValueError,TypeError):return False
 
 def credit_activity(conn,member_id):

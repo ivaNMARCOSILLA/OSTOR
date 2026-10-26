@@ -11,7 +11,7 @@ function status(value) { $('account-status').textContent = value; }
 async function api(path, data) {
   const response = await fetch(path, data === undefined ? {} : {method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify(data)});
   const result = await response.json();
-  if (!response.ok) throw new Error(result.error || 'No se pudo completar la operación.');
+  if (!response.ok){const error=new Error(result.error||'No se pudo completar la operación.');error.code=result.code;throw error;}
   return result;
 }
 async function refresh() {
@@ -19,6 +19,7 @@ async function refresh() {
   $('credentials').classList.toggle('hidden', Boolean(current) || Boolean(inviteToken));
   $('member-panel').classList.toggle('hidden', !current);
   $('admin-panel').classList.toggle('hidden', current?.role !== 'admin');
+  window.dispatchEvent(new Event('ol:account-refreshed'));
   const streamReady=Boolean(data.streamer_available),videoReady=Boolean(data.live_video_ready);
   $('premium-availability').textContent=videoReady?'Ol del bueno: tres meses de prueba y, después, 25 € en un único pago si decides continuar.':'El vídeo aún se está preparando. Tu prueba de tres meses todavía no empieza y no se solicita ningún pago.';
   $('trial-start').disabled=!videoReady||Boolean(current?.live_trial_until||current?.live_lifetime||current?.complimentary);
@@ -142,7 +143,7 @@ function renderCalendar() {
 const today=new Date(); $('calendar-month').value=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
 $('calendar-month').addEventListener('change',renderCalendar);
 for (const [id,endpoint] of [['login-form','login'],['register-form','register'],['invite-form','accept-invite']]) {
-  $(id).addEventListener('submit',async event=>{event.preventDefault(); const button=$(id).querySelector('button');button.disabled=true; try {const data=Object.fromEntries(new FormData($(id)));if(endpoint==='accept-invite')data.token=inviteToken;await api(`/api/account/${endpoint}`,data);if(endpoint==='accept-invite'){location.assign('/account');return;}$(id).reset();await refresh();if((endpoint==='login'||endpoint==='register')&&streamReturn&&current){location.assign(streamReturn);return;}status('Sesión iniciada.');}catch(error){status(error.message);}finally{button.disabled=false;}});
+  $(id).addEventListener('submit',async event=>{event.preventDefault(); const button=$(id).querySelector('button');button.disabled=true; try {const data=Object.fromEntries(new FormData($(id)));if(endpoint==='accept-invite')data.token=inviteToken;await api(`/api/account/${endpoint}`,data);if(endpoint==='accept-invite'){location.assign('/account');return;}$(id).reset();await refresh();if((endpoint==='login'||endpoint==='register')&&streamReturn&&current){location.assign(streamReturn);return;}status('Sesión iniciada.');}catch(error){status(error.message);if(endpoint==='login'&&error.code==='two_factor_required'){$('login-second-factor').classList.remove('hidden');$('login-form').querySelector('[name=otp]').focus();}}finally{button.disabled=false;}});
 }
 $('logout').addEventListener('click',async()=>{try{await api('/api/account/logout',{});location.assign('/account');}catch(error){status(error.message);}});
 $('create-invite').addEventListener('submit',async event=>{event.preventDefault();try{const result=await api('/api/admin/invite',Object.fromEntries(new FormData(event.target)));const link=text('a',`${location.origin}${result.path}`);link.href=result.path;$('invite-result').replaceChildren(text('span','Acceso gratuito incluido. Comparte esta invitación privada con tu amigo (48 horas para aceptarla): '),link);event.target.reset();await loadAdmin();}catch(error){status(error.message);}});

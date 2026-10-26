@@ -18,6 +18,8 @@ def init_database():
           kind TEXT NOT NULL,body TEXT NOT NULL,category TEXT NOT NULL DEFAULT '',blocked INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL
         ); CREATE INDEX IF NOT EXISTS community_channel ON community_messages(channel_id,created_at);
         CREATE INDEX IF NOT EXISTS community_retention ON community_messages(created_at)''')
+    from subscriptions import init_database as init_subscriptions
+    init_subscriptions()
 
 
 def purge(conn):
@@ -31,19 +33,24 @@ def live_channel(conn,ident):
 @bp.get('/api/streamers/<channel_id>/comments')
 def comments(channel_id):
     with database() as conn:
-        if not live_channel(conn,channel_id):return jsonify(error='Este canal no está en directo.'),404
+        channel=live_channel(conn,channel_id)
+        if not channel:return jsonify(error='Este canal no está en directo.'),404
+        from subscriptions import chat_allowed,settings
+        user=get_user();private_access=chat_allowed(conn,channel,user);mode=settings(conn,channel_id)
+        badge_members={row['member_id'] for row in conn.execute("SELECT DISTINCT member_id FROM creator_subscriptions WHERE channel_id=? AND revoked_at IS NULL AND starts_at<=? AND (ends_at IS NULL OR ends_at>?) AND benefits_json LIKE ?",(channel_id,stamp(now_utc()),stamp(now_utc()),'%"badge"%')).fetchall()}
         purge(conn)
-        rows=conn.execute("SELECT c.id,c.body,c.kind,c.created_at,m.username,f.number AS founder_number,sg.mode AS badge_mode,sg.letter AS badge_letter,sg.caption AS badge_caption FROM community_messages c JOIN members m ON m.id=c.member_id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN founder_signatures sg ON sg.member_id=m.id WHERE c.channel_id=? AND c.kind IN ('comment','sticker') AND c.blocked=0 ORDER BY c.created_at DESC,c.id DESC LIMIT 50",(channel_id,)).fetchall()
+        rows=conn.execute("SELECT c.id,c.member_id,c.body,c.kind,c.created_at,m.username,f.number AS founder_number,sg.mode AS badge_mode,sg.letter AS badge_letter,sg.caption AS badge_caption FROM community_messages c JOIN members m ON m.id=c.member_id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN founder_signatures sg ON sg.member_id=m.id WHERE c.channel_id=? AND c.kind IN ('comment','sticker') AND c.blocked=0 AND (?=1 OR NOT EXISTS(SELECT 1 FROM community_audiences a WHERE a.message_id=c.id AND a.audience='subscribers')) ORDER BY c.created_at DESC,c.id DESC LIMIT 50",(channel_id,int(private_access))).fetchall()
     from rewards import catalog
     designs={item['id']:item for item in catalog(0)}
     comments=[dict(row) for row in reversed(rows)]
     for comment in comments:
+        comment['subscriber_badge']=comment.pop('member_id') in badge_members
         if comment.get('founder_number'):
             from founders import signature_from_row
             comment['founder_signature']=signature_from_row(comment)
         for key in ['badge_mode','badge_letter','badge_caption']:comment.pop(key,None)
         if comment['kind']=='sticker':comment['sticker']={key:designs[comment['body']][key] for key in ['id','name','image','phrase']} if comment['body'] in designs else None
-    return jsonify(comments=comments)
+    return jsonify(comments=comments,subscriber_chat=bool(mode['subscriber_chat']),can_post=not mode['subscriber_chat'] or private_access)
 
 
 @bp.post('/api/streamers/<channel_id>/comments')
@@ -55,6 +62,9 @@ def post_text(channel_id):
     with database() as conn:
         conn.execute('BEGIN IMMEDIATE');channel=live_channel(conn,channel_id)
         if not channel:return jsonify(error='Este canal no está en directo.'),404
+        from subscriptions import chat_allowed,settings
+        subscriber_only=bool(settings(conn,channel_id)['subscriber_chat'])
+        if kind in {'comment','sticker'} and subscriber_only and not chat_allowed(conn,channel,user):return jsonify(error='Este chat está reservado a suscriptores del creador.'),403
         if kind=='transcript':
             from streamers import publisher_allowed
             if channel['member_id']!=user['id'] or not publisher_allowed():return jsonify(error='Solo el creador puede enviar la transcripción de su micrófono.'),403
@@ -66,7 +76,9 @@ def post_text(channel_id):
         recent=conn.execute('SELECT COUNT(*) AS n FROM community_messages WHERE member_id=? AND created_at>?',(user['id'],stamp(now_utc()-timedelta(seconds=60)))).fetchone()['n']
         if recent>=60:return jsonify(error='Demasiados mensajes. Espera un momento.'),429
         category='report' if kind=='report' else classify(body);blocked=bool(category and kind!='report')
-        conn.execute('INSERT INTO community_messages(id,channel_id,member_id,kind,body,category,blocked,created_at) VALUES(?,?,?,?,?,?,?,?)',(secrets.token_hex(16),channel_id,user['id'],kind,body,category,int(blocked),stamp(now_utc())))
+        ident=secrets.token_hex(16)
+        conn.execute('INSERT INTO community_messages(id,channel_id,member_id,kind,body,category,blocked,created_at) VALUES(?,?,?,?,?,?,?,?)',(ident,channel_id,user['id'],kind,body,category,int(blocked),stamp(now_utc())))
+        if subscriber_only and kind in {'comment','sticker'}:conn.execute('INSERT INTO community_audiences(message_id,audience) VALUES(?,?)',(ident,'subscribers'))
         strikes=conn.execute("SELECT COUNT(*) AS n FROM community_messages WHERE channel_id=? AND member_id=? AND blocked=1 AND created_at>?",(channel_id,user['id'],stamp(now_utc()-timedelta(hours=24)))).fetchone()['n']
     if blocked or kind=='report':notify('moderation','Aviso de moderación' if blocked else 'Nueva denuncia','Hay un nuevo aviso o denuncia en un directo. Revisa el contexto en administración; los correos no incluyen conversaciones completas.')
     warning=('Aviso de moderación: se ha detectado una expresión no permitida. La reiteración puede dar lugar a suspensión tras revisión de administración.' if strikes<3 else 'Avisos reiterados: el caso queda señalado para revisión de una posible suspensión por administración.') if blocked else ''

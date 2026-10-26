@@ -30,7 +30,7 @@ class PostgresMembershipTests(unittest.TestCase):
         ready=patch('streamers.streamer_sales_ready',return_value=True);ready.start();self.addCleanup(ready.stop)
         self.app=application.app
         with self.app.app_context(),m.database() as connection:
-            for table in ['founder_slot_history','live_launch','creator_daily_activity','founder_activity','live_entitlements','human_challenges','promotion_metrics','online_presence','founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:
+            for table in ['two_factor_recovery','member_two_factor','community_audiences','creator_subscriptions','channel_subscription_settings','subscription_approvals','subscription_agreements','pricing_moderators','founder_slot_history','live_launch','creator_daily_activity','founder_activity','live_entitlements','human_challenges','promotion_metrics','online_presence','founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:
                 connection.execute('DELETE FROM '+table)
         with self.app.app_context():
             m.create_admin('pg-admin','postgres-admin-password-123')
@@ -72,6 +72,47 @@ class PostgresMembershipTests(unittest.TestCase):
             retry=self.post(self.client,'/api/account/live-trial',{})
             self.assertTrue(retry.json['already_started'])
             self.assertIsNone(retry.json['founder_number'])
+
+    def test_creator_agreement_receipt_and_private_benefits_persist(self):
+        with self.app.app_context(),m.database() as conn:
+            conn.execute('INSERT INTO live_entitlements(member_id,paid_at) VALUES(?,?)',(self.member['id'],m.stamp(m.now_utc())))
+        gref=self.app.test_client();viewer=self.app.test_client()
+        self.assertEqual(self.post(gref,'/api/account/register',{'username':'gref','password':'postgres-moderator-password-123'}).status_code,201)
+        self.assertEqual(self.post(viewer,'/api/account/register',{'username':'pg-subscriber','password':'postgres-subscriber-password-123'}).status_code,201)
+        self.assertEqual(self.post(self.admin,'/api/admin/subscription-moderator',{'username':'Gref'}).status_code,200)
+        channel=self.post(self.client,'/api/streamers/me',{'title':'PG creator channel','paypal_url':'https://paypal.me/CreatorOnly','owns_paypal':True}).json['channel']['id']
+        agreement=self.post(self.client,'/api/channel-subscriptions/propose',{'price_cents':500,'period':'month','benefits':['badge','subscriber_chat']}).json['agreement_id']
+        for client,party in [(self.client,'creator'),(self.admin,'admin'),(gref,'moderator')]:
+            result=self.post(client,'/api/channel-subscriptions/approve',{'agreement_id':agreement,'party':party})
+            self.assertEqual(result.status_code,200)
+        self.assertTrue(result.json['agreement_activated'])
+        receipt={'username':'pg-subscriber','reference':'PG-CREATOR-RECEIPT-001','amount_cents':500,'verified_receipt':True}
+        self.assertEqual(self.post(self.client,'/api/channel-subscriptions/'+channel+'/confirm',receipt).status_code,200)
+        self.assertEqual(self.post(self.client,'/api/channel-subscriptions/'+channel+'/confirm',receipt).status_code,409)
+        public=viewer.get('/api/channel-subscriptions/'+channel).json
+        self.assertEqual(public['subscriber_count'],1)
+        self.assertIn('badge',public['mine'])
+        self.assertEqual(gref.get('/api/channel-subscriptions/'+channel+'/members').status_code,403)
+        self.assertEqual(viewer.get('/api/account/me').json['payments'],[])
+
+    def test_optional_two_factor_counter_and_recovery_persist(self):
+        import base64
+        import two_factor as tf
+        with patch.object(tf,'counter_now',return_value=1000000):
+            setup=self.post(self.client,'/api/account/2fa/setup',{'password':'postgres-client-password-123'})
+            self.assertEqual(setup.status_code,200)
+            otp=tf.totp(base64.b32decode(setup.json['secret']),1000000)
+            enabled=self.post(self.client,'/api/account/2fa/enable',{'otp':otp})
+            self.assertEqual(enabled.status_code,200)
+            other=self.app.test_client()
+            login={'username':'pg-client','password':'postgres-client-password-123'}
+            self.assertEqual(self.post(other,'/api/account/login',login).status_code,401)
+            self.assertEqual(self.post(other,'/api/account/login',dict(login,otp=otp)).status_code,401)
+            recovery=enabled.json['recovery_codes'][0]
+            self.assertEqual(self.post(other,'/api/account/login',dict(login,recovery_code=recovery)).status_code,200)
+            self.assertEqual(other.get('/api/account/2fa/status').json['recovery_remaining'],7)
+            repeat=self.app.test_client()
+            self.assertEqual(self.post(repeat,'/api/account/login',dict(login,recovery_code=recovery)).status_code,401)
 
     def test_statistics_and_presence_use_persistent_postgresql(self):
         visitor=self.app.test_client()
@@ -173,7 +214,7 @@ class PostgresMembershipTests(unittest.TestCase):
                 legacy_payment(source,admin,ident,'welcome','SQLITE-MIGRATE-001')
                 expected=client.get('/api/account/me').json['user']['access_until']
             with self.app.app_context(),m.database() as connection:
-                for table in ['founder_slot_history','live_launch','creator_daily_activity','founder_activity','live_entitlements','human_challenges','promotion_metrics','founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:connection.execute('DELETE FROM '+table)
+                for table in ['two_factor_recovery','member_two_factor','community_audiences','creator_subscriptions','channel_subscription_settings','subscription_approvals','subscription_agreements','pricing_moderators','founder_slot_history','live_launch','creator_daily_activity','founder_activity','live_entitlements','human_challenges','promotion_metrics','founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:connection.execute('DELETE FROM '+table)
             counts=migrate(Path(folder)/'members.sqlite3',self.app)
             self.assertEqual(counts['members'],2);self.assertEqual(counts['payments'],1)
             migrated=self.app.test_client()
