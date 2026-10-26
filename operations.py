@@ -55,7 +55,7 @@ def set_maintenance():
   c.execute('BEGIN IMMEDIATE');c.execute("INSERT INTO ol_operations VALUES('maintenance',?,?,?,?) ON CONFLICT(id) DO UPDATE SET scope=excluded.scope,message=excluded.message,updated_by=excluded.updated_by,updated_at=excluded.updated_at",(scope,message,get_user()['id'],stamp(now_utc())))
  return jsonify(ok=True,maintenance=state())
 
-def supervisor_review(c,user):return bool(user and c.execute('SELECT member_id FROM ol_supervisors WHERE member_id=? AND revoked_at IS NULL AND can_review=1',(user['id'],)).fetchone() and user['password_hash'])
+def supervisor_review(c,user):return False
 
 @bp.get('/api/admin/launch-readiness')
 @require_admin
@@ -76,24 +76,12 @@ def launch_readiness():
 
 @bp.get('/api/admin/supervisor')
 @require_admin
-def supervisor_status():
- with database() as c:r=c.execute('SELECT m.username,(m.password_hash IS NOT NULL) AS activated,s.can_review FROM ol_supervisors s JOIN members m ON m.id=s.member_id WHERE s.revoked_at IS NULL ORDER BY s.assigned_at DESC LIMIT 1').fetchone()
- return jsonify(supervisor=dict(r) if r else None)
+def supervisor_status():return jsonify(supervisor=None,retired=True)
 
 @bp.post('/api/admin/supervisor')
 @require_admin
-def assign_supervisor():
- data=payload()
- name=str(data.get('username','Rubi')).strip().lower()
- if not 3<=len(name)<=60 or type(data.get('can_review',False)) is not bool:return jsonify(error='Indica el usuario real de Rubi y su permiso de revisión.'),400
- with database() as c:
-  c.execute('BEGIN IMMEDIATE');r=c.execute('SELECT id,role FROM members WHERE LOWER(username)=?',(name,)).fetchone()
-  if not r:return jsonify(error='No se encuentra Rubi. Comprueba su nombre de usuario; no se ha creado otra cuenta.'),404
-  if r['role']=='admin':return jsonify(error='El supervisor debe usar una cuenta distinta de administración.'),409
-  if c.execute('SELECT member_id FROM pricing_moderators WHERE member_id=? AND revoked_at IS NULL',(r['id'],)).fetchone():return jsonify(error='Supervisor y moderador de acuerdos deben usar cuentas distintas.'),409
-  c.execute('UPDATE ol_supervisors SET revoked_at=?,can_review=0 WHERE member_id!=?',(stamp(now_utc()),r['id']))
-  c.execute('INSERT INTO ol_supervisors(member_id,assigned_by,assigned_at,can_review) VALUES(?,?,?,?) ON CONFLICT(member_id) DO UPDATE SET assigned_by=excluded.assigned_by,assigned_at=excluded.assigned_at,can_review=excluded.can_review,revoked_at=NULL',(r['id'],get_user()['id'],stamp(now_utc()),int(data.get('can_review',False))))
- return jsonify(ok=True)
+def assign_supervisor():return jsonify(error='Este apartado ha sido retirado.'),410
+
 
 def guard():
  path=request.path

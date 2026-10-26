@@ -21,7 +21,7 @@ La transcripción de voz de Ol Live depende del navegador y puede fallar; la int
 
 Las primeras 100 plazas disponibles se reservan con la prueba de siete días. Para conservar el número se debe confirmar un único pago de 25 €; se ofrece al finalizar los siete días de prueba. Al vencer sin pago, la plaza vuelve a estar disponible y su historial se archiva en privado. No se reinicia la prueba de la cuenta y pagar tarde no garantiza recuperar el número anterior. Si las 100 plazas están ocupadas, no se inicia una nueva prueba con plaza hasta que se libere una.
 
-Las suscripciones opcionales a creadores tienen precio, periodo, beneficios y PayPal aprobados por tres cuentas: creador, administración y moderador Gref. Incluyen los beneficios acordados de insignia, chat y directos exclusivos; los pagos externos al creador se activan mediante comprobación manual del ingreso, separados de los regalos y del acceso general a Ol Live. No se habilitan cobros sin acuerdo completo ni vídeo disponible.
+Las suscripciones a creadores siguen en preparación. Sus precios y beneficios requieren acuerdo entre creador, administración y Gref. La configuración de Stripe solo se muestra en administración; durante el próximo estreno no se ofrecen cobros, enlaces externos ni regalos monetarios.
 
 La cuenta permite activar voluntariamente verificación de dos factores TOTP con una app autenticadora y ocho códigos de recuperación de un solo uso. No se activa automáticamente ni requiere SMS. Conserva el mismo secreto de servidor al migrar cuentas que tengan 2FA activa.
 
@@ -29,6 +29,6 @@ La cuenta permite activar voluntariamente verificación de dos factores TOTP con
 Pagos, mantenimiento, supervisión y preparación Android: [guía de activación](docs/PAGOS_Y_PLAY_STORE.md). La PWA ya se instala desde el navegador. No se afirma publicación en Google Play ni cobros reales sin completar la configuración del gestor.
 
 
-Construir el paquete fuente: `python tools/build_release.py`. Comprobar su contenido y SHA-256: `python tools/verify_release.py ../artifacts/OL_9_8_0.zip`. El ZIP usa la carpeta `Ol`, excluye cuentas y secretos y sirve para web/PWA; la plantilla Android no es una publicación en Play Store.
+Construir el paquete fuente: `python tools/build_release.py`. Comprobar su contenido y SHA-256: `python tools/verify_release.py ../artifacts/OL_9_8_1.zip`. El ZIP usa la carpeta `Ol`, excluye cuentas y secretos y sirve para web/PWA; la plantilla Android no es una publicación en Play Store.
 
-Ol 9.8.0: [próximo estreno y PayPal temporal](docs/PAYPAL_TEMPORAL_Y_ESTRENO.md). Nuevas pruebas de siete días; después, 25 € en un único pago. El modo estreno impide iniciar pruebas y cobros y oculta los paneles públicos de Ol Live.
+Ol 9.8.1: [próximo estreno y preparación privada](docs/PREESTRENO_OL_LIVE.md). Nuevas pruebas de siete días; después, 25 € en un único pago. El modo estreno impide iniciar pruebas y cobros y oculta los paneles públicos de Ol Live.

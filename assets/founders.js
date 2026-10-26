@@ -1,4 +1,4 @@
-import {founderBadge} from '/assets/badges.js?v=9.8.0';
+import {founderBadge} from '/assets/badges.js?v=9.8.1';
 /* Ol Live promotion: real numbered places, one per account, no payment. */
 const banner=document.getElementById('founders');
 if(banner){const $=id=>document.getElementById(id);let csrf='',account=null,busy=false,mine=null,signature={},selectedAudio=null,audioToken='',humanId='';

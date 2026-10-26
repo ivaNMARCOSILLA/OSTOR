@@ -80,7 +80,9 @@ def public_agreement(conn,row,private=False):
  if private:
   result.update(creator_id=row['creator_id'],moderator_id=row['moderator_id'])
   if row['paypal_url'].startswith('stripe:'):result.update(payment_provider='stripe',payout_account=row['paypal_url'][7:])
-  else:result['paypal_url']=row['paypal_url']
+  else:
+   from payments import provider
+   if provider()!='stripe':result['paypal_url']=row['paypal_url']
  return result
 
 def approvals_valid(conn,row):

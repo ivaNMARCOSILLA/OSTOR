@@ -70,7 +70,7 @@ def paypal_link(value):
 
 def channel_public(row):
     from founders import signature_from_row
-    return {key:row[key] for key in ['id','title','bio','username','paypal_url']} | {'live':bool(row['live_until'] and row['live_until']>stamp(now_utc())),'category':row['category'] if 'category' in row.keys() and row['category'] else 'entretenimiento','featured':bool(row['featured']) if 'featured' in row.keys() else False,'founder_number':row['founder_number'] if 'founder_number' in row.keys() else None,'founder_signature':signature_from_row(row) if 'founder_number' in row.keys() and row['founder_number'] else None}
+    return {key:row[key] for key in ['id','title','bio','username']} | {'paypal_url':'' if os.getenv('VERCEL_ENV') in {'production','preview'} or os.getenv('OL_PAYMENT_PROVIDER','stripe')=='stripe' else row['paypal_url']} | {'live':bool(row['live_until'] and row['live_until']>stamp(now_utc())),'category':row['category'] if 'category' in row.keys() and row['category'] else 'entretenimiento','featured':bool(row['featured']) if 'featured' in row.keys() else False,'founder_number':row['founder_number'] if 'founder_number' in row.keys() else None,'founder_signature':signature_from_row(row) if 'founder_number' in row.keys() and row['founder_number'] else None}
 
 
 def own_channel():
@@ -266,6 +266,8 @@ def presence():
 
 @bp.post('/api/streamers/<channel_id>/gift-link')
 def gift_link(channel_id):
+    from payments import provider
+    if provider()=='stripe':return jsonify(error='Los regalos y pagos externos no están disponibles.'),410
     amount=(request.get_json(silent=True) or {}).get('amount_cents')
     if isinstance(amount,bool) or not isinstance(amount,int) or not 100<=amount<=100000: return jsonify(error='Introduce entre 1 y 1.000 €, con un máximo de dos decimales.'),400
     with database() as conn:

@@ -21,9 +21,8 @@ def run():
   assert '25 €' in page.locator('#planes .plan.featured h3').inner_text()
   assert all(old not in page.locator('#planes').inner_text() for old in ['1 €','6 €','8 €'])
   page.goto(BASE_URL+'/account');assert page.locator('#trial-start').is_disabled()
-  assert page.locator('#pay-lifetime').get_attribute('href') is None
-  assert page.locator('#payment-form option').count()==1
-  assert page.locator('#payment-form option').get_attribute('value')=='lifetime'
+  assert page.locator('#pay-lifetime').count()==0
+  assert page.locator('#payment-form').count()==0
   assert page.locator('#trial-start').inner_text()=='Iniciar mis siete días'
   for width in [1440,768,390,320]:
    page.set_viewport_size({'width':width,'height':1000})

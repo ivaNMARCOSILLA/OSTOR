@@ -11,7 +11,9 @@ class PaymentError(Exception):
   super().__init__(message);self.code=code;self.reason=reason
 
 
-def provider():return os.getenv('OL_PAYMENT_PROVIDER','legacy_paypal')
+def provider():
+ # Legacy imports remain readable locally; deployed Ol only offers Stripe.
+ return 'stripe' if os.getenv('VERCEL_ENV') in {'production','preview'} else os.getenv('OL_PAYMENT_PROVIDER','stripe')
 def configured():
  if provider()=='legacy_paypal':return True
  return bool(os.getenv('STRIPE_SECRET_KEY','').startswith(('sk_live_','rk_live_')) and os.getenv('STRIPE_WEBHOOK_SECRET','').startswith('whsec_') and os.getenv('STRIPE_CONNECT_WEBHOOK_SECRET','').startswith('whsec_') and os.getenv('OL_PAYMENTS_ENABLED')=='1')
@@ -71,7 +73,7 @@ def account_for(c,member_id):
 def status():
  user=get_user()
  with database() as c:account=account_for(c,user['id']) if user else None
- return jsonify(provider=provider(),configured=configured(),enabled=ready(),creator_connected=bool(account),connect_available=bool(provider()=='stripe' and os.getenv('STRIPE_CONNECT_CLIENT_ID','').startswith('ca_') and os.getenv('STRIPE_SECRET_KEY','').startswith('sk_live_')),platform_price_cents=2500,currency='eur',platform_commission_percent=0,renewal='manual',play_distribution=bool(session.get('ol_play_distribution')),pending_reason=None if ready() else 'PayPal temporal preparado; Ol Live debe estar disponible y comprobado antes de cobrar.' if provider()=='legacy_paypal' else 'El gestor y Ol Live deben estar configurados y comprobados antes de cobrar.')
+ return jsonify(provider=provider(),configured=configured(),enabled=ready(),creator_connected=bool(account),connect_available=bool(provider()=='stripe' and os.getenv('STRIPE_CONNECT_CLIENT_ID','').startswith('ca_') and os.getenv('STRIPE_SECRET_KEY','').startswith('sk_live_')),platform_price_cents=2500,currency='eur',platform_commission_percent=0,renewal='manual',play_distribution=bool(session.get('ol_play_distribution')),pending_reason=None if ready() else 'Ol Live · próximo estreno. Todavía no hay cobros disponibles.')
 
 def sandbox_configured():return bool(os.getenv('STRIPE_TEST_SECRET_KEY','').startswith(('sk_test_','rk_test_')) and os.getenv('STRIPE_TEST_WEBHOOK_SECRET','').startswith('whsec_'))
 

@@ -18,11 +18,9 @@ def run():
         assert not any('livekit-client' in url for url in requests)
         page.locator('#channel-title').fill('My live channel')
         page.locator('#channel-bio').fill('<script>window.unwanted=true</script>')
-        page.locator('#creator-paypal').fill('https://paypal.me/CreatorLink')
+        assert page.locator('#creator-paypal').count()==0
+        assert page.locator('#gift-panel').count()==0
         page.locator('#save-channel').click()
-        assert 'casilla' in page.locator('#creator-status').inner_text()
-        assert not page.locator('#stream-studio').is_visible()
-        page.locator('#owns-paypal').check();page.locator('#save-channel').click()
         page.wait_for_function("document.querySelector('#stream-status').textContent==='Canal guardado.'")
         assert not page.evaluate('Boolean(window.unwanted)')
         assert page.locator('#stream-studio').is_visible()
@@ -74,8 +72,8 @@ def run():
         page.locator('#member-panel').wait_for(state='visible')
         assert '/account?' in page.url
         page.goto(BASE_URL+'/account');page.locator('#member-panel').wait_for(state='visible')
-        assert page.locator('#pay-lifetime').get_attribute('href') is None
-        page.wait_for_function("document.querySelector('#payment-form button').disabled === true")
+        assert page.locator('#pay-lifetime').count()==0
+        assert page.locator('#payment-form').count()==0
         page.goto(BASE_URL+'/streamers');page.locator('#stream-unavailable').wait_for(state='visible')
         for width in [1440,768,390,320]:
             page.set_viewport_size({'width':width,'height':900})

@@ -8,12 +8,13 @@ class TemporaryPayPalTests(unittest.TestCase):
  def setUp(self):
   self.admin=authenticated_client(app.app,self.addCleanup)
   with app.app.app_context():streamers.init_database()
- def test_retained_live_keys_cannot_open_stripe_checkout_or_connect(self):
-  with patch.dict('os.environ',{'STRIPE_SECRET_KEY':'sk_live_local_only','STRIPE_CONNECT_CLIENT_ID':'ca_local_only'}),patch('streamers.streamer_sales_ready',return_value=True),patch('payments.stripe') as stripe:
+ def test_production_never_reactivates_legacy_external_payments(self):
+  with patch.dict('os.environ',{'VERCEL_ENV':'production','OL_PAYMENT_PROVIDER':'legacy_paypal','OL_LIVE_PREMIERE':'1'}),patch('payments.stripe') as stripe:
    status=self.admin.get('/api/payments/status').json
-   self.assertEqual(status['provider'],'legacy_paypal');self.assertTrue(status['enabled']);self.assertFalse(status['connect_available'])
+   self.assertEqual(status['provider'],'stripe');self.assertFalse(status['enabled'])
    self.assertEqual(self.admin.post('/api/payments/checkout',json={}).status_code,409)
-   self.assertEqual(self.admin.post('/api/payments/connect',json={}).status_code,409)
+   self.assertEqual(self.admin.post('/api/streamers/any/gift-link',json={'amount_cents':2500}).status_code,410)
+   self.assertEqual(self.admin.post('/api/admin/confirm-payment',json={}).status_code,409)
    stripe.assert_not_called()
  def test_manual_payment_cannot_bypass_video_or_maintenance_gate(self):
   with patch('streamers.streamer_sales_ready',return_value=False):

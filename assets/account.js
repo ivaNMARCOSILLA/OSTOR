@@ -20,18 +20,11 @@ async function refresh() {
   $('member-panel').classList.toggle('hidden', !current);
   $('admin-panel').classList.toggle('hidden', current?.role !== 'admin');
   window.dispatchEvent(new Event('ol:account-refreshed'));
-  const manager=await api('/api/payments/status');
-  const streamReady=Boolean(data.streamer_available),videoReady=Boolean(data.live_video_ready)&&!data.live_premiere;
-  $('payment-form').hidden=manager.provider==='stripe';
-  document.querySelectorAll('[data-stripe-setup]').forEach(el=>el.hidden=manager.provider!=='stripe');
+  const videoReady=Boolean(data.live_video_ready)&&!data.live_premiere;
+  document.querySelectorAll('[data-stripe-setup]').forEach(el=>el.hidden=current?.role!=='admin');
   $('premium-availability').textContent=videoReady?'Ol del bueno: siete días de prueba y, después, 25 € en un único pago si decides continuar.':'El vídeo aún se está preparando. Tu prueba de siete días todavía no empieza y no se solicita ningún pago.';
   $('trial-start').disabled=!videoReady||Boolean(current?.live_trial_until||current?.live_lifetime||current?.complimentary);
   $('trial-start').textContent=data.live_premiere?'Próximo estreno · Ol Live':current?.trial_active?'Prueba activa hasta '+date(current.live_trial_until):current?.live_trial_until?'Prueba ya utilizada':'Iniciar mis siete días';
-  const paymentDate=data.founder_reservation?.payment_opens_at||current?.live_trial_until;
-  const payable=manager.enabled&&streamReady&&paymentDate&&new Date(paymentDate)<=new Date()&&!current?.live_lifetime&&!current?.complimentary;
-  const pay=$('pay-lifetime');if(payable&&manager.provider==='legacy_paypal'){pay.href='https://paypal.me/IMarcosIlla/25EUR';pay.removeAttribute('aria-disabled');pay.textContent='Continuar · 25 € en PayPal';}else{pay.removeAttribute('href');pay.setAttribute('aria-disabled','true');pay.textContent=current?.live_lifetime?'Tu acceso sin vencimiento ya está activo':'Disponible al final de la prueba';}
-  if(manager.provider==='stripe'){pay.removeAttribute('href');pay.setAttribute('role','button');pay.tabIndex=0;pay.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pay.click();}};pay.textContent=manager.enabled&&payable?'Continuar · 25 € con pago seguro':current?.live_lifetime?'Tu acceso sin vencimiento ya está activo':'Pago seguro pendiente de habilitar';pay.setAttribute('aria-disabled',String(!(manager.enabled&&payable)));pay.onclick=async e=>{e.preventDefault();if(!(manager.enabled&&payable))return;try{const r=await api('/api/payments/checkout',{});location.assign(r.url);}catch(error){$('premium-availability').textContent=error.message;}};}
-  $('payment-form').querySelector('button').disabled=!manager.enabled;
   if (!current) return;
   $('member-title').textContent = `Tu cuenta · ${current.username}${current.founder_number?' · Fundador n.º '+current.founder_number:''}`;
   $('access-status').textContent=current.role==='admin'?'Administrador: acceso de gestión activo en todos tus dispositivos.':current.founder_active?'Plaza n.º '+current.founder_number+': '+(data.founder_reservation?.confirmed?'pago único confirmado.':'reservada durante la prueba de siete días; después, continuar cuesta 25 €.')+' Consulta tu progreso abajo.':current.live_lifetime?'Ol Live completo: pago único confirmado, sin vencimiento.':current.trial_active?'Prueba de Ol Live activa hasta '+date(current.live_trial_until):data.founder_last_release?'Tu prueba terminó y la plaza n.º '+data.founder_last_release.number+' ha quedado disponible. Puedes continuar con 25 € en un pago único, pero el número anterior no está garantizado.':current.complimentary?'Acceso especial por invitación de administración.':current.active?'Ol Live activo hasta '+date(current.access_until):'Música y biblioteca gratuitas. Puedes probar Ol Live durante siete días cuando el vídeo esté disponible.';
@@ -41,7 +34,7 @@ async function refresh() {
   $('enter-streamers').href=current.streamer_active?'/live#stream-studio':'/live#live-catalogue';
   $('pricing').classList.toggle('hidden',Boolean(current.complimentary||current.role==='admin'));
   $('next-payment').textContent=current.role==='admin'?'Tu cuenta de gestión no tiene vencimiento.':current.live_lifetime?'Pago único confirmado. No tienes próximas cuotas.':current.founder_active?'Plaza reservada hasta '+(data.founder_reservation?.payment_due_at?date(data.founder_reservation.payment_due_at):'la activación real de Ol Live y siete días de prueba')+'. Para conservarla se deben confirmar los 25 €. Sin pago, vuelve a estar disponible.':current.complimentary?'Invitación gratuita de administración, hasta su retirada.':current.live_trial_until?'Prueba hasta '+date(current.live_trial_until)+'. Después puedes continuar con 25 € en un único pago; sin pago se libera tu plaza. Nunca se cobra automáticamente.':'Siete días de prueba cuando el vídeo esté disponible. Después, 25 € en un único pago si decides continuar.';
-  if(data.founder_reservation&&!data.founder_reservation.confirmed&&data.founder_reservation.payment_due_at){$('next-payment').textContent='Prueba hasta '+date(data.founder_reservation.trial_until)+'. Confirma los mismos 25 € antes de '+date(data.founder_reservation.payment_due_at)+' para conservar tu número. Al terminar la prueba, continuar cuesta 25 € en un único pago. El pago se verifica manualmente en PayPal. Sin pago se libera la plaza.';}
+  if(data.founder_reservation&&!data.founder_reservation.confirmed&&data.founder_reservation.payment_due_at){$('next-payment').textContent='Prueba hasta '+date(data.founder_reservation.trial_until)+'. Confirma los mismos 25 € antes de '+date(data.founder_reservation.payment_due_at)+' para conservar tu número. Al terminar la prueba, continuar cuesta 25 € en un único pago. Los cobros aún no están disponibles. Sin pago se libera la plaza.';}
   $('my-payments').replaceChildren();
   for (const payment of data.payments) {
     const row = document.createElement('tr');
@@ -52,8 +45,6 @@ async function refresh() {
 }
 async function loadAdmin() {
   const data = await api('/api/admin/members'); members = data.members; payments = data.payments;
-  $('payment-member').replaceChildren();
-  for(const member of members){if(member.role!=='admin'){const option=text('option',member.username);option.value=member.id;$('payment-member').append(option);}}
   renderMembers();
   if($('invitation-history').open)await loadInvitations();
   $('admin-payments').replaceChildren();
@@ -152,7 +143,6 @@ for (const [id,endpoint] of [['login-form','login'],['register-form','register']
 }
 $('logout').addEventListener('click',async()=>{try{await api('/api/account/logout',{});location.assign('/account');}catch(error){status(error.message);}});
 $('create-invite').addEventListener('submit',async event=>{event.preventDefault();try{const result=await api('/api/admin/invite',Object.fromEntries(new FormData(event.target)));const link=text('a',`${location.origin}${result.path}`);link.href=result.path;$('invite-result').replaceChildren(text('span','Acceso gratuito incluido. Comparte esta invitación privada con tu amigo (48 horas para aceptarla): '),link);event.target.reset();await loadAdmin();}catch(error){status(error.message);}});
-$('payment-form').addEventListener('submit',async event=>{event.preventDefault();const button=event.target.querySelector('button');button.disabled=true;try{const result=await api('/api/admin/confirm-payment',Object.fromEntries(new FormData(event.target)));status('Pago único de 25 € confirmado. Ol Live completo sin vencimiento.');event.target.reset();await refresh();}catch(error){status(error.message);}finally{button.disabled=false;}});
 window.OlAccountReady=refresh().then(()=>{if(streamReturn&&current)location.assign(streamReturn);}).catch(error=>status(error.message));
 
 if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('/sw.js').catch(()=>{});

@@ -22,20 +22,11 @@ class OperationsTests(unittest.TestCase):
   self.assertEqual(public.post('/api/payments/webhook/platform',json={}).status_code,400)
   self.assertEqual(self.post(self.admin,'/api/admin/maintenance',dict(data,scope='off')).status_code,200)
   self.assertEqual(public.get('/').status_code,200)
- def test_pending_supervisor_stays_inactive_and_cannot_approve_or_self_grant(self):
-  invite=self.post(self.admin,'/api/admin/invite',{'username':'Rubi'}).json
-  self.assertEqual(self.post(self.admin,'/api/admin/supervisor',{'username':'Rubi','can_review':False}).status_code,200)
-  state=self.admin.get('/api/admin/supervisor').json['supervisor'];self.assertFalse(state['activated']);self.assertFalse(state['can_review'])
-  rubi=app.app.test_client();token=invite['path'].split('=',1)[1]
-  self.assertEqual(self.post(rubi,'/api/account/accept-invite',{'token':token,'password':'local-rubi-test-password-123'}).status_code,200)
-  self.assertEqual(rubi.get('/api/channel-subscriptions/review').status_code,403)
-  self.assertEqual(self.post(rubi,'/api/admin/supervisor',{'username':'Rubi','can_review':True}).status_code,403)
-  self.assertEqual(self.post(self.admin,'/api/admin/supervisor',{'username':'Rubi','can_review':True}).status_code,200)
-  self.assertEqual(rubi.get('/api/channel-subscriptions/review').status_code,200)
-  self.assertEqual(self.post(rubi,'/api/channel-subscriptions/approve',{'party':'moderator','agreement_id':'none'}).status_code,404)
-  self.assertEqual(rubi.get('/api/admin/members').status_code,403)
-  self.post(self.admin,'/api/admin/supervisor',{'username':'Rubi','can_review':False})
-  self.assertEqual(rubi.get('/api/channel-subscriptions/review').status_code,403)
+ def test_retired_supervisor_cannot_be_assigned_or_review_agreements(self):
+  self.assertEqual(self.post(self.admin,'/api/admin/supervisor',{'username':'retired-role','can_review':True}).status_code,410)
+  self.assertTrue(self.admin.get('/api/admin/supervisor').json['retired'])
+  from operations import supervisor_review
+  with app.app.app_context(),m.database() as conn:self.assertFalse(supervisor_review(conn,None))
  def test_no_fabricated_android_signing_certificate(self):
   with patch.dict('os.environ',{'OL_ANDROID_SHA256':''}):self.assertEqual(app.app.test_client().get('/.well-known/assetlinks.json').status_code,404)
   with patch.dict('os.environ',{'OL_ANDROID_SHA256':':'.join(['AB']*32)}):

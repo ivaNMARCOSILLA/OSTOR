@@ -12,7 +12,7 @@ def run():
   assert page.locator('#enter-maggy').is_visible();assert 'gratuita' in page.locator('#access-status').inner_text()
   assert context.request.get(BASE_URL+'/api/rewards').status==200
   assert context.request.get(BASE_URL+'/api/streamers').status==402
-  assert page.locator('#pay-lifetime').get_attribute('href') is None
+  assert page.locator('#pay-lifetime').count()==0
   admin_context=browser.new_context();login_context(admin_context);admin=admin_context.new_page();admin.goto(BASE_URL+'/account');admin.locator('#admin-panel').wait_for()
   admin.locator('#create-invite [name=username]').fill('invited-'+secrets.token_hex(4));admin.locator('#create-invite button').click();link=admin.locator('#invite-result a');link.wait_for();path=link.get_attribute('href')
   invited_context=browser.new_context();invited=invited_context.new_page();invited.goto(BASE_URL+path);invited.locator('#invite-form [name=password]').fill(secrets.token_urlsafe(20));invited.locator('#invite-form button').click();invited.locator('#member-panel').wait_for()

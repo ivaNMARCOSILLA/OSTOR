@@ -69,3 +69,19 @@ html[data-sticker-motion=off] .collection-sticker::before,html[data-sticker-moti
 .ol-live-premiere{position:relative;isolation:isolate;overflow:hidden;padding-right:3rem}.ol-live-premiere:before,.ol-live-premiere:after{content:"";position:absolute;z-index:-1;pointer-events:none;right:-12px;width:94px;height:44px;border-radius:100% 0 100% 0;background:linear-gradient(145deg,#28794b,#79b16a);opacity:.28;transform:rotate(-26deg);box-shadow:-18px 40px 0 #4a995e,-52px -30px 0 #72aa63}.ol-live-premiere:before{top:-10px}.ol-live-premiere:after{bottom:-13px;transform:rotate(32deg);opacity:.22}.ol-live-premiere strong{position:relative}.ol-live-premiere p{max-width:52ch}
 
 .ol-live-premiere-only #stream-status{display:none}
+
+/* Natural text flow at mobile widths and explicit browser zoom. */
+.ol-live-premiere>div,.hero-copy,.platform-header nav,.plan,.panel,.account-shell,.platform-content{min-width:0}
+.ol-live-premiere strong,.ol-live-premiere p,.ol-live-premiere small,.hero-copy h1,.plan h3{overflow-wrap:anywhere}
+.ol-live-premiere strong{display:block;line-height:1.35}.ol-live-premiere small{display:block;line-height:1.6}.premiere-badge{line-height:1.4;max-width:100%;white-space:normal;flex-shrink:0}
+.premiere-public-actions,.premiere-studio-actions{flex-wrap:wrap;gap:.75rem}.hero-copy h1{line-height:1.1;letter-spacing:-.035em}
+@media(max-width:600px){.platform-header{gap:.75rem;flex-wrap:wrap}.platform-header nav{flex-wrap:wrap}.ol-live-premiere>div{flex-basis:100%;min-width:0}.ol-live-premiere .premiere-badge{max-width:100%}.hero-copy h1{font-size:clamp(2.1rem,10vw,3.6rem)}button,.button{white-space:normal;line-height:1.4}.account-shell input,.account-shell select,.account-shell textarea{max-width:100%;box-sizing:border-box}}
+
+/* Original tropical foliage illustration; optimised WebP, no brand artwork. */
+.ol-live-premiere{padding:1.25rem;gap:1rem;background:#f4f8ee;border-color:#a8bf82}
+.ol-live-premiere:before{inset:0;width:auto;height:auto;right:0;top:0;border-radius:inherit;background:url('/assets/ol-live-jungle-leaves.webp?v=9.8.1') right center/cover no-repeat;opacity:1;transform:none;box-shadow:none}
+.ol-live-premiere:after{display:none}
+.ol-live-premiere>div{background:rgba(250,253,247,.96);border:1px solid rgba(228,236,216,.9);border-radius:12px;padding:.8rem 1rem;flex:1}
+.ol-live-premiere>a{padding:.6rem .8rem;background:#fffdf2;border:1px solid #e2dbb5;border-radius:10px;line-height:1.5}
+.ol-live-premiere .premiere-badge{background:#fff5d6;color:#6b501a;border-color:#d8bc77}
+@media(max-width:600px){.ol-live-premiere{padding:1rem;gap:1rem}.ol-live-premiere:before{background-size:auto 100%;background-position:right center}.ol-live-premiere>div{flex-basis:100%;padding:.85rem}.ol-live-premiere>a{width:auto;margin-left:0}}
