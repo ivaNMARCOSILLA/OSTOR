@@ -7,8 +7,8 @@ from membership import database,get_user,user_public,payload,stamp,now_utc,end_o
 bp=Blueprint('payments',__name__)
 ORIGIN='https://electronicama.com'
 class PaymentError(Exception):
- def __init__(self,message,code='provider_unavailable'):
-  super().__init__(message);self.code=code
+ def __init__(self,message,code='provider_unavailable',reason=None):
+  super().__init__(message);self.code=code;self.reason=reason
 
 
 def provider():return os.getenv('OL_PAYMENT_PROVIDER','stripe')
@@ -54,7 +54,10 @@ def stripe(method,path,data=None,account=None,idempotency=None,oauth=False,sandb
    elif response.status_code==403 and code=='request_rejected':code='permission_error'
    message=str(error.get('message','')).lower()
    if 'business name' in message or 'account name' in message:code='business_profile_required';messages[code]='Stripe necesita que completes el nombre del negocio en su configuración antes de abrir Checkout.'
-   raise PaymentError(messages.get(code,'Stripe ha rechazado la creación del pago. Revisa las tareas pendientes de tu cuenta en su panel.'),code if re.fullmatch(r'[a-z_]{1,60}',code) else 'request_rejected')
+   reason=str(error.get('message','')) if sandbox else ''
+   reason=re.sub(r'(?i)(?:sk|rk|pk)_(?:test|live)_[A-Za-z0-9_*.-]+|whsec_[A-Za-z0-9_*.-]+|[A-Za-z0-9]+_secret_[A-Za-z0-9_*.-]+','[credencial oculta]',reason)
+   reason=re.sub(r'https?://\S+','[enlace de Stripe]',reason)[:500]
+   raise PaymentError(messages.get(code,'Stripe ha rechazado la creación del pago. Revisa las tareas pendientes de tu cuenta en su panel.'),code if re.fullmatch(r'[a-z_]{1,60}',code) else 'request_rejected',reason or None)
   return response.json()
  except (requests.RequestException,ValueError):raise PaymentError('El gestor de pagos no está disponible. No se ha confirmado ningún pago.') from None
 
@@ -100,7 +103,7 @@ def test_checkout():
   return jsonify(url=result['url'],mode='test',grants_access=False)
  except PaymentError as e:
   with database() as c:c.execute("UPDATE stripe_orders SET state='failed' WHERE id=? AND checkout_id IS NULL",(ident,))
-  return jsonify(error=str(e),code=e.code),409
+  return jsonify(error=str(e),code=e.code,diagnostic=e.reason),409
 
 @bp.post('/api/payments/connect')
 def connect():

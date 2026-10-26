@@ -46,3 +46,10 @@ class StripeSandboxTests(unittest.TestCase):
    self.assertEqual(result.status_code,409);self.assertEqual(result.json['code'],'business_profile_required')
   with app.app.app_context(),m.database() as c:self.assertEqual(c.execute('SELECT state FROM stripe_orders').fetchone()['state'],'failed')
   self.checkout()
+
+ def test_stripe_diagnostic_redacts_keys_and_links(self):
+  from unittest.mock import Mock
+  response=Mock(status_code=400);response.json.return_value={'error':{'type':'invalid_request_error','message':'Rejected sk_test_hiddenValue123 see https://example.org/private'}}
+  with patch('requests.request',return_value=response):
+   with self.assertRaises(p.PaymentError) as caught:p.stripe('POST','/checkout/sessions',{},sandbox=True)
+  self.assertNotIn('sk_test_hiddenValue123',caught.exception.reason);self.assertNotIn('https://',caught.exception.reason)
