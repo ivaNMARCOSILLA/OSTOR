@@ -13,7 +13,7 @@
   "maskableIconUrl": "https://electronicama.com/assets/app-icon-512.png",
   "splashScreenFadeOutDuration": 300,
   "appVersionCode": 1,
-  "appVersionName": "9.6.3",
+  "appVersionName": "9.6.4",
   "shortcuts": [],
   "generatorApp": "bubblewrap-cli",
   "fallbackType": "customtabs",

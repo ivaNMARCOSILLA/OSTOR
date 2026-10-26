@@ -83,7 +83,7 @@ def test_checkout():
  ident=secrets.token_hex(16);user=get_user()
  with database() as c:
   c.execute('BEGIN IMMEDIATE')
-  pending=c.execute("SELECT * FROM stripe_orders WHERE member_id=? AND kind='test' AND state='open' AND created_at>?",(user['id'],stamp(now_utc()-timedelta(minutes=31)))).fetchone()
+  pending=c.execute("SELECT * FROM stripe_orders WHERE member_id=? AND kind='test' AND state='open' AND created_at>?",(user['id'],stamp(now_utc()-timedelta(minutes=32)))).fetchone()
   if pending:ident=pending['id']
   else:c.execute("INSERT INTO stripe_orders(id,member_id,kind,account_id,amount_cents,currency,created_at,state) VALUES(?,?,'test','',2500,'eur',?,'open')",(ident,user['id'],stamp(now_utc())))
  try:
@@ -97,7 +97,7 @@ def test_checkout():
    with database() as c:c.execute("UPDATE stripe_orders SET state='abandoned' WHERE id=? AND checkout_id IS NULL",(ident,))
    ident=secrets.token_hex(16)
    with database() as c:c.execute("INSERT INTO stripe_orders(id,member_id,kind,account_id,amount_cents,currency,created_at,state) VALUES(?,?,'test','',2500,'eur',?,'open')",(ident,user['id'],stamp(now_utc())))
-  result=stripe('POST','/checkout/sessions',{'mode':'payment','success_url':ORIGIN+'/account?test_payment=processing','cancel_url':ORIGIN+'/account?test_payment=cancelled','metadata[ol_order]':ident,'client_reference_id':ident,'line_items[0][quantity]':'1','line_items[0][price_data][currency]':'eur','line_items[0][price_data][unit_amount]':'2500','line_items[0][price_data][product_data][name]':'Ol · PRUEBA SIN DINERO REAL · no activa acceso','payment_method_types[0]':'card','expires_at':str(int(time.time())+1800)},idempotency='ol-test-'+ident,sandbox=True)
+  result=stripe('POST','/checkout/sessions',{'mode':'payment','managed_payments[enabled]':'false','success_url':ORIGIN+'/account?test_payment=processing','cancel_url':ORIGIN+'/account?test_payment=cancelled','metadata[ol_order]':ident,'client_reference_id':ident,'line_items[0][quantity]':'1','line_items[0][price_data][currency]':'eur','line_items[0][price_data][unit_amount]':'2500','line_items[0][price_data][product_data][name]':'Ol · PRUEBA SIN DINERO REAL · no activa acceso','payment_method_types[0]':'card','expires_at':str(int(time.time())+1860)},idempotency='ol-test-'+ident,sandbox=True)
   if not str(result.get('id','')).startswith('cs_test_') or not str(result.get('url','')).startswith('https://checkout.stripe.com/'):raise PaymentError('Stripe no devolvió una sesión válida de pruebas.')
   with database() as c:c.execute('UPDATE stripe_orders SET checkout_id=? WHERE id=?',(result['id'],ident))
   return jsonify(url=result['url'],mode='test',grants_access=False)
@@ -147,13 +147,13 @@ def validate_order(c,user,channel_id=None):
   mode=sub.settings(c,channel_id);agreement=c.execute('SELECT * FROM subscription_agreements WHERE id=?',(mode['agreement_id'] or '',)).fetchone();account=account_for(c,channel['member_id'])
   if not agreement or not sub.approvals_valid(c,agreement) or not account or agreement['paypal_url']!='stripe:'+account:raise PaymentError('El precio, los beneficios y el destinatario Stripe deben estar aprobados por las tres partes.')
   if sub.active_benefits(c,channel_id,user['id']):raise PaymentError('Ya tienes una suscripción activa. Renueva cuando termine su periodo.')
-  pending=c.execute("SELECT id FROM stripe_orders WHERE member_id=? AND channel_id=? AND paid_at IS NULL AND state='open' AND created_at>?",(user['id'],channel_id,stamp(now_utc()-timedelta(minutes=31)))).fetchone()
+  pending=c.execute("SELECT id FROM stripe_orders WHERE member_id=? AND channel_id=? AND paid_at IS NULL AND state='open' AND created_at>?",(user['id'],channel_id,stamp(now_utc()-timedelta(minutes=32)))).fetchone()
   if pending:raise PaymentError('Ya hay un pago pendiente para este canal. Completa o deja caducar la sesión anterior.')
   return dict(kind='creator',channel_id=channel_id,agreement_id=agreement['id'],account_id=account,amount_cents=agreement['price_cents'],label='Ol Live · '+channel['title'])
  release_expired(c);entitlement=details(user['id'],c);slot=reservation(c,user['id'])
  if user['role']=='admin' or user_public(user)['complimentary'] or entitlement.get('paid_at'):raise PaymentError('Esta cuenta ya dispone de acceso; no corresponde cobrar.')
  if not payment_allowed(entitlement,slot):raise PaymentError('El pago de 25 € aún no está disponible para tu prueba.')
- if c.execute("SELECT id FROM stripe_orders WHERE member_id=? AND kind='platform' AND paid_at IS NULL AND state='open' AND created_at>?",(user['id'],stamp(now_utc()-timedelta(minutes=31)))).fetchone():raise PaymentError('Ya hay un pago pendiente. Completa o deja caducar la sesión anterior.')
+ if c.execute("SELECT id FROM stripe_orders WHERE member_id=? AND kind='platform' AND paid_at IS NULL AND state='open' AND created_at>?",(user['id'],stamp(now_utc()-timedelta(minutes=32)))).fetchone():raise PaymentError('Ya hay un pago pendiente. Completa o deja caducar la sesión anterior.')
  return dict(kind='platform',channel_id=None,agreement_id=None,account_id='',amount_cents=2500,label='Ol Live · acceso de pago único')
 
 @bp.post('/api/payments/checkout')
@@ -172,7 +172,7 @@ def checkout():
   if order['account_id']:
    account=stripe('GET','/accounts/'+order['account_id'])
    if not account.get('charges_enabled') or not account.get('payouts_enabled'):raise PaymentError('El creador debe completar la verificación bancaria en Stripe antes de cobrar.')
-  data={'mode':'payment','success_url':ORIGIN+'/account?payment=processing','cancel_url':ORIGIN+'/account?payment=cancelled','client_reference_id':order_id,'metadata[ol_order]':order_id,'payment_intent_data[metadata][ol_order]':order_id,'line_items[0][quantity]':'1','line_items[0][price_data][currency]':'eur','line_items[0][price_data][unit_amount]':str(order['amount_cents']),'line_items[0][price_data][product_data][name]':order['label'],'expires_at':str(int(time.time())+1800),'payment_method_types[0]':'card'}
+  data={'mode':'payment','managed_payments[enabled]':'false','success_url':ORIGIN+'/account?payment=processing','cancel_url':ORIGIN+'/account?payment=cancelled','client_reference_id':order_id,'metadata[ol_order]':order_id,'payment_intent_data[metadata][ol_order]':order_id,'line_items[0][quantity]':'1','line_items[0][price_data][currency]':'eur','line_items[0][price_data][unit_amount]':str(order['amount_cents']),'line_items[0][price_data][product_data][name]':order['label'],'expires_at':str(int(time.time())+1860),'payment_method_types[0]':'card'}
   result=stripe('POST','/checkout/sessions',data,account=order['account_id'] or None,idempotency='ol-'+order_id)
   if not str(result.get('url','')).startswith('https://checkout.stripe.com/') or not str(result.get('id','')).startswith('cs_'):raise PaymentError('El gestor no devolvió una sesión válida.')
   with database() as c:c.execute('UPDATE stripe_orders SET checkout_id=? WHERE id=?',(result['id'],order_id))

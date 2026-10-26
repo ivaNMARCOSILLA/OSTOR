@@ -38,3 +38,5 @@ Referencias oficiales: [TWA](https://developer.chrome.com/docs/android/trusted-w
 ## Mantenimiento
 
 Administración → Mantenimiento, gestor y supervisión permite bloquear todo, solo directos o solo pagos con un aviso público de Ol y HTTP 503/Retry-After. El administrador conserva acceso. Los webhooks siguen recibiéndose para no perder confirmaciones. `OL_MAINTENANCE=1` es el cierre de emergencia. Desactivar exige retirar esa variable si está activa. El estado se comparte entre la web y la PWA; no hay una app publicada que sincronizar todavía. Los periodos no se extienden automáticamente por un mantenimiento.
+
+Las solicitudes de Checkout indican `managed_payments[enabled]=false`: el diseño usa Payments/Connect estándar, no el producto adicional Managed Payments que algunas cuentas tienen activado por defecto. Esto no cambia ajustes globales de Stripe. La caducidad añade un margen sobre el mínimo de 30 minutos para tolerar el tiempo de red; las reservas de pedido duran algo más que la sesión.

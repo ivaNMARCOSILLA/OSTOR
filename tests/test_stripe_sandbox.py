@@ -12,6 +12,7 @@ class StripeSandboxTests(unittest.TestCase):
   with patch.object(p,'stripe',return_value={'id':'cs_test_local_only','url':'https://checkout.stripe.com/c/pay/local-test'}) as remote:
    r=self.admin.post('/api/admin/payments/test-checkout',json={})
    self.assertEqual(r.status_code,200);self.assertFalse(r.json['grants_access']);self.assertTrue(remote.call_args.kwargs['sandbox'])
+   params=remote.call_args.args[2];self.assertEqual(params['managed_payments[enabled]'],'false');self.assertGreaterEqual(int(params['expires_at'])-int(time.time()),1801)
   with app.app.app_context(),m.database() as c:return dict(c.execute("SELECT * FROM stripe_orders WHERE kind='test'").fetchone())
  def event(self,order,scope='test',kind='checkout.session.completed',ident='evt_sandbox',obj=None):
   data={'id':ident,'livemode':scope!='test','type':kind,'data':{'object':obj or {'id':order['checkout_id'],'payment_status':'paid','amount_total':2500,'currency':'eur','metadata':{'ol_order':order['id']},'payment_intent':'pi_sandbox_local'}}}
