@@ -32,6 +32,8 @@ Los servidores DNS actuales del dominio son ns27.domaincontrol.com y ns28.domain
 1. En Resend → Domains, abrir o añadir `electronicama.com` y copiar los registros que indique Resend. Usar sus valores exactos; este documento no inventa claves DKIM, SPF ni prioridades MX.
 2. En GoDaddy → Mis productos → electronicama.com → DNS, añadir esos registros con su tipo, nombre, valor, TTL y prioridad. Cuando GoDaddy ya añade el dominio al nombre, introducir solo el prefijo que corresponda. No duplicar un registro SPF existente ni reemplazar los MX del dominio raíz sin revisar el alcance.
 3. Volver a Resend y verificar el dominio hasta que figure como Verified. Los registros de recepción de correo o funciones opcionales no deben añadirse por simple deducción: seguir la finalidad indicada por Resend.
-4. El remitente de producción está preparado como `Ol <cuentas@electronicama.com>`. La entrega pública sigue pendiente de verificar el dominio y comprobar un envío real. No usar Gmail como remitente de Resend.
+4. El remitente de producción está preparado como `Ol <cuentas@electronicama.com>`. La entrega pública requiere verificar el dominio y comprobar un envío real. No usar Gmail como remitente de Resend.
 
 El registro por usuario y contraseña permanece disponible mientras se completa esta verificación. El indicador de configuración no equivale a una entrega confirmada.
+
+Comprobación de activación: el titular ha indicado el dominio como Verified en Resend; el remitente de producción se cambió al dominio de Ol y Resend aceptó el reintento de un aviso administrativo pendiente. Esto acredita aceptación por el proveedor, no la lectura en la bandeja del destinatario.
