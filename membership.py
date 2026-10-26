@@ -1,4 +1,4 @@
-"""Server-side membership, manual PayPal verification and multi-device sessions."""
+"""Accounts, private profiles and multi-device authentication."""
 from __future__ import annotations
 
 import calendar
@@ -71,6 +71,15 @@ def init_database():
           created_at TEXT NOT NULL, access_until TEXT,
           welcome_used INTEGER NOT NULL DEFAULT 0, session_version INTEGER NOT NULL DEFAULT 0
         );
+        CREATE TABLE IF NOT EXISTS member_profiles (
+          member_id TEXT PRIMARY KEY REFERENCES members(id) ON DELETE CASCADE,email TEXT UNIQUE,
+          nickname TEXT NOT NULL DEFAULT '',email_verified INTEGER NOT NULL DEFAULT 0,updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS email_tokens (
+          token_hash TEXT PRIMARY KEY,member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+          purpose TEXT NOT NULL,email TEXT NOT NULL,session_version INTEGER NOT NULL,created_at TEXT NOT NULL,expires_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS email_token_expiry ON email_tokens(expires_at);
         CREATE TABLE IF NOT EXISTS member_two_factor (
           member_id TEXT PRIMARY KEY REFERENCES members(id) ON DELETE CASCADE,nonce TEXT,enabled_at TEXT,key_id TEXT,
           last_counter INTEGER NOT NULL DEFAULT -1,pending_nonce TEXT,pending_until TEXT
@@ -203,14 +212,14 @@ def user_public(user,founder_state=None):
     active = user['role'] == 'admin' or complimentary or founder_active or live_lifetime or trial_active or bool(user['access_until'] and datetime.fromisoformat(user['access_until']) > now_utc())
     streamer_until=user['streamer_until'] if 'streamer_until' in user.keys() else None
     streamer_active=active and (user['role']=='admin' or founder_active or live_lifetime or trial_active or bool(streamer_until and datetime.fromisoformat(streamer_until)>now_utc()))
-    return {key: user[key] for key in ('id', 'username', 'role', 'access_until', 'welcome_used')} | {'active': active, 'complimentary':complimentary,'founder_number':founder_number,'founder_active':founder_active,'live_lifetime':live_lifetime,'live_trial_until':trial_until,'trial_active':trial_active, 'streamer_until':streamer_until, 'streamer_active':streamer_active}
+    return {key: user[key] for key in ('id', 'username', 'role', 'access_until', 'welcome_used')} | {'nickname':user['nickname'] if 'nickname' in user.keys() and user['nickname'] else user['username'],'active': active, 'complimentary':complimentary,'founder_number':founder_number,'founder_active':founder_active,'live_lifetime':live_lifetime,'live_trial_until':trial_until,'trial_active':trial_active, 'streamer_until':streamer_until, 'streamer_active':streamer_active}
 
 
 def get_user():
     if hasattr(g, 'member'):
         return g.member
     with database() as conn:
-        row = conn.execute('SELECT m.*,s.until_at AS streamer_until,f.granted_at AS friend_granted_at,f.revoked_at AS friend_revoked_at,l.number AS founder_number,l.revoked_at AS founder_revoked_at,e.trial_until AS live_trial_until,e.paid_at AS live_paid_at,e.revoked_at AS live_revoked_at FROM members m LEFT JOIN streamer_access s ON s.member_id=m.id LEFT JOIN friend_access f ON f.member_id=m.id LEFT JOIN live_founders l ON l.member_id=m.id LEFT JOIN live_entitlements e ON e.member_id=m.id WHERE m.id=?', (session.get('member_id', ''),)).fetchone()
+        row = conn.execute('SELECT m.*,p.nickname AS nickname,p.email AS profile_email,p.email_verified AS profile_email_verified,s.until_at AS streamer_until,f.granted_at AS friend_granted_at,f.revoked_at AS friend_revoked_at,l.number AS founder_number,l.revoked_at AS founder_revoked_at,e.trial_until AS live_trial_until,e.paid_at AS live_paid_at,e.revoked_at AS live_revoked_at FROM members m LEFT JOIN member_profiles p ON p.member_id=m.id LEFT JOIN streamer_access s ON s.member_id=m.id LEFT JOIN friend_access f ON f.member_id=m.id LEFT JOIN live_founders l ON l.member_id=m.id LEFT JOIN live_entitlements e ON e.member_id=m.id WHERE m.id=?', (session.get('member_id', ''),)).fetchone()
     g.member = row if row and row['session_version'] == session.get('session_version') else None
     return g.member
 
@@ -261,7 +270,7 @@ def payload():
 
 def allow_attempt(kind, limit=12):
     # Persisted across workers; no raw addresses in the attempt log.
-    identity = f'{kind}:{request.remote_addr}:{str(payload().get("username", "")).lower()}'
+    identity = f'{kind}:{request.remote_addr}:{str(payload().get("username") or payload().get("email") or "").lower()}'
     bucket = hashlib.sha256(identity.encode()).hexdigest()
     cutoff = stamp(now_utc() - timedelta(minutes=15))
     with database() as conn:
@@ -295,7 +304,7 @@ def account_me():
     with database() as conn:
         slot=reservation(conn,user['id']) if user else None
         last_release=conn.execute('SELECT number,trial_until,released_at FROM founder_slot_history WHERE member_id=? ORDER BY released_at DESC,id DESC LIMIT 1',(user['id'],)).fetchone() if user else None
-    return jsonify(user=user_public(user) if user else None, csrf=csrf_token(), payments=payments, payment_mode='manual_verified', streamer_available=streamer_sales_ready(),premium_available=streamer_sales_ready(),founder_reservation=slot,founder_last_release=dict(last_release) if last_release else None,live_video_ready=live_ready(),music_free=True,live_price_cents=2500,live_trial_months=0,live_trial_days=7,live_premiere=premiere())
+    return jsonify(user=user_public(user) if user else None, csrf=csrf_token(), payments=payments, payment_mode='manual_verified', streamer_available=streamer_sales_ready(),premium_available=streamer_sales_ready(),founder_reservation=slot,founder_last_release=dict(last_release) if last_release else None,live_video_ready=live_ready(),music_free=True,live_price_cents=2500,live_trial_months=0,live_trial_days=7,live_premiere=premiere(),profile={'email':user['profile_email'],'nickname':user['nickname'] or '', 'email_verified':bool(user['profile_email_verified'])} if user else None)
 
 
 @bp.post('/api/account/register')
@@ -306,6 +315,8 @@ def register():
     try:
         name = clean_username(data.get('username'))
         validate_password(data.get('password'))
+        from email_security import clean_email,clean_nickname
+        email=clean_email(data.get('email'));nickname=clean_nickname(data.get('nickname'))
         with database() as conn:
             conn.execute('BEGIN IMMEDIATE')
             from human_check import verify
@@ -314,13 +325,15 @@ def register():
             ident = secrets.token_hex(16)
             conn.execute('INSERT INTO members(id,username,password_hash,created_at) VALUES(?,?,?,?)',
                          (ident, name, generate_password_hash(data['password']), stamp(now_utc())))
+            if email or nickname:conn.execute('INSERT INTO member_profiles(member_id,email,nickname,updated_at) VALUES(?,?,?,?)',(ident,email,nickname,stamp(now_utc())))
         session.clear()
         session.update(member_id=ident, session_version=0,csrf=secrets.token_urlsafe(32))
         session.permanent = True
         notify('registration','Nueva cuenta registrada','Se ha registrado una cuenta de cliente. El registro no activa acceso de pago.',event_key='registration:'+ident)
-        return jsonify(ok=True), 201
+        from email_security import send_security_mail
+        return jsonify(ok=True,verification_sent=send_security_mail(ident,'verify') if email else False), 201
     except (ValueError,) + INTEGRITY_ERRORS as exc:
-        return jsonify(error=str(exc) if isinstance(exc, ValueError) else 'Ese usuario no está disponible.'), 400
+        return jsonify(error=str(exc) if isinstance(exc, ValueError) else 'Ese usuario o correo no está disponible.'), 400
 
 
 @bp.post('/api/account/login')
@@ -329,7 +342,8 @@ def login():
         return jsonify(error='Demasiados intentos. Espera 15 minutos.'), 429
     data = payload()
     with database() as conn:
-        user = conn.execute('SELECT * FROM members WHERE username=?', (str(data.get('username', '')).strip().lower(),)).fetchone()
+        identity=str(data.get('username', '')).strip().lower()
+        user=conn.execute('SELECT m.* FROM members m LEFT JOIN member_profiles p ON p.member_id=m.id WHERE m.username=? OR (p.email=? AND p.email_verified=1)',(identity,identity)).fetchone()
     password = data.get('password')
     valid_password = password if isinstance(password, str) and len(password) <= 256 else ''
     # Verify a dummy hash too, avoiding a fast response for unknown accounts.
@@ -355,7 +369,7 @@ def logout():
 def list_members():
     with database() as conn:
         from live_access import founder_activity
-        users = [user_public(row,founder_state=founder_activity(row['id'],conn) if row['founder_number'] else None) for row in conn.execute('SELECT m.*,s.until_at AS streamer_until,f.granted_at AS friend_granted_at,f.revoked_at AS friend_revoked_at,l.number AS founder_number,l.revoked_at AS founder_revoked_at,e.trial_until AS live_trial_until,e.paid_at AS live_paid_at,e.revoked_at AS live_revoked_at FROM members m LEFT JOIN streamer_access s ON s.member_id=m.id LEFT JOIN friend_access f ON f.member_id=m.id LEFT JOIN live_founders l ON l.member_id=m.id LEFT JOIN live_entitlements e ON e.member_id=m.id ORDER BY m.created_at DESC')]
+        users = [user_public(row,founder_state=founder_activity(row['id'],conn) if row['founder_number'] else None) for row in conn.execute('SELECT m.*,p.nickname AS nickname,p.email AS profile_email,p.email_verified AS profile_email_verified,s.until_at AS streamer_until,f.granted_at AS friend_granted_at,f.revoked_at AS friend_revoked_at,l.number AS founder_number,l.revoked_at AS founder_revoked_at,e.trial_until AS live_trial_until,e.paid_at AS live_paid_at,e.revoked_at AS live_revoked_at FROM members m LEFT JOIN member_profiles p ON p.member_id=m.id LEFT JOIN streamer_access s ON s.member_id=m.id LEFT JOIN friend_access f ON f.member_id=m.id LEFT JOIN live_founders l ON l.member_id=m.id LEFT JOIN live_entitlements e ON e.member_id=m.id ORDER BY m.created_at DESC')]
         payments = [dict(row) for row in conn.execute('SELECT p.*,m.username FROM payments p JOIN members m ON m.id=p.member_id ORDER BY verified_at DESC LIMIT 300')]
     return jsonify(members=users, payments=payments)
 
@@ -545,6 +559,8 @@ def install(app):
     app.register_blueprint(bp)
     from human_check import install as install_human_check
     install_human_check(app)
+    from email_security import install as install_email_security
+    install_email_security(app)
     app.before_request(verify_csrf)
     app.before_request(restrict_music)
     @app.after_request

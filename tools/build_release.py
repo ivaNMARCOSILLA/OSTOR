@@ -10,9 +10,9 @@ version=next(ast.literal_eval(n.value) for n in ast.parse((ROOT/'app.py').read_t
 parser = argparse.ArgumentParser()
 parser.add_argument('--output', type=Path, default=ROOT.parent/'artifacts'/('OL_'+version.replace('.','_')+'.zip'))
 args = parser.parse_args()
-root_files = ['.dockerignore','.env.example','.gitignore','.vercelignore','README.md','AUTORIA_MAGGY.md','Dockerfile','compose.yaml','app.py','membership.py','streamers.py','subscriptions.py','two_factor.py','operations.py','payments.py', 'moderation.py','community.py','notifications.py','rewards.py','founders.py','founder_slots.py','sounds.py','live_access.py','human_check.py','sticker_phrases.py','analytics.py','storage.py','manage.py','vercel.json','.python-version','index.html','manifest.webmanifest','sw.js','requirements.txt','requirements-dev.txt']
+root_files = ['.dockerignore','.env.example','.gitignore','.vercelignore','README.md','AUTORIA_MAGGY.md','Dockerfile','compose.yaml','app.py','membership.py','email_security.py','streamers.py','subscriptions.py','two_factor.py','operations.py','payments.py', 'moderation.py','community.py','notifications.py','rewards.py','founders.py','founder_slots.py','sounds.py','live_access.py','human_check.py','sticker_phrases.py','analytics.py','storage.py','manage.py','vercel.json','.python-version','index.html','manifest.webmanifest','sw.js','requirements.txt','requirements-dev.txt']
 files = [ROOT/name for name in root_files]
-for directory in ['api','assets','legal','tests','docs','tools','android']:
+for directory in ['api','assets','legal','tests','docs','tools','android','.github']:
     for path in (ROOT/directory).rglob('*'):
         if not path.is_file(): continue
         relative=path.relative_to(ROOT)

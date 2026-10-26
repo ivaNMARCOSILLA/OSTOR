@@ -15,14 +15,14 @@ def mail_ready():
     return bool(os.getenv('OL_EMAIL_FROM') and (os.getenv('RESEND_API_KEY') or all(os.getenv(key) for key in ['SMTP_HOST','SMTP_USER','SMTP_PASSWORD'])))
 
 
-def deliver(title,body):
+def deliver_to(recipient,title,body):
     sender=os.environ['OL_EMAIL_FROM']
-    if '\n' in sender or '\r' in sender:raise ValueError('sender')
+    if any('\n' in v or '\r' in v for v in [sender,recipient,title]):raise ValueError('mail header')
     if os.getenv('RESEND_API_KEY'):
-        response=requests.post('https://api.resend.com/emails',headers={'Authorization':'Bearer '+os.environ['RESEND_API_KEY']},json={'from':sender,'to':[RECIPIENT],'subject':'Ol · '+title,'text':body+'\n\nRevisa los detalles en https://electronicama.com/account'},timeout=(2,5))
+        response=requests.post('https://api.resend.com/emails',headers={'Authorization':'Bearer '+os.environ['RESEND_API_KEY']},json={'from':sender,'to':[recipient],'subject':'Ol · '+title,'text':body},timeout=(2,5))
         response.raise_for_status();return
-    message=EmailMessage();message['From']=sender;message['To']=RECIPIENT;message['Subject']='Ol · '+title
-    message.set_content(body+'\n\nRevisa los detalles en https://electronicama.com/account')
+    message=EmailMessage();message['From']=sender;message['To']=recipient;message['Subject']='Ol · '+title
+    message.set_content(body)
     host=os.environ['SMTP_HOST'];port=int(os.getenv('SMTP_PORT','465'));context=ssl.create_default_context()
     if port==465:
         with smtplib.SMTP_SSL(host,port,timeout=5,context=context) as client:
@@ -30,6 +30,10 @@ def deliver(title,body):
     else:
         with smtplib.SMTP(host,port,timeout=5) as client:
             client.ehlo();client.starttls(context=context);client.ehlo();client.login(os.environ['SMTP_USER'],os.environ['SMTP_PASSWORD']);client.send_message(message)
+
+
+def deliver(title,body):
+    return deliver_to(RECIPIENT,title,body+'\n\nRevisa los detalles en https://electronicama.com/account')
 
 
 def send_one(ident):

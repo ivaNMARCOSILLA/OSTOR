@@ -216,6 +216,23 @@ class PostgresMembershipTests(unittest.TestCase):
             futures=[pool.submit(self.post,device,'/api/account/accept-invite',{'token':token,'password':'postgres-friend-password-123'}) for device in devices]
             self.assertEqual(sorted(future.result().status_code for future in futures),[200,400])
 
+    def test_private_email_verification_and_reset_persist_in_postgresql(self):
+        import email_security
+        from urllib.parse import urlsplit,parse_qs
+        with patch.object(email_security,'mail_ready',return_value=True),patch.object(email_security,'deliver_to') as mail:
+            client=self.app.test_client()
+            result=self.post(client,'/api/account/register',{'username':'pg-email-user','email':'pg-private@example.test','nickname':'Ol Amigo','password':'postgres-email-password-123'})
+            self.assertEqual(result.status_code,201)
+            body=mail.call_args.args[2];link=next(line for line in body.splitlines() if line.startswith('https://'));token=parse_qs(urlsplit(link).fragment)['verify-email'][0]
+            self.assertEqual(self.post(client,'/api/account/email/confirm',{'token':token}).status_code,200)
+            self.assertTrue(client.get('/api/account/me').json['profile']['email_verified'])
+            human=client.get('/api/account/human-check').json
+            self.assertEqual(self.post(client,'/api/account/password/request',{'email':'pg-private@example.test','human_id':human['id'],'human_answer':'OL234'}).status_code,200)
+            body=mail.call_args.args[2];link=next(line for line in body.splitlines() if line.startswith('https://'));token=parse_qs(urlsplit(link).fragment)['reset-password'][0]
+            self.assertEqual(self.post(client,'/api/account/password/reset',{'token':token,'password':'postgres-new-email-password-123'}).status_code,200)
+            self.assertIsNone(client.get('/api/account/me').json['user'])
+            self.assertEqual(self.post(client,'/api/account/login',{'username':'pg-private@example.test','password':'postgres-new-email-password-123'}).status_code,200)
+
     def test_cookie_and_accounts_survive_an_independent_app_instance(self):
         fresh=Flask('another_vercel_instance',static_folder=self.app.static_folder)
         m.install(fresh)

@@ -19,3 +19,5 @@ node_modules/
 skills-lock.json
 
 !.env.example
+
+navigation-health.json

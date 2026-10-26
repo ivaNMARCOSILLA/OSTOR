@@ -1,5 +1,6 @@
 """Run functional checks against a temporary database, never real paid accounts."""
 import os
+import json,hashlib
 from pathlib import Path
 import secrets
 import subprocess
@@ -24,6 +25,13 @@ def run():
         sys.path.insert(0,str(ROOT))
         code=patch('human_check.new_code',return_value='OL234');code.start()
         from app import app
+        import email_security
+        mail_directory=Path(directory)/'mail';mail_directory.mkdir()
+        def capture_mail(recipient,title,body):
+            target=mail_directory/(hashlib.sha256(recipient.encode()).hexdigest()+'.jsonl')
+            with target.open('a') as stream:stream.write(json.dumps({'recipient':recipient,'title':title,'body':body})+'\n')
+        delivery_patch=patch.object(email_security,'deliver_to',side_effect=capture_mail);delivery_patch.start()
+        mail_ready_patch=patch.object(email_security,'mail_ready',return_value=True);mail_ready_patch.start()
         from membership import create_admin
         from werkzeug.serving import make_server, WSGIRequestHandler
         password=secrets.token_urlsafe(32)
@@ -32,13 +40,13 @@ def run():
             def log_request(self,*args,**kwargs): pass
         server=make_server('127.0.0.1',0,app,threaded=True,request_handler=QuietHandler)
         thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
-        child_env=dict(os.environ,MAGGY_TEST_BASE_URL=f'http://127.0.0.1:{server.server_port}',MAGGY_TEST_USER='browser-admin',MAGGY_TEST_PASSWORD=password)
+        child_env=dict(os.environ,MAGGY_TEST_BASE_URL=f'http://127.0.0.1:{server.server_port}',MAGGY_TEST_USER='browser-admin',MAGGY_TEST_PASSWORD=password,OL_TEST_MAIL_CAPTURE_DIR=str(mail_directory))
         try:
             selected=sys.argv[1:] or ['test_preview_browser.py','test_audio_browser.py','test_membership_browser.py','test_streamers_browser.py']
             for name in selected:
                 subprocess.run([sys.executable,str(ROOT/'tests'/name)],cwd=ROOT,env=child_env,check=True)
         finally:
-            server.shutdown();server.server_close()
+            server.shutdown();server.server_close();delivery_patch.stop();mail_ready_patch.stop()
 
 
 if __name__=='__main__':run()

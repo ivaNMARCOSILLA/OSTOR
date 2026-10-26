@@ -1,9 +1,10 @@
-import {openSubscription} from '/assets/subscriptions.js?v=9.8.2';
-import {founderBadge} from '/assets/badges.js?v=9.8.2';
+import {openSubscription} from '/assets/subscriptions.js?v=9.8.3';
+import {founderBadge} from '/assets/badges.js?v=9.8.3';
 'use strict';
-import {StreamCommunity} from '/assets/community.js?v=9.8.2';
-import {StudioTools} from '/assets/studio-tools.js?v=9.8.2';
+import {StreamCommunity} from '/assets/community.js?v=9.8.3';
+import {StudioTools} from '/assets/studio-tools.js?v=9.8.3';
 const $=id=>document.getElementById(id);
+let premiereOnly=false;
 let publicInfo=null,liveCategory='all';
 const categoryNames={videojuegos:'Videojuegos',musica:'Música',entretenimiento:'Entretenimiento',actualidad:'Actualidad'};
 let info=null,room=null,selected=null,publishing=false,heartbeat=null,sdkPromise=null,connecting=false,connectionGeneration=0,giftRevision=0;
@@ -20,7 +21,8 @@ const tools=new StudioTools({getRoom:()=>publishing?room:null,getPreview:()=>pre
 async function sdk(){if(window.LivekitClient)return window.LivekitClient;if(!sdkPromise)sdkPromise=new Promise((resolve,reject)=>{const s=document.createElement('script');s.src='/assets/vendor/livekit-client-2.23.0.umd.js';s.onload=()=>resolve(window.LivekitClient);s.onerror=()=>reject(new Error('No se pudo cargar el reproductor de directos.'));document.head.append(s);});return sdkPromise;}
 async function refresh(){
  const launch=await api('/api/status');
- if(launch.live_premiere&&(await api('/api/account/me')).user?.role!=='admin'){document.body.classList.add('ol-live-premiere-only');return;}
+ premiereOnly=launch.live_premiere&&(await api('/api/account/me')).user?.role!=='admin';
+ if(premiereOnly){document.body.classList.add('ol-live-premiere-only');return;}
  document.body.classList.remove('ol-live-premiere-only');
  if(!window.MaggySession.premium){publicInfo=await api('/api/live/catalogue');renderCatalogue();return;}
  info=await api('/api/streamers');
@@ -60,6 +62,7 @@ function renderCatalogue(){
 }
 function focusSection(section,heading){section.classList.remove('hidden');section.scrollIntoView({behavior:'smooth',block:'start'});heading?.focus({preventScroll:true});}
 function navigateSection(hash){
+ if(hash==='#ol-live-premiere'||premiereOnly&&['#live-catalogue','#creator-panel','#stream-studio'].includes(hash)){const target=$('ol-live-premiere');target.tabIndex=-1;focusSection(target,target);return;}
  if(hash==='#video-setup'){if(info?.setup_checks){const heading=$('video-setup').querySelector('h2');heading.tabIndex=-1;focusSection($('video-setup'),heading);}return;}
  if(hash==='#live-catalogue'){renderCatalogue();focusSection($('live-catalogue'),$('catalogue-title'));return;}
  if(!['#creator-panel','#stream-studio'].includes(hash))return;
@@ -170,7 +173,7 @@ window.addEventListener('maggy:access-changed',event=>{if(!event.detail.premium)
 window.addEventListener('pagehide',()=>{community.stop();stopPreview('',true);if(publishing)window.MaggySession.fetch('/api/streamers/me/live',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({live:false}),keepalive:true}).catch(()=>{});room?.disconnect();});
 await window.MaggySession.ready;
 $('stream-access').classList.toggle('hidden',window.MaggySession.premium);
-if(window.MaggySession.premium){try{await refresh();status(info.video_ready?'Elige un directo o prepara tu canal.':'Zona preparada; las emisiones y las altas de Ol Live aún no están disponibles.');navigateSection(location.hash);}catch(error){status(error.message);}}
+if(window.MaggySession.premium){try{await refresh();status(info?.video_ready?'Elige un directo o prepara tu canal.':'Zona preparada; las emisiones y las altas de Ol Live aún no están disponibles.');navigateSection(location.hash);}catch(error){status(error.message);}}
 else{try{await refresh();}catch(error){$('catalogue-status').textContent=error.message;}status('Explora Ol Live. Para ver o emitir necesitas acceso premium.');const hash=/^#canal-[a-f0-9]{32}$/.test(location.hash)||['#live-catalogue','#creator-panel','#stream-studio'].includes(location.hash)?location.hash:'#live-catalogue';$('stream-access').querySelector('a').href='/account?next='+encodeURIComponent('/live'+hash);}
 if(window.MaggySession.premium&&/^#canal-[a-f0-9]{32}$/.test(location.hash)){const card=document.getElementById(location.hash.slice(1));if(card)card.scrollIntoView({behavior:'smooth'});else status('Este canal no está en directo ahora. Vuelve a abrir el enlace cuando comience la emisión.');}
 renderCatalogue();
