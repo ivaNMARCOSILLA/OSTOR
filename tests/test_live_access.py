@@ -21,19 +21,19 @@ class LiveAccessTests(unittest.TestCase):
   return client.post(path,json=data,headers={'X-CSRF-Token':token})
  def pay(self,client=None,reference='REAL-REFERENCE-001',member=None,plan='lifetime'):
   return self.post(client or self.admin,'/api/admin/confirm-payment',{'member_id':member or self.ident,'plan':plan,'reference':reference})
- def test_three_calendar_months_once_and_no_premature_or_repeated_billing(self):
+ def test_seven_day_trial_once_and_no_premature_or_repeated_billing(self):
   initial=datetime(2027,1,31,12,tzinfo=timezone.utc)
   with patch.object(st,'live_ready',return_value=False):
    self.assertEqual(self.post(self.user,'/api/account/live-trial',{}).status_code,409)
   with app.app.app_context(),m.database() as conn:self.assertEqual(conn.execute('SELECT COUNT(*) AS n FROM live_entitlements').fetchone()['n'],0)
   with patch.object(st,'live_ready',return_value=True),patch.object(st,'streamer_sales_ready',return_value=True),patch.object(access,'now_utc',return_value=initial),patch.object(m,'now_utc',return_value=initial):
    self.assertEqual(self.pay().status_code,409)
-   trial=self.post(self.user,'/api/account/live-trial',{});self.assertEqual(trial.json['trial_until'],'2027-04-30T12:00:00+00:00')
+   trial=self.post(self.user,'/api/account/live-trial',{});self.assertEqual(trial.json['trial_until'],'2027-02-07T12:00:00+00:00')
    self.assertEqual(self.post(self.user,'/api/account/live-trial',{}).json['trial_until'],trial.json['trial_until'])
    self.assertTrue(self.user.get('/api/account/me').json['user']['streamer_active'])
    self.assertEqual(self.pay().status_code,409)
    for retired in ['welcome','monthly','streamer']:self.assertEqual(self.pay(plan=retired).status_code,400)
-  expired=datetime(2027,4,30,12,tzinfo=timezone.utc)
+  expired=datetime(2027,2,7,12,tzinfo=timezone.utc)
   with patch.object(st,'streamer_sales_ready',return_value=True),patch.object(m,'now_utc',return_value=expired):
    self.assertFalse(self.user.get('/api/account/me').json['user']['active'])
    self.assertEqual(self.pay(self.user).status_code,403)

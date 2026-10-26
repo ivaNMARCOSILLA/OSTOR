@@ -5,7 +5,7 @@ from membership import create_admin, init_database
 
 def authenticated_client(app, cleanup):
     from unittest.mock import patch
-    legacy=patch.dict('os.environ',{'OL_PAYMENT_PROVIDER':'legacy_paypal'});legacy.start();cleanup(legacy.stop)
+    legacy=patch.dict('os.environ',{'OL_PAYMENT_PROVIDER':'legacy_paypal','OL_LIVE_PREMIERE':'0'});legacy.start();cleanup(legacy.stop)
     temporary = tempfile.TemporaryDirectory()
     original = app.config['MEMBERSHIP_DATABASE']
     original_url = app.config.get('MEMBERSHIP_DATABASE_URL')

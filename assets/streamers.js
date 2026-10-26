@@ -1,8 +1,8 @@
-import {openSubscription} from '/assets/subscriptions.js?v=9.7.1';
-import {founderBadge} from '/assets/badges.js?v=9.7.1';
+import {openSubscription} from '/assets/subscriptions.js?v=9.8.0';
+import {founderBadge} from '/assets/badges.js?v=9.8.0';
 'use strict';
-import {StreamCommunity} from '/assets/community.js?v=9.7.1';
-import {StudioTools} from '/assets/studio-tools.js?v=9.7.1';
+import {StreamCommunity} from '/assets/community.js?v=9.8.0';
+import {StudioTools} from '/assets/studio-tools.js?v=9.8.0';
 const $=id=>document.getElementById(id);
 let publicInfo=null,liveCategory='all';
 const categoryNames={videojuegos:'Videojuegos',musica:'Música',entretenimiento:'Entretenimiento',actualidad:'Actualidad'};
@@ -19,6 +19,9 @@ function node(tag,text){const n=document.createElement(tag);if(text!==undefined)
 const tools=new StudioTools({getRoom:()=>publishing?room:null,getPreview:()=>previewStream,getChannel:()=>room&&selected?selected:info?.mine,restartPreview:()=>privatePreview(),canPreview:()=>!connecting&&!publishing&&Boolean(info?.mine&&info.streamer_active),report:message=>{status(message);$(room?'live-tools-status':'studio-status').textContent=message;}});
 async function sdk(){if(window.LivekitClient)return window.LivekitClient;if(!sdkPromise)sdkPromise=new Promise((resolve,reject)=>{const s=document.createElement('script');s.src='/assets/vendor/livekit-client-2.23.0.umd.js';s.onload=()=>resolve(window.LivekitClient);s.onerror=()=>reject(new Error('No se pudo cargar el reproductor de directos.'));document.head.append(s);});return sdkPromise;}
 async function refresh(){
+ const launch=await api('/api/status');
+ if(launch.live_premiere&&(await api('/api/account/me')).user?.role!=='admin'){document.body.classList.add('ol-live-premiere-only');return;}
+ document.body.classList.remove('ol-live-premiere-only');
  if(!window.MaggySession.premium){publicInfo=await api('/api/live/catalogue');renderCatalogue();return;}
  info=await api('/api/streamers');
  $('stream-unavailable').classList.toggle('hidden',info.video_ready);
@@ -62,7 +65,7 @@ function navigateSection(hash){
  if(!['#creator-panel','#stream-studio'].includes(hash))return;
  if(!window.MaggySession.premium){$('stream-access').querySelector('a').href='/account?next='+encodeURIComponent('/live'+hash);focusSection($('stream-access'),$('stream-access').querySelector('h2'));return;}
  if(!info){status('No se pudo comprobar el acceso al estudio. Pulsa «Actualizar canales» para reintentar.');focusSection($('live-catalogue'),$('catalogue-title'));return;}
- if(!info.streamer_active){$('creator-access-message').textContent=info.streamer_sales_available?'Activa tus tres meses de prueba de Ol Live desde tu cuenta. Después, si quieres continuar, el pago único es de 25 €.':'Puedes ver los directos con tu acceso habitual cuando estén disponibles. Crear y emitir requiere el plan Ol Live Creador; sus altas y cobros siguen bloqueados mientras se prepara el servicio.';focusSection($('creator-access'),$('creator-access-title'));return;}
+ if(!info.streamer_active){$('creator-access-message').textContent=info.streamer_sales_available?'Activa tus siete días de prueba de Ol Live desde tu cuenta. Después, si quieres continuar, el pago único es de 25 €.':'Puedes ver los directos con tu acceso habitual cuando estén disponibles. Crear y emitir requiere el plan Ol Live Creador; sus altas y cobros siguen bloqueados mientras se prepara el servicio.';focusSection($('creator-access'),$('creator-access-title'));return;}
  if(hash==='#creator-panel'||!info.mine){focusSection($('creator-panel'),$('creator-form-title'));return;}
  showStudio();
 }

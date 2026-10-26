@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def run():
     with tempfile.TemporaryDirectory() as directory:
         os.environ.setdefault('OL_PAYMENT_PROVIDER','legacy_paypal')
+        os.environ.setdefault('OL_LIVE_PREMIERE','0')
         os.environ.pop('DATABASE_URL', None)
         os.environ.pop('VERCEL', None)
         os.environ.pop('MAGGY_SESSION_SECRET', None)

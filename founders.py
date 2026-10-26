@@ -27,10 +27,12 @@ def status():
   with database() as conn:mine['activity']=founder_activity(user['id'],conn)
   mine['signature']=signature_from_row(preferences or {})
  if mine:mine['future_transfer_eligible']=mine['number']==1
- return jsonify(limit=LIMIT,claimed=claimed,remaining=max(0,LIMIT-claimed),mine=mine if mine else None,lifetime=False,transfer_sales_open=False,activity_required=True,payment_required=True,trial_months=3)
+ return jsonify(limit=LIMIT,claimed=claimed,remaining=max(0,LIMIT-claimed),mine=mine if mine else None,lifetime=False,transfer_sales_open=False,activity_required=True,payment_required=True,trial_months=0,trial_days=7)
 
 @bp.post('/api/live/founders/claim')
 def claim():
+ from operations import premiere
+ if premiere():return jsonify(error='Ol Live · próximo estreno. Las plazas aún no están abiertas.'),409
  user=get_user()
  if not user:return jsonify(error='Crea una cuenta gratuita o inicia sesión para reservar tu plaza.'),401
  if not allow_attempt('founder-claim',12):return jsonify(error='Demasiados intentos. Espera unos minutos.'),429
@@ -50,11 +52,11 @@ def claim():
   if number is None:return jsonify(error='Las 100 plazas de prueba ya están reservadas.'),409
   launch=conn.execute("SELECT started_at FROM live_launch WHERE id='live'").fetchone()
   if launch:
-   from live_access import months_after
-   end=stamp(months_after(now_utc()))
+   from live_access import trial_end
+   end=stamp(trial_end(now_utc()))
    conn.execute('INSERT INTO live_entitlements(member_id,trial_started_at,trial_until) VALUES(?,?,?) ON CONFLICT(member_id) DO NOTHING',(user['id'],stamp(now_utc()),end))
    conn.execute('INSERT INTO founder_activity(member_id,qualification_until) VALUES(?,?) ON CONFLICT(member_id) DO NOTHING',(user['id'],end))
- notify('founder','Nueva plaza Ol Live fundadores',f'Se ha reservado la plaza {number} de 100. Reserva durante tres meses. Para conservarla se debe confirmar el pago único de 25 € antes del vencimiento y mantener la actividad indicada. Consulta la cuenta en administración.',event_key='founder:'+user['id'])
+ notify('founder','Nueva plaza Ol Live fundadores',f'Se ha reservado la plaza {number} de 100. Reserva durante siete días. Para conservarla se debe confirmar el pago único de 25 € antes del vencimiento y mantener la actividad indicada. Consulta la cuenta en administración.',event_key='founder:'+user['id'])
  return jsonify(ok=True,number=number,already_claimed=False,lifetime=False,payment_required=True)
 
 @bp.post('/api/admin/founders/revoke')

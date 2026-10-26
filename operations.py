@@ -13,6 +13,8 @@ def init_database():
  member_id TEXT PRIMARY KEY REFERENCES members(id) ON DELETE CASCADE,assigned_by TEXT NOT NULL REFERENCES members(id),assigned_at TEXT NOT NULL,can_review INTEGER NOT NULL DEFAULT 0,revoked_at TEXT
  );''')
 
+def premiere():return os.getenv('OL_LIVE_PREMIERE','1')=='1'
+
 def state():
  with database() as c:r=c.execute("SELECT scope,message,updated_at FROM ol_operations WHERE id='maintenance'").fetchone()
  d=dict(r) if r else {'scope':'off','message':'Ol en mantenimiento. Estamos preparando tu mejor momento. Vuelve en unos minutos.','updated_at':None}
@@ -42,7 +44,7 @@ def save_fan_alias():
  return jsonify(ok=True,alias=alias)
 
 @bp.get('/api/status')
-def status():return jsonify(maintenance=state())
+def status():return jsonify(maintenance=state(),live_premiere=premiere())
 
 @bp.post('/api/admin/maintenance')
 @require_admin
@@ -59,7 +61,7 @@ def supervisor_review(c,user):return bool(user and c.execute('SELECT member_id F
 @require_admin
 def launch_readiness():
  from streamers import video_configuration_checks,live_ready
- from payments import configured,ready
+ from payments import configured,ready,provider
  with database() as c:
   test=c.execute("SELECT COUNT(*) AS n FROM stripe_orders WHERE kind='test' AND state='test_paid' AND paid_at IS NOT NULL").fetchone()['n']
  checks={'video':video_configuration_checks(),'payments':{
@@ -69,6 +71,7 @@ def launch_readiness():
   'STRIPE_CONNECT_WEBHOOK_SECRET':os.getenv('STRIPE_CONNECT_WEBHOOK_SECRET','').startswith('whsec_'),
   'MAGGY_STREAMER_SALES_ENABLED':os.getenv('MAGGY_STREAMER_SALES_ENABLED')=='1',
   'OL_PAYMENTS_ENABLED':os.getenv('OL_PAYMENTS_ENABLED')=='1'}}
+ if provider()=='legacy_paypal':checks['payments']={'PAYPAL_MANUAL_VERIFICATION':True,'MAGGY_STREAMER_SALES_ENABLED':os.getenv('MAGGY_STREAMER_SALES_ENABLED')=='1'}
  return jsonify(environment=os.getenv('VERCEL_ENV','local'),checks=checks,stripe_test_confirmed=test>0,video_configuration_complete=live_ready(),live_payments_enabled=ready(),configuration_only=True,packaging={'web_pwa':True,'play_signing_configured':bool(os.getenv('OL_ANDROID_SHA256')),'play_publication_verified':False},message='Los datos presentes no sustituyen probar vídeo entre dos dispositivos ni verificar la cuenta comercial de Stripe.')
 
 @bp.get('/api/admin/supervisor')

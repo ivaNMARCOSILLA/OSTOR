@@ -1,10 +1,13 @@
-"""Ol Live: one three-month trial, one fixed price, verified creator activity."""
+"""Ol Live: one seven-day trial, one fixed price, verified creator activity."""
 import calendar,os,time
 from datetime import datetime,timedelta
 from flask import Blueprint,jsonify
 from membership import database,get_user,now_utc,stamp,payload
 bp=Blueprint('live_access',__name__)
 PRICE_CENTS=2500
+TRIAL_DAYS=7
+
+def trial_end(instant):return instant+timedelta(days=TRIAL_DAYS)
 INITIAL_MINUTES=30
 MONTHLY_MINUTES=120
 
@@ -36,7 +39,9 @@ def trial():
  user=get_user()
  if not user:return jsonify(error='Entra en tu cuenta para iniciar la prueba.'),401
  from streamers import live_ready
- if not live_ready() or not video_service_available():return jsonify(error='Tus tres meses empezarán cuando Ol Live esté disponible. Todavía no consumimos tu prueba.'),409
+ from operations import premiere
+ if premiere():return jsonify(error='Ol Live · próximo estreno. Las pruebas todavía no empiezan.'),409
+ if not live_ready() or not video_service_available():return jsonify(error='Tus siete días empezarán cuando Ol Live esté disponible. Todavía no consumimos tu prueba.'),409
  with database() as conn:
   conn.execute('BEGIN IMMEDIATE')
   from founder_slots import release_expired,reserve
@@ -51,7 +56,7 @@ def trial():
   elif own['revoked_at']:return jsonify(error='Tu plaza fue desactivada. Contacta con administración.'),403
   number=reserve(conn,user['id'])
   if number is None:return jsonify(error='Las 100 plazas de prueba están reservadas.'),409
-  start=now_utc();end=months_after(start)
+  start=now_utc();end=trial_end(start)
   conn.execute("INSERT INTO live_launch(id,started_at) VALUES('live',?) ON CONFLICT(id) DO NOTHING",(stamp(start),))
   conn.execute('INSERT INTO live_entitlements(member_id,trial_started_at,trial_until) VALUES(?,?,?)',(user['id'],stamp(start),stamp(end)))
   if number:

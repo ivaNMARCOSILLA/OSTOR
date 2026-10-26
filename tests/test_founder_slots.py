@@ -34,7 +34,7 @@ class FounderSlotsTests(unittest.TestCase):
  def test_trial_reserves_slot_then_unpaid_expiry_recycles_number_without_resetting_trial(self):
   with self.clock(self.initial):
    first=self.member('first-holder');trial=self.post(first,'/api/account/live-trial',{})
-   self.assertEqual(trial.status_code,200);self.assertEqual(trial.json['founder_number'],1);self.assertEqual(trial.json['trial_until'],'2027-04-30T12:00:00+00:00')
+   self.assertEqual(trial.status_code,200);self.assertEqual(trial.json['founder_number'],1);self.assertEqual(trial.json['trial_until'],'2027-02-07T12:00:00+00:00')
    self.assertEqual(first.get('/api/live/founders').json['remaining'],99)
    self.assertEqual(self.pay(first,'NO-EARLY-PAYMENT').status_code,409)
    self.assertEqual(self.post(first,'/api/live/founders/signature',{'mode':'letra','letter':'A','caption':'Mi estilo'}).status_code,200)
@@ -65,8 +65,8 @@ class FounderSlotsTests(unittest.TestCase):
   launched=self.initial+timedelta(days=10)
   with app.app.app_context(),m.database() as conn:
    conn.execute("INSERT INTO live_launch(id,started_at) VALUES('live',?)",(m.stamp(launched),))
-  expected=m.stamp(live_access.months_after(launched))
-  with self.clock(self.initial+timedelta(days=60)):
+  expected=m.stamp(live_access.trial_end(launched))
+  with self.clock(self.initial+timedelta(days=12)):
    me=client.get('/api/account/me').json
    self.assertEqual(me['user']['live_trial_until'],expected)
    started=self.post(client,'/api/account/live-trial',{})
@@ -77,6 +77,8 @@ class FounderSlotsTests(unittest.TestCase):
  def test_confirmed_payment_in_final_week_keeps_number_after_trial(self):
   with self.clock(self.initial):
    client=self.member('paid-holder');self.post(client,'/api/account/live-trial',{})
+   ident=client.get('/api/account/me').json['user']['id']
+   with app.app.app_context(),m.database() as conn:conn.execute('UPDATE live_entitlements SET trial_until=? WHERE member_id=?',('2027-04-30T12:00:00+00:00',ident))
   with self.clock(datetime(2027,4,24,12,tzinfo=timezone.utc)):
    self.assertEqual(self.pay(client,'FINAL-WEEK-001').status_code,200)
    self.assertTrue(client.get('/api/account/me').json['founder_reservation']['confirmed'])

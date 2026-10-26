@@ -11,12 +11,15 @@ class PaymentError(Exception):
   super().__init__(message);self.code=code;self.reason=reason
 
 
-def provider():return os.getenv('OL_PAYMENT_PROVIDER','stripe')
-def configured():return bool(os.getenv('STRIPE_SECRET_KEY','').startswith(('sk_live_','rk_live_')) and os.getenv('STRIPE_WEBHOOK_SECRET','').startswith('whsec_') and os.getenv('STRIPE_CONNECT_WEBHOOK_SECRET','').startswith('whsec_') and os.getenv('OL_PAYMENTS_ENABLED')=='1')
+def provider():return os.getenv('OL_PAYMENT_PROVIDER','legacy_paypal')
+def configured():
+ if provider()=='legacy_paypal':return True
+ return bool(os.getenv('STRIPE_SECRET_KEY','').startswith(('sk_live_','rk_live_')) and os.getenv('STRIPE_WEBHOOK_SECRET','').startswith('whsec_') and os.getenv('STRIPE_CONNECT_WEBHOOK_SECRET','').startswith('whsec_') and os.getenv('OL_PAYMENTS_ENABLED')=='1')
 def ready():
  from streamers import streamer_sales_ready
  from operations import state
- return not session.get('ol_play_distribution',False) and configured() and streamer_sales_ready() and state()['scope'] not in {'all','payments','live'}
+ from operations import premiere
+ return not premiere() and not session.get('ol_play_distribution',False) and configured() and streamer_sales_ready() and state()['scope'] not in {'all','payments','live'}
 
 def init_database():
  with database() as c:c.executescript('''CREATE TABLE IF NOT EXISTS stripe_accounts (
@@ -68,7 +71,7 @@ def account_for(c,member_id):
 def status():
  user=get_user()
  with database() as c:account=account_for(c,user['id']) if user else None
- return jsonify(provider=provider(),configured=configured(),enabled=ready(),creator_connected=bool(account),connect_available=bool(os.getenv('STRIPE_CONNECT_CLIENT_ID','').startswith('ca_') and os.getenv('STRIPE_SECRET_KEY','').startswith('sk_live_')),platform_price_cents=2500,currency='eur',platform_commission_percent=0,renewal='manual',play_distribution=bool(session.get('ol_play_distribution')),pending_reason=None if ready() else 'El gestor y Ol Live deben estar configurados y comprobados antes de cobrar.')
+ return jsonify(provider=provider(),configured=configured(),enabled=ready(),creator_connected=bool(account),connect_available=bool(provider()=='stripe' and os.getenv('STRIPE_CONNECT_CLIENT_ID','').startswith('ca_') and os.getenv('STRIPE_SECRET_KEY','').startswith('sk_live_')),platform_price_cents=2500,currency='eur',platform_commission_percent=0,renewal='manual',play_distribution=bool(session.get('ol_play_distribution')),pending_reason=None if ready() else 'PayPal temporal preparado; Ol Live debe estar disponible y comprobado antes de cobrar.' if provider()=='legacy_paypal' else 'El gestor y Ol Live deben estar configurados y comprobados antes de cobrar.')
 
 def sandbox_configured():return bool(os.getenv('STRIPE_TEST_SECRET_KEY','').startswith(('sk_test_','rk_test_')) and os.getenv('STRIPE_TEST_WEBHOOK_SECRET','').startswith('whsec_'))
 
@@ -110,7 +113,7 @@ def connect():
  user=get_user()
  if not user or not user_public(user)['streamer_active']:return jsonify(error='Entra con una cuenta de creador activa.'),403
  client=os.getenv('STRIPE_CONNECT_CLIENT_ID','')
- if not client.startswith('ca_') or not os.getenv('STRIPE_SECRET_KEY','').startswith('sk_live_'):return jsonify(error='La conexión de creadores con Stripe está pendiente de configurar.'),409
+ if provider()!='stripe' or not client.startswith('ca_') or not os.getenv('STRIPE_SECRET_KEY','').startswith('sk_live_'):return jsonify(error='La conexión de creadores con Stripe está pendiente de configurar.'),409
  if not allow_attempt('stripe-connect',limit=6):return jsonify(error='Espera unos minutos antes de volver a conectar.'),429
  token=secrets.token_urlsafe(32)
  with database() as c:
@@ -160,7 +163,7 @@ def validate_order(c,user,channel_id=None):
 def checkout():
  user=get_user()
  if not user:return jsonify(error='Entra antes de pagar.'),401
- if not ready():return jsonify(error='Ol está preparando el gestor de pagos. Todavía no se habilitan cobros.'),409
+ if provider()!='stripe' or not ready():return jsonify(error='Ol está preparando el gestor de pagos. Todavía no se habilitan cobros.'),409
  if not allow_attempt('stripe-checkout',limit=8):return jsonify(error='Espera unos minutos antes de volver a pagar.'),429
  channel_id=payload().get('channel_id')
  if channel_id is not None and not isinstance(channel_id,str):return jsonify(error='Canal no válido.'),400

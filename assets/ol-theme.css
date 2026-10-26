@@ -60,3 +60,12 @@ html[data-sticker-motion=off] .collection-sticker::before,html[data-sticker-moti
 [hidden]{display:none!important}
 
 .web-funds-note{margin:18px 0;padding:16px 18px;background:#f7f5fb;border:1px solid #ded8eb;border-radius:14px}.web-funds-note strong{display:block;margin-top:6px;color:#56426f}.web-funds-note p{margin:6px 0 0;font-size:.9rem}.launch-check-list{padding-left:1.2rem;overflow-wrap:anywhere}.launch-check-list li{margin:.6rem 0}
+
+/* Ol Live premiere: readable on mobile, no simulated audience or urgency. */
+.ol-live-premiere{display:flex;align-items:center;gap:1rem;padding:1.25rem;margin:1rem 0;border:1px solid #d6c28f;border-radius:20px;background:linear-gradient(115deg,#fffaf0,#eef3fc);color:#25364e;flex-wrap:wrap}.ol-live-premiere p{margin:.35rem 0}.ol-live-premiere small{color:#52637c}.ol-live-premiere a{margin-left:auto;color:#335b9b;font-weight:700}.premiere-badge{color:#71501a;background:#f5e7bf;border:1px solid #d5b66a;border-radius:999px;padding:.45rem .7rem;font-size:.75rem;letter-spacing:.1em;font-weight:800}@media(max-width:600px){.ol-live-premiere{align-items:flex-start;gap:.75rem}.ol-live-premiere div{flex:1;min-width:190px}.ol-live-premiere a{margin-left:0;width:100%}}
+
+.premiere-public-actions{display:none}.ol-live-premiere-only .premiere-public-actions{display:contents}.ol-live-premiere-only .premiere-studio-actions{display:none}.ol-live-premiere-only .platform-content>section:not(.intro),.ol-live-premiere-only .platform-sidebar,.ol-live-premiere-only .header-live{display:none!important}.ol-live-premiere-only .platform-content{grid-column:1/-1}.ol-live-premiere-only .platform-header nav a[href^="#"]{display:none}.ol-live-premiere-only .ol-live-premiere{grid-column:1/-1}
+/* Original botanical ornament: green leaves around the premiere notice. */
+.ol-live-premiere{position:relative;isolation:isolate;overflow:hidden;padding-right:3rem}.ol-live-premiere:before,.ol-live-premiere:after{content:"";position:absolute;z-index:-1;pointer-events:none;right:-12px;width:94px;height:44px;border-radius:100% 0 100% 0;background:linear-gradient(145deg,#28794b,#79b16a);opacity:.28;transform:rotate(-26deg);box-shadow:-18px 40px 0 #4a995e,-52px -30px 0 #72aa63}.ol-live-premiere:before{top:-10px}.ol-live-premiere:after{bottom:-13px;transform:rotate(32deg);opacity:.22}.ol-live-premiere strong{position:relative}.ol-live-premiere p{max-width:52ch}
+
+.ol-live-premiere-only #stream-status{display:none}

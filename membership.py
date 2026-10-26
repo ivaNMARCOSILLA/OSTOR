@@ -285,6 +285,7 @@ def account_me():
     with database() as conn:
         payments = [dict(row) for row in conn.execute('SELECT plan,amount_cents,starts_at,ends_at,verified_at FROM payments WHERE member_id=? ORDER BY ends_at DESC', (user['id'] if user else '',))]
     from streamers import streamer_sales_ready,live_ready
+    from operations import premiere
     from founder_slots import cleanup,reservation
     cleanup()
     if user:
@@ -294,7 +295,7 @@ def account_me():
     with database() as conn:
         slot=reservation(conn,user['id']) if user else None
         last_release=conn.execute('SELECT number,trial_until,released_at FROM founder_slot_history WHERE member_id=? ORDER BY released_at DESC,id DESC LIMIT 1',(user['id'],)).fetchone() if user else None
-    return jsonify(user=user_public(user) if user else None, csrf=csrf_token(), payments=payments, payment_mode='manual_verified', streamer_available=streamer_sales_ready(),premium_available=streamer_sales_ready(),founder_reservation=slot,founder_last_release=dict(last_release) if last_release else None,live_video_ready=live_ready(),music_free=True,live_price_cents=2500,live_trial_months=3)
+    return jsonify(user=user_public(user) if user else None, csrf=csrf_token(), payments=payments, payment_mode='manual_verified', streamer_available=streamer_sales_ready(),premium_available=streamer_sales_ready(),founder_reservation=slot,founder_last_release=dict(last_release) if last_release else None,live_video_ready=live_ready(),music_free=True,live_price_cents=2500,live_trial_months=0,live_trial_days=7,live_premiere=premiere())
 
 
 @bp.post('/api/account/register')
@@ -459,8 +460,8 @@ def confirm_payment():
     reference = str(data.get('reference', '')).strip()
     if plan not in PLANS or not 4 <= len(reference) <= 120:
         return jsonify(error='Indica plan y referencia única del pago comprobado en PayPal.'), 400
-    from streamers import streamer_sales_ready
-    if not streamer_sales_ready():return jsonify(error='Los cobros de Ol Live están bloqueados hasta que la emisión esté disponible. Escuchar música es gratuito.'),409
+    from payments import ready
+    if not ready():return jsonify(error='Los cobros de Ol Live están bloqueados hasta que la emisión esté disponible. Escuchar música es gratuito.'),409
     try:
         with database() as conn:
             conn.execute('BEGIN IMMEDIATE')
@@ -475,7 +476,7 @@ def confirm_payment():
             entitlement=details(user['id'],conn)
             if entitlement.get('paid_at'):return jsonify(error='Esta cuenta ya tiene el pago único de Ol Live.'),409
             slot=reservation(conn,user['id'])
-            if not payment_allowed(entitlement,slot):return jsonify(error='El pago único se habilita al terminar la prueba; con plaza reservada puedes confirmarlo voluntariamente durante los últimos siete días para conservar tu número.'),409
+            if not payment_allowed(entitlement,slot):return jsonify(error='El pago único se habilita al terminar la prueba de siete días. Los plazos históricos ya iniciados se conservan.'),409
             start=now_utc();end=end_of_plan(start,plan)
             conn.execute('INSERT INTO payments VALUES(?,?,?,?,?,?,?,?,?)',(secrets.token_hex(16),user['id'],plan,PLANS[plan]['cents'],stamp(start),stamp(end),stamp(now_utc()),get_user()['id'],reference))
             access_end=max(end,datetime.fromisoformat(user['access_until'])) if user['access_until'] else end

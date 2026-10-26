@@ -11,12 +11,12 @@ def deadline(conn,row,launch=None,known_launch=False):
  if row['trial_until']:return row['trial_until']
  if not known_launch:launch=conn.execute("SELECT started_at FROM live_launch WHERE id='live'").fetchone()
  if not launch:return None
- from live_access import months_after
- return stamp(months_after(max(datetime.fromisoformat(launch['started_at']),datetime.fromisoformat(row['claimed_at']))))
+ from live_access import trial_end
+ return stamp(trial_end(max(datetime.fromisoformat(launch['started_at']),datetime.fromisoformat(row['claimed_at']))))
 
 def release_expired(conn):
  """Caller holds BEGIN IMMEDIATE; payments and reallocation share the lock."""
- rows=conn.execute('SELECT f.*,e.trial_until,e.paid_at FROM live_founders f LEFT JOIN live_entitlements e ON e.member_id=f.member_id').fetchall()
+ rows=conn.execute('SELECT f.*,e.trial_started_at,e.trial_until,e.paid_at FROM live_founders f LEFT JOIN live_entitlements e ON e.member_id=f.member_id').fetchall()
  instant=stamp(now_utc());released=0
  launch=conn.execute("SELECT started_at FROM live_launch WHERE id='live'").fetchone()
  for row in rows:
@@ -50,14 +50,20 @@ def reserve(conn,member_id):
  return number
 
 def reservation(conn,member_id):
- row=conn.execute('SELECT f.*,e.trial_until,e.paid_at FROM live_founders f LEFT JOIN live_entitlements e ON e.member_id=f.member_id WHERE f.member_id=?',(member_id,)).fetchone()
+ row=conn.execute('SELECT f.*,e.trial_started_at,e.trial_until,e.paid_at FROM live_founders f LEFT JOIN live_entitlements e ON e.member_id=f.member_id WHERE f.member_id=?',(member_id,)).fetchone()
  if not row:return None
  until=deadline(conn,row)
- return dict(payment_due_at=until,payment_confirmation_days=PAYMENT_NOTICE_DAYS,number=row['number'],trial_until=until,confirmed=bool(row['paid_at']),payment_required=not bool(row['paid_at']),payment_opens_at=stamp(datetime.fromisoformat(until)-timedelta(days=PAYMENT_NOTICE_DAYS)) if until else None)
+ return dict(payment_due_at=until,payment_confirmation_days=PAYMENT_NOTICE_DAYS,number=row['number'],trial_until=until,confirmed=bool(row['paid_at']),payment_required=not bool(row['paid_at']),payment_opens_at=payment_opening(row,until) if until else None)
+
+def payment_opening(row,until):
+ start=row['trial_started_at'] if 'trial_started_at' in row.keys() else row['claimed_at']
+ end=datetime.fromisoformat(until)
+ if start and end-datetime.fromisoformat(start)>timedelta(days=7):end-=timedelta(days=PAYMENT_NOTICE_DAYS)
+ return stamp(end)
 
 def payment_allowed(entitlement,slot):
  until=entitlement.get('trial_until') or (slot or {}).get('trial_until')
  if not until:return False
  opens=datetime.fromisoformat(until)
- if slot:opens-=timedelta(days=PAYMENT_NOTICE_DAYS)
+ if slot:opens=datetime.fromisoformat(slot['payment_opens_at'])
  return now_utc()>=opens
