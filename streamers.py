@@ -103,7 +103,7 @@ def sign_token(claims):
 def check_video():
     if get_user()['role']!='admin': return jsonify(error='Se requiere administración.'),403
     checks=video_configuration_checks()
-    if not all(checks.values()): return jsonify(connected=False,checks=checks,message='Revisa las variables marcadas como pendientes en Vercel Preview.'),409
+    if not all(checks.values()): return jsonify(connected=False,checks=checks,message='Revisa las variables pendientes en Vercel '+('Production para electronicama.com.' if os.getenv('VERCEL_ENV')=='production' else 'Preview para esta vista de pruebas.' if os.getenv('VERCEL_ENV')=='preview' else 'o en el entorno local.')),409
     parsed=urlparse(os.environ['LIVEKIT_URL'].strip())
     now=int(time.time())
     token=sign_token({'iss':os.environ['LIVEKIT_API_KEY'].strip(),'sub':'maggy-connection-check','iat':now,'nbf':now-5,'exp':now+60,'video':{'roomList':True}})

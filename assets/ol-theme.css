@@ -58,3 +58,5 @@ html{color-scheme:light;-webkit-text-size-adjust:100%;text-size-adjust:100%}body
 html[data-sticker-motion=off] .collection-sticker::before,html[data-sticker-motion=off] .chat-sticker-button::before,html[data-sticker-motion=off] #comment-stickers>button::before{animation-play-state:paused}@media(prefers-reduced-motion:reduce){.collection-sticker::before,.chat-sticker-button::before,#comment-stickers>button::before{animation:none!important}}
 
 [hidden]{display:none!important}
+
+.web-funds-note{margin:18px 0;padding:16px 18px;background:#f7f5fb;border:1px solid #ded8eb;border-radius:14px}.web-funds-note strong{display:block;margin-top:6px;color:#56426f}.web-funds-note p{margin:6px 0 0;font-size:.9rem}.launch-check-list{padding-left:1.2rem;overflow-wrap:anywhere}.launch-check-list li{margin:.6rem 0}

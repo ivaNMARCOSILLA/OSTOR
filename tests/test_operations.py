@@ -17,6 +17,8 @@ class OperationsTests(unittest.TestCase):
   self.assertEqual(self.admin.get('/').status_code,200)
   self.assertEqual(public.get('/account').status_code,200)
   self.assertEqual(public.get('/api/status').status_code,200)
+  self.assertEqual(public.get('/api/payments/status').status_code,200)
+  self.assertFalse(public.get('/api/payments/status').json['enabled'])
   self.assertEqual(public.post('/api/payments/webhook/platform',json={}).status_code,400)
   self.assertEqual(self.post(self.admin,'/api/admin/maintenance',dict(data,scope='off')).status_code,200)
   self.assertEqual(public.get('/').status_code,200)

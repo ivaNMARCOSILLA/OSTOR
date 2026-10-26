@@ -1,8 +1,8 @@
-import {openSubscription} from '/assets/subscriptions.js?v=9.6.4';
-import {founderBadge} from '/assets/badges.js?v=9.6.4';
+import {openSubscription} from '/assets/subscriptions.js?v=9.7.0';
+import {founderBadge} from '/assets/badges.js?v=9.7.0';
 'use strict';
-import {StreamCommunity} from '/assets/community.js?v=9.6.4';
-import {StudioTools} from '/assets/studio-tools.js?v=9.6.4';
+import {StreamCommunity} from '/assets/community.js?v=9.7.0';
+import {StudioTools} from '/assets/studio-tools.js?v=9.7.0';
 const $=id=>document.getElementById(id);
 let publicInfo=null,liveCategory='all';
 const categoryNames={videojuegos:'Videojuegos',musica:'Música',entretenimiento:'Entretenimiento',actualidad:'Actualidad'};
@@ -23,7 +23,7 @@ async function refresh(){
  info=await api('/api/streamers');
  $('stream-unavailable').classList.toggle('hidden',info.video_ready);
  $('video-setup').classList.toggle('hidden',!info.setup_checks);
- if(info.setup_checks){$('open-video-preview').classList.toggle('hidden',info.setup_environment!=='production');$('setup-environment').textContent=info.setup_environment==='production'?'Estás en electronicama.com. Las claves guardadas solo en Preview no activan el vídeo de esta web principal. Usa la vista previa para comprobarlas.':info.setup_environment==='preview'?'Estás en la vista previa de pruebas. Los cobros siguen bloqueados durante la comprobación.':'Estudio local de pruebas.';const list=$('video-checks');list.replaceChildren();for(const [name,ok] of Object.entries(info.setup_checks))list.append(node('li',`${name}: ${ok?'correcto':'pendiente de corregir'}`));}
+ if(info.setup_checks){$('open-video-preview').classList.toggle('hidden',info.setup_environment!=='production');$('setup-environment').textContent=info.setup_environment==='production'?'Estás en electronicama.com. El vídeo de esta web necesita sus variables en Production. Las claves guardadas solo en Preview no lo activan. Comprueba aquí la conexión después del despliegue.':info.setup_environment==='preview'?'Estás en la vista previa de pruebas. Los cobros siguen bloqueados durante la comprobación.':'Estudio local de pruebas.';const list=$('video-checks');list.replaceChildren();for(const [name,ok] of Object.entries(info.setup_checks))list.append(node('li',`${name}: ${ok?'correcto':'pendiente de corregir'}`));}
  $('creator-panel').classList.toggle('hidden',!info.streamer_active);
  renderCatalogue();
  renderStudio();
@@ -57,6 +57,7 @@ function renderCatalogue(){
 }
 function focusSection(section,heading){section.classList.remove('hidden');section.scrollIntoView({behavior:'smooth',block:'start'});heading?.focus({preventScroll:true});}
 function navigateSection(hash){
+ if(hash==='#video-setup'){if(info?.setup_checks){const heading=$('video-setup').querySelector('h2');heading.tabIndex=-1;focusSection($('video-setup'),heading);}return;}
  if(hash==='#live-catalogue'){renderCatalogue();focusSection($('live-catalogue'),$('catalogue-title'));return;}
  if(!['#creator-panel','#stream-studio'].includes(hash))return;
  if(!window.MaggySession.premium){$('stream-access').querySelector('a').href='/account?next='+encodeURIComponent('/live'+hash);focusSection($('stream-access'),$('stream-access').querySelector('h2'));return;}

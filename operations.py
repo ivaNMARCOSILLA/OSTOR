@@ -55,6 +55,22 @@ def set_maintenance():
 
 def supervisor_review(c,user):return bool(user and c.execute('SELECT member_id FROM ol_supervisors WHERE member_id=? AND revoked_at IS NULL AND can_review=1',(user['id'],)).fetchone() and user['password_hash'])
 
+@bp.get('/api/admin/launch-readiness')
+@require_admin
+def launch_readiness():
+ from streamers import video_configuration_checks,live_ready
+ from payments import configured,ready
+ with database() as c:
+  test=c.execute("SELECT COUNT(*) AS n FROM stripe_orders WHERE kind='test' AND state='test_paid' AND paid_at IS NOT NULL").fetchone()['n']
+ checks={'video':video_configuration_checks(),'payments':{
+  'STRIPE_SECRET_KEY':os.getenv('STRIPE_SECRET_KEY','').startswith('sk_live_'),
+  'STRIPE_WEBHOOK_SECRET':os.getenv('STRIPE_WEBHOOK_SECRET','').startswith('whsec_'),
+  'STRIPE_CONNECT_CLIENT_ID':os.getenv('STRIPE_CONNECT_CLIENT_ID','').startswith('ca_'),
+  'STRIPE_CONNECT_WEBHOOK_SECRET':os.getenv('STRIPE_CONNECT_WEBHOOK_SECRET','').startswith('whsec_'),
+  'MAGGY_STREAMER_SALES_ENABLED':os.getenv('MAGGY_STREAMER_SALES_ENABLED')=='1',
+  'OL_PAYMENTS_ENABLED':os.getenv('OL_PAYMENTS_ENABLED')=='1'}}
+ return jsonify(environment=os.getenv('VERCEL_ENV','local'),checks=checks,stripe_test_confirmed=test>0,video_configuration_complete=live_ready(),live_payments_enabled=ready(),configuration_only=True,packaging={'web_pwa':True,'play_signing_configured':bool(os.getenv('OL_ANDROID_SHA256')),'play_publication_verified':False},message='Los datos presentes no sustituyen probar vídeo entre dos dispositivos ni verificar la cuenta comercial de Stripe.')
+
 @bp.get('/api/admin/supervisor')
 @require_admin
 def supervisor_status():
@@ -79,7 +95,7 @@ def assign_supervisor():
 def guard():
  path=request.path
  if request.method=='GET' and request.args.get('distribution')=='googleplay':session['ol_play_distribution']=True
- if path.startswith(('/assets/','/api/admin/','/api/account/','/api/payments/webhook/')) or path in {'/health','/api/status','/account','/sw.js','/manifest.webmanifest','/api/payments/connect-return','/.well-known/assetlinks.json'}:return
+ if path.startswith(('/assets/','/api/admin/','/api/account/','/api/payments/webhook/')) or path in {'/health','/api/status','/api/payments/status','/account','/sw.js','/manifest.webmanifest','/api/payments/connect-return','/.well-known/assetlinks.json'}:return
  d=state();scope=d['scope']
  affected=scope=='all' or scope=='live' and (path in {'/live','/streamers'} or path.startswith(('/api/streamers','/api/channel-subscriptions','/api/live/'))) or scope=='payments' and path.startswith('/api/payments/')
  if not affected:return
