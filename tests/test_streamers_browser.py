@@ -74,9 +74,8 @@ def run():
         page.locator('#member-panel').wait_for(state='visible')
         assert '/account?' in page.url
         page.goto(BASE_URL+'/account');page.locator('#member-panel').wait_for(state='visible')
-        assert not page.locator('#pay-streamer').is_visible()
-        assert page.locator('#pay-streamer').get_attribute('href') is None
-        page.wait_for_function("document.querySelector('#streamer-plan-option').disabled === true")
+        assert page.locator('#pay-lifetime').get_attribute('href') is None
+        page.wait_for_function("document.querySelector('#payment-form button').disabled === true")
         page.goto(BASE_URL+'/streamers');page.locator('#stream-unavailable').wait_for(state='visible')
         for width in [1440,768,390,320]:
             page.set_viewport_size({'width':width,'height':900})

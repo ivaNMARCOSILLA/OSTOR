@@ -10,7 +10,10 @@ def run():
   result=context.request.post(BASE_URL+'/api/account/register',headers={'X-CSRF-Token':csrf},data={'username':'founder-'+secrets.token_hex(4),'password':secrets.token_urlsafe(20)})
   assert result.ok,result.status
   page.goto(BASE_URL+'/live#founders');page.locator('#founder-claim:not([disabled])').wait_for()
-  before=context.request.get(BASE_URL+'/api/live/founders').json()['claimed'];page.locator('#founder-claim').click();page.wait_for_url('**/live?welcome=founder#creator-panel')
+  before=context.request.get(BASE_URL+'/api/live/founders').json()['claimed'];page.locator('#founder-claim').click();page.wait_for_function("document.querySelector('#founder-claim').textContent==='Confirmar mi plaza' && !document.querySelector('#human-answer').disabled");page.locator('#human-answer').fill('OL234')
+  with page.expect_response('**/api/live/founders/claim') as claim:page.locator('#founder-claim').click()
+  assert claim.value.status==200,claim.value.json().get('error')
+  page.wait_for_url('**/live?welcome=founder#creator-panel')
   page.locator('#creator-panel').wait_for(state='visible');page.wait_for_function("!document.querySelector('#my-founder-signature').classList.contains('hidden')")
   account=context.request.get(BASE_URL+'/api/account/me').json()['user'];assert account['founder_active'] and account['streamer_active'];assert account['founder_number']==before+1
   assert page.locator('#start-camera').is_hidden()

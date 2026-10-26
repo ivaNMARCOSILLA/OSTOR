@@ -10,6 +10,7 @@ from urllib.parse import urlsplit
 from flask import Flask
 import app as application
 import membership as m
+from legacy_support import legacy_payment
 
 URL=os.getenv('MAGGY_TEST_POSTGRES_URL')
 
@@ -25,10 +26,11 @@ class PostgresMembershipTests(unittest.TestCase):
             raise RuntimeError('The application is not connected to the selected test database.')
 
     def setUp(self):
+        code=patch("human_check.new_code",return_value="OL234");code.start();self.addCleanup(code.stop)
         ready=patch('streamers.streamer_sales_ready',return_value=True);ready.start();self.addCleanup(ready.stop)
         self.app=application.app
         with self.app.app_context(),m.database() as connection:
-            for table in ['online_presence','founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:
+            for table in ['live_launch','creator_daily_activity','founder_activity','live_entitlements','human_challenges','promotion_metrics','online_presence','founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:
                 connection.execute('DELETE FROM '+table)
         with self.app.app_context():
             m.create_admin('pg-admin','postgres-admin-password-123')
@@ -39,6 +41,8 @@ class PostgresMembershipTests(unittest.TestCase):
 
     def post(self,client,path,data):
         csrf=client.get('/api/account/me').json['csrf']
+        if path=='/api/live/founders/claim':
+            data=dict(data,human_id=client.get('/api/account/human-check').json['id'],human_answer='OL234')
         return client.post(path,json=data,headers={'X-CSRF-Token':csrf})
 
     def admin_client(self):
@@ -47,7 +51,7 @@ class PostgresMembershipTests(unittest.TestCase):
         return client
 
     def grant(self,client,plan,reference):
-        return self.post(client,'/api/admin/confirm-payment',{'member_id':self.member['id'],'plan':plan,'reference':reference})
+        return legacy_payment(self.app,client,self.member['id'],plan,reference)
 
     def test_statistics_and_presence_use_persistent_postgresql(self):
         visitor=self.app.test_client()
@@ -106,13 +110,18 @@ class PostgresMembershipTests(unittest.TestCase):
             self.assertFalse(self.client.get('/api/account/me').json['user']['active'])
             self.assertEqual(self.client.get('/api/streamers').status_code,402)
 
-    def test_concurrent_welcome_cannot_grant_twice(self):
+    def test_concurrent_lifetime_payment_after_trial_is_single_use(self):
+        with self.app.app_context(),m.database() as conn:
+            conn.execute('INSERT INTO live_entitlements(member_id,trial_started_at,trial_until) VALUES(?,?,?)',(self.member['id'],m.stamp(m.now_utc()-m.timedelta(days=100)),m.stamp(m.now_utc()-m.timedelta(days=1))))
         devices=[self.admin_client(),self.admin_client()]
         with ThreadPoolExecutor(max_workers=2) as pool:
-            futures=[pool.submit(self.grant,device,'welcome',f'PG-WELCOME-{index}') for index,device in enumerate(devices)]
+            futures=[pool.submit(self.post,device,'/api/admin/confirm-payment',{'member_id':self.member['id'],'plan':'lifetime','reference':'PG-ONCE-'+str(index)}) for index,device in enumerate(devices)]
             self.assertEqual(sorted(future.result().status_code for future in futures),[200,409])
-        with self.app.app_context(),m.database() as connection:
-            self.assertEqual(connection.execute('SELECT COUNT(*) AS count FROM payments').fetchone()['count'],1)
+        data=self.client.get('/api/account/me').json
+        self.assertTrue(data['user']['live_lifetime'])
+        self.assertTrue(data['user']['streamer_active'])
+        self.assertEqual(len(data['payments']),1)
+        self.assertEqual(data['payments'][0]['amount_cents'],2500)
 
     def test_concurrent_invitation_is_single_use(self):
         invite=self.post(self.admin,'/api/admin/invite',{'username':'pg-friend'}).json
@@ -141,10 +150,10 @@ class PostgresMembershipTests(unittest.TestCase):
                 self.post(admin,'/api/account/login',{'username':'source-admin','password':'source-admin-password-123'})
                 self.post(client,'/api/account/register',{'username':'source-client','password':'source-client-password-123'})
                 ident=client.get('/api/account/me').json['user']['id']
-                self.post(admin,'/api/admin/confirm-payment',{'member_id':ident,'plan':'welcome','reference':'SQLITE-MIGRATE-001'})
+                legacy_payment(source,admin,ident,'welcome','SQLITE-MIGRATE-001')
                 expected=client.get('/api/account/me').json['user']['access_until']
             with self.app.app_context(),m.database() as connection:
-                for table in ['founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:connection.execute('DELETE FROM '+table)
+                for table in ['live_launch','creator_daily_activity','founder_activity','live_entitlements','human_challenges','promotion_metrics','founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:connection.execute('DELETE FROM '+table)
             counts=migrate(Path(folder)/'members.sqlite3',self.app)
             self.assertEqual(counts['members'],2);self.assertEqual(counts['payments'],1)
             migrated=self.app.test_client()

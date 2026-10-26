@@ -42,7 +42,7 @@ def comments(channel_id):
             from founders import signature_from_row
             comment['founder_signature']=signature_from_row(comment)
         for key in ['badge_mode','badge_letter','badge_caption']:comment.pop(key,None)
-        if comment['kind']=='sticker':comment['sticker']={key:designs[comment['body']][key] for key in ['id','name','image']} if comment['body'] in designs else None
+        if comment['kind']=='sticker':comment['sticker']={key:designs[comment['body']][key] for key in ['id','name','image','phrase']} if comment['body'] in designs else None
     return jsonify(comments=comments)
 
 

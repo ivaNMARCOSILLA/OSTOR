@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -19,6 +20,7 @@ def run():
         os.environ['MAGGY_DATA_DIR']=directory
         os.environ['MAGGY_COOKIE_SECURE']='0'  # Loopback HTTP test server only.
         sys.path.insert(0,str(ROOT))
+        code=patch('human_check.new_code',return_value='OL234');code.start()
         from app import app
         from membership import create_admin
         from werkzeug.serving import make_server, WSGIRequestHandler

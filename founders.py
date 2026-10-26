@@ -19,8 +19,12 @@ def status():
   mine=conn.execute('SELECT number,claimed_at,revoked_at FROM live_founders WHERE member_id=?',(user['id'],)).fetchone() if user else None
  if mine:
   with database() as conn:preferences=conn.execute('SELECT mode AS badge_mode,letter AS badge_letter,caption AS badge_caption,audio_json AS badge_audio FROM founder_signatures WHERE member_id=?',(user['id'],)).fetchone()
-  mine=dict(mine);mine['signature']=signature_from_row(preferences or {})
- return jsonify(limit=LIMIT,claimed=claimed,remaining=max(0,LIMIT-claimed),mine=mine if mine else None,lifetime=True)
+  mine=dict(mine)
+  from live_access import founder_activity
+  with database() as conn:mine['activity']=founder_activity(user['id'],conn)
+  mine['signature']=signature_from_row(preferences or {})
+ if mine:mine['future_transfer_eligible']=mine['number']==1
+ return jsonify(limit=LIMIT,claimed=claimed,remaining=max(0,LIMIT-claimed),mine=mine if mine else None,lifetime=True,transfer_sales_open=False,activity_required=True)
 
 @bp.post('/api/live/founders/claim')
 def claim():
@@ -33,11 +37,17 @@ def claim():
   if existing:
    if existing['revoked_at']:return jsonify(error='Esta plaza fue revocada. Contacta con administración; no se puede reclamar otra.'),403
    return jsonify(ok=True,number=existing['number'],already_claimed=True,lifetime=True)
+  from human_check import verify
+  if not verify(conn):return jsonify(error='Completa la comprobación visual antes de reservar. El código caduca y solo se usa una vez.'),400
   total=conn.execute('SELECT COUNT(*) AS n FROM live_founders').fetchone()['n']
   if total>=LIMIT:return jsonify(error='Las 100 plazas gratuitas de fundador ya están reservadas.'),409
   number=total+1
   conn.execute('INSERT INTO live_founders(member_id,number,claimed_at) VALUES(?,?,?)',(user['id'],number,stamp(now_utc())))
- notify('founder','Nueva plaza Ol Live fundadores',f'Se ha reservado la plaza {number} de 100. Incluye acceso de creador sin vencimiento e insignia. Consulta la cuenta en administración.',event_key='founder:'+user['id'])
+  launch=conn.execute("SELECT started_at FROM live_launch WHERE id='live'").fetchone()
+  if launch:
+   from live_access import months_after
+   conn.execute('INSERT INTO founder_activity(member_id,qualification_until) VALUES(?,?) ON CONFLICT(member_id) DO NOTHING',(user['id'],stamp(months_after(now_utc()))))
+ notify('founder','Nueva plaza Ol Live fundadores',f'Se ha reservado la plaza {number} de 100. Incluye plaza de creador condicionada a actividad e insignia. Consulta la cuenta en administración.',event_key='founder:'+user['id'])
  return jsonify(ok=True,number=number,already_claimed=False,lifetime=True)
 
 @bp.post('/api/admin/founders/revoke')
@@ -123,3 +133,34 @@ def save_signature():
  with database() as conn:
   conn.execute('INSERT INTO founder_signatures(member_id,mode,letter,caption,audio_json,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(member_id) DO UPDATE SET mode=excluded.mode,letter=excluded.letter,caption=excluded.caption,audio_json=excluded.audio_json,updated_at=excluded.updated_at',(user['id'],mode,letter if mode=='letra' else '',caption,json.dumps(audio,ensure_ascii=False) if audio else None,stamp(now_utc())))
  return jsonify(ok=True,number=user['founder_number'],signature={'mode':mode,'letter':letter if mode=='letra' else '', 'caption':caption or 'Buen rollo','audio':audio})
+
+@bp.get('/api/admin/founders/activity')
+@require_admin
+def activity_directory():
+ from flask import request
+ from live_access import founder_activity
+ try:page=max(1,int(request.args.get('page',1)))
+ except ValueError:page=1
+ with database() as conn:
+  total=conn.execute('SELECT COUNT(*) AS n FROM live_founders').fetchone()['n']
+  rows=conn.execute('SELECT f.*,m.username FROM live_founders f JOIN members m ON m.id=f.member_id ORDER BY f.number LIMIT 25 OFFSET ?',((page-1)*25,)).fetchall()
+  results=[dict(row)|{'activity':founder_activity(row['member_id'],conn)} for row in rows]
+ return jsonify(founders=results,total=total,page=page,pages=max(1,(total+24)//25))
+
+@bp.post('/api/admin/founders/grace')
+@require_admin
+def extend_grace():
+ from datetime import timedelta
+ data=payload();days=data.get('days');ident=str(data.get('member_id',''))
+ if type(days) is not int or not 1<=days<=365:return jsonify(error='Indica de 1 a 365 días para revisar la incidencia.'),400
+ with database() as conn:
+  conn.execute('BEGIN IMMEDIATE')
+  founder=conn.execute('SELECT * FROM live_founders WHERE member_id=?',(ident,)).fetchone()
+  if not founder or founder['revoked_at']:return jsonify(error='La plaza no está disponible para ampliar su plazo.'),404
+  from live_access import founder_activity
+  from datetime import datetime
+  previous=founder_activity(ident,conn)['qualification_until']
+  base=max(now_utc(),datetime.fromisoformat(previous)) if previous else now_utc()
+  deadline=stamp(base+timedelta(days=days))
+  conn.execute('INSERT INTO founder_activity(member_id,qualification_until) VALUES(?,?) ON CONFLICT(member_id) DO UPDATE SET qualification_until=excluded.qualification_until',(ident,deadline))
+ return jsonify(ok=True,qualification_until=deadline)

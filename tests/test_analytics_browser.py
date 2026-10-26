@@ -14,7 +14,7 @@ def run():
   page.on('pageerror',lambda e:errors.append(str(e)))
   page.goto(BASE_URL+'/account')
   page.locator('#statistics-cards article').first.wait_for()
-  assert page.locator('#statistics-cards article').count()==14
+  assert page.locator('#statistics-cards article').count()==18
   assert page.locator('#statistics-days tr').count()==7
   page.locator('#refresh-statistics').click()
   page.wait_for_function("!document.querySelector('#refresh-statistics').disabled")

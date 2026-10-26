@@ -27,4 +27,4 @@ def is_abusive(value):return bool(classify(value))
 
 def validate_public_text(value):
     if is_abusive(value):
-        raise ValueError('Revisa el texto: no se permiten insultos graves, acoso, amenazas, expresiones sexuales sobre menores ni ofertas de actividades ilegales.')
+        raise ValueError('Revisa el texto para que respete las normas de buen trato y seguridad de Ol.')

@@ -11,16 +11,19 @@ from auth_support import authenticated_client
 
 class OlLiveBusinessTests(unittest.TestCase):
  def setUp(self):
+  code=patch("human_check.new_code",return_value="OL234");code.start();self.addCleanup(code.stop)
   self.admin=authenticated_client(app.app,self.addCleanup)
   with app.app.app_context():st.init_database()
  def post(self,client,path,data):
-  csrf=client.get('/api/account/me').json['csrf'];return client.post(path,json=data,headers={'X-CSRF-Token':csrf})
+  csrf=client.get('/api/account/me').json['csrf']
+  if path=='/api/live/founders/claim':data=dict(data,human_id=client.get('/api/account/human-check').json['id'],human_answer='OL234')
+  return client.post(path,json=data,headers={'X-CSRF-Token':csrf})
  def member(self,name):
   client=app.app.test_client();self.assertEqual(self.post(client,'/api/account/register',{'username':name,'password':'ol-live-user-password-123'}).status_code,201);return client
  def test_all_new_premium_billing_is_blocked_before_live_is_ready(self):
   client=self.member('premium-pending');ident=client.get('/api/account/me').json['user']['id']
   with patch.object(st,'streamer_sales_ready',return_value=False):
-   for plan in ['welcome','monthly','streamer']:
+   for plan in ['lifetime']:
     self.assertEqual(self.post(self.admin,'/api/admin/confirm-payment',{'member_id':ident,'plan':plan,'reference':'PENDING-'+plan}).status_code,409)
   self.assertEqual(client.get('/api/account/me').json['payments'],[])
   self.assertEqual(client.get('/api/resolve/audius_test').status_code,200)

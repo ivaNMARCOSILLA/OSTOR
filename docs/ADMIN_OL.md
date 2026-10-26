@@ -49,22 +49,30 @@ El álbum, el selector del chat y el gestor muestran 24 resultados por página. 
 
 Se seleccionaron 999 disfraces completos entre las once láminas, revisando sus cuadrículas. Se guardan recortes transparentes de 160 píxeles y vistas generales WebP; la página no descarga los mil diseños de golpe. Los fuentes PNG no forman parte del despliegue.
 
-Cada sticker tiene un sonido original diferente de menos de un segundo, generado sin muestras musicales ajenas. Solo suena al pulsar su botón o un sticker del chat; no hay reproducción automática. Los diseños personalizados también reciben su propio sonido.
+Cada sticker tiene una frase original positiva que se pronuncia al pulsarlo. Las mil frases base son diferentes. Se conservan los sonidos breves originales como alternativa para dispositivos sin síntesis de voz. No hay reproducción automática. Los diseños personalizados también reciben una frase.
 
 ## Música gratuita y Ol Live
 
-La búsqueda, reproducción, favoritos, listas y temporizador musicales son gratuitos. Una cuenta gratuita permite conservar los puntos de la colección. Los pagos se aplican exclusivamente al vídeo de Ol Live: bienvenida 1 € / 14 días, espectador 6 € / mes y creador 8 € / mes. Los cobros permanecen bloqueados hasta que el servicio de vídeo esté preparado. Los regalos se envían al PayPal del creador sin comisión de Ol.
-
-El directorio muestra emisiones reales, con categorías Videojuegos, Música, Entretenimiento y Actualidad. Destacados se gestiona desde administración; no se inventan canales ni espectadores.
+La música y la biblioteca son gratuitas. Todo Ol Live se ofrece con tres meses de prueba y, después, 25 € en un único pago voluntario, sin vencimiento mientras el servicio siga operativo. No hay renovaciones. Las invitaciones de administración siguen siendo un acceso especial independiente. Los regalos siguen siendo externos, sin comisión de Ol.
 
 ## Los 100 fundadores
 
-Las primeras 100 cuentas que reserven expresamente una plaza obtienen acceso de creador sin vencimiento, sin pago ni renovación. El contador se comprueba en el servidor; una reserva simultánea no puede superar las 100 plazas. Cada cuenta conserva un número único e inmutable. Las plazas revocadas permanecen en el historial y no se vuelven a asignar.
+Hay 100 plazas numeradas que requieren actividad: un primer directo verificado de 30 minutos durante la prueba y luego 120 minutos por ventana de 30 días. No se cobra por la plaza si se mantienen estas condiciones. Las plazas tienen una comprobación visual antiautomatismos; el número se conserva en el historial. Solo n.º 1 se marca para una posible cesión futura; la venta no está habilitada y los demás números no son transferibles. El panel permite revisar el progreso y ampliar plazos por incidencias.
 
-El fundador puede adornar su insignia con una letra, una frase positiva, una canción gratuita del buscador o un sonido original. Esto no cambia su número oficial. Las canciones conservan su atribución y disponibilidad de origen; el sonido solo se reproduce por acción del visitante. Las normas de moderación se aplican también a los fundadores. Revocar una cuenta invalida sus sesiones y el acceso de fundador, manteniendo la música gratuita.
+La insignia se personaliza con una letra, frase, canción gratuita o sonido sin alterar el número oficial. Las normas de buen trato y seguridad se mantienen. Revocar invalida las sesiones; la música permanece gratuita.
 
 ## Estadísticas y personas en línea
 
 El panel muestra clientes registrados, altas de los últimos siete días, periodos pagados vigentes, amigos, fundadores, canales, emisiones, pagos confirmados e importes total y del mes UTC. Una tabla resume siete días por fecha UTC. Los importes son los pagos registrados por administración, no beneficios, facturación auditada ni saldo consultado en PayPal. Los grupos de acceso pueden coincidir. El resumen se actualiza al abrir el panel, cada minuto mientras está visible y al pulsar Actualizar estadísticas. Solo administración recibe estos datos.
 
 El contador público distingue cuentas conectadas y visitantes sin cuenta. Comprueba presencia cada 30 segundos en páginas visibles o con audio/vídeo activo y usa una ventana de 90 segundos. Deduplica una cuenta entre pestañas y dispositivos; un visitante se estima por navegador mediante una cookie técnica firmada de un día. No se guardan IP, ubicación ni historial de navegación en la tabla de presencia. Los registros vencidos se eliminan al recibir otra presencia. No es un recuento exacto de seres humanos y no filtra todos los robots. Un error de conexión se muestra como pendiente, sin inventar ceros.
+
+## Ol del bueno · actualización comercial
+
+Sustituye los planes de 1, 6 y 8 euros: una prueba de tres meses y después 25 € en un único pago voluntario. Los pagos e historiales anteriores se conservan. El servidor rechaza nuevas operaciones de los planes retirados, pagos durante la prueba, referencias repetidas y un segundo pago de por vida. La prueba solo puede iniciarse una vez y no comienza con el vídeo desactivado. Revocar invalida las sesiones y el acceso nuevo; no reinicia la prueba.
+
+Las plazas de fundador son condicionales: primer directo continuo de 30 minutos y luego 120 minutos en los últimos 30 días, tras el periodo inicial de tres meses. Se consulta ListParticipants de LiveKit para verificar pistas de cámara o pantalla publicadas por la identidad del creador; no se confía únicamente en el indicador del navegador. Solo se acreditan intervalos de hasta 75 segundos entre verificaciones. La falta de actividad desactiva derechos pero mantiene número e historial para revisión; la venta de plazas no está habilitada. Solo n.º 1 es elegible para una opción futura, sin valor económico prometido.
+
+La comprobación visual contra automatismos caduca en cinco minutos, está vinculada a la sesión y solo sirve una vez. Limita reservas automatizadas; no garantiza identidad única ni elimina todos los bots. Usuarios con dificultades de lectura necesitan ayuda de administración. Para protección adicional especializada puede integrarse un proveedor de retos con sus credenciales.
+
+Los stickers pronuncian frases positivas mediante la voz española del dispositivo; no utilizan el micrófono ni una voz clonada. La disponibilidad depende del navegador; se muestra el texto y se conserva un sonido alternativo cuando no hay síntesis de voz. No hay reproducción automática. El tamaño de formulario es de al menos 16 px para evitar el zoom automático de iPhone; el zoom manual sigue permitido.

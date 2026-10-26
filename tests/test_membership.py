@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
+from legacy_support import legacy_payment
 import app as application
 import membership as m
 
@@ -32,7 +33,7 @@ class MembershipTests(unittest.TestCase):
         return client.post(path, json=data, headers={'X-CSRF-Token':token})
 
     def grant(self, plan, reference='PAYPAL-TEST-001'):
-        return self.post(self.admin, '/api/admin/confirm-payment', {'member_id':self.member['id'], 'plan':plan, 'reference':reference})
+        return legacy_payment(self.app,self.admin,self.member['id'],plan,reference)
 
     def test_music_is_free_but_ol_live_cannot_be_self_granted(self):
         self.assertEqual(self.member['role'],'member');self.assertFalse(self.member['active'])
@@ -40,7 +41,7 @@ class MembershipTests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/streamers').status_code,402)
         self.assertEqual(self.post(self.client,'/api/admin/confirm-payment',{}).status_code,403)
 
-    def test_welcome_is_fourteen_days_and_single_use(self):
+    def test_legacy_welcome_period_and_history_are_preserved(self):
         instant = datetime(2026, 10, 25, 12, tzinfo=timezone.utc)
         with patch.object(m, 'now_utc', return_value=instant):
             result=self.grant('welcome')
@@ -51,7 +52,7 @@ class MembershipTests(unittest.TestCase):
             with self.app.app_context(),m.database() as conn:
                 self.assertEqual(conn.execute('SELECT amount_cents FROM payments').fetchone()[0],100)
 
-    def test_month_clamps_and_extends_early_renewal(self):
+    def test_legacy_month_end_calculation_is_preserved(self):
         instant = datetime(2027, 1, 31, 12, tzinfo=timezone.utc)
         with patch.object(m, 'now_utc', return_value=instant):
             result=self.grant('monthly')
@@ -107,7 +108,7 @@ class MembershipTests(unittest.TestCase):
         self.grant('monthly')
         other=self.app.test_client();self.post(other,'/api/account/register',{'username':'another-test','password':'another-password-123'})
         ident=other.get('/api/account/me').json['user']['id']
-        result=self.post(self.admin,'/api/admin/confirm-payment',{'member_id':ident,'plan':'monthly','reference':'PAYPAL-TEST-001'})
+        result=legacy_payment(self.app,self.admin,ident,'monthly','PAYPAL-TEST-001')
         self.assertEqual(result.status_code,409)
         self.assertFalse(other.get('/api/account/me').json['user']['active'])
 

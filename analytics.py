@@ -55,6 +55,7 @@ def statistics():
         start = instant.replace(hour=0,minute=0,second=0)-timedelta(days=6)
         registrations = conn.execute("SELECT SUBSTR(created_at,1,10) AS day,COUNT(*) AS n FROM members WHERE role!='admin' AND created_at>=? GROUP BY SUBSTR(created_at,1,10)", (stamp(start),)).fetchall()
         revenue = conn.execute('SELECT SUBSTR(verified_at,1,10) AS day,COUNT(*) AS n,SUM(amount_cents) AS cents FROM payments WHERE verified_at>=? GROUP BY SUBSTR(verified_at,1,10)', (stamp(start),)).fetchall()
+        promotion = conn.execute("SELECT event,SUM(amount) AS n FROM promotion_metrics GROUP BY event").fetchall()
         presence = online(conn)
     registrations = {row['day']:row['n'] for row in registrations}
     revenue = {row['day']:dict(row) for row in revenue}
@@ -64,8 +65,18 @@ def statistics():
         days.append(dict(day=day, registrations=registrations.get(day,0), payments=paid.get('n',0), cents=paid.get('cents',0)))
     return jsonify(online=presence, accounts=dict(counts), payments=dict(payments), founders=founders,
                    friends=friends, channels=channels, live=live, pending_notifications=pending,
-                   days=days, updated_at=stamp(instant), timezone='UTC')
+                   days=days,promotion={row['event']:row['n'] for row in promotion}, updated_at=stamp(instant), timezone='UTC')
 
 
 def install(app):
     app.register_blueprint(bp)
+
+@bp.post('/api/promotion/event')
+def promotion_event():
+    from membership import payload,allow_attempt
+    event=payload().get('event')
+    if event not in {'shown','next','skip','complete'}:return jsonify(error='Evento no válido.'),400
+    if not allow_attempt('promotion',60):return jsonify(error='Espera antes de volver a actualizar.'),429
+    with database() as conn:
+        conn.execute('INSERT INTO promotion_metrics(day,event,amount) VALUES(?,?,1) ON CONFLICT(day,event) DO UPDATE SET amount=promotion_metrics.amount+1',(now_utc().date().isoformat(),event))
+    return jsonify(ok=True)

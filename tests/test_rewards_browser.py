@@ -7,6 +7,7 @@ def run():
   context=browser.new_context();login_context(context);page=context.new_page();errors=[]
   page.on('pageerror',lambda e:errors.append(str(e)))
   page.route('**/api/search?*',lambda route:route.fulfill(json=[]))
+  page.add_init_script("window.__phrases=[];window.speechSynthesis.speak=u=>window.__phrases.push(u.text);window.speechSynthesis.cancel=()=>{}")
   page.goto(BASE_URL+'/#ol-collection')
   page.locator('#consent-decline').click()
   page.locator('.collection-sticker').first.wait_for()
@@ -16,10 +17,11 @@ def run():
   assert page.locator('#reward-points').inner_text()=='0'
   assert len(page.evaluate('window.OlCollection.stickers'))==1
   assert not page.evaluate("performance.getEntriesByType('resource').some(e=>e.name.endsWith('/sound.wav'))")
-  with page.expect_response('**/api/stickers/hello/sound.wav') as sound:
-   page.locator('.sticker-sound-button').first.click()
-  assert sound.value.status==200 and sound.value.headers['content-type'].startswith('audio/wav')
-  page.wait_for_function("document.querySelector('.sticker-sound-button').getAttribute('aria-label').includes('reproducido')")
+  assert page.evaluate('window.__phrases.length')==0
+  page.locator('.sticker-sound-button').first.click()
+  page.wait_for_function('window.__phrases.length===1')
+  assert len(page.evaluate('window.__phrases[0]'))>5
+  assert 'Frase del sticker' in page.locator('.sticker-sound-button').first.get_attribute('aria-label')
   page.locator('#reward-next-page').click()
   page.wait_for_function("document.querySelector('#reward-page').textContent.includes('Página 2')")
   assert page.locator('.collection-sticker').count()==24

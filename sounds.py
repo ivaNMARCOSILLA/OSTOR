@@ -38,6 +38,13 @@ def response_for(ident):
  if limiter and not limiter('sticker-sounds',150):return jsonify(error='Espera un momento antes de escuchar más sonidos.'),429
  return Response(sound_bytes(ident),mimetype='audio/wav',headers={'Cache-Control':'public, max-age=86400','X-Content-Type-Options':'nosniff'})
 
+@bp.get('/api/stickers/<ident>/phrase')
+def sticker_phrase(ident):
+ from rewards import catalog
+ from sticker_phrases import phrase_for
+ if not any(item['id']==ident for item in catalog(0)):return jsonify(error='Este sticker no existe.'),404
+ return jsonify(phrase=phrase_for(ident),language='es-ES')
+
 @bp.get('/api/stickers/<ident>/sound.wav')
 def sticker_sound(ident):
  from rewards import catalog

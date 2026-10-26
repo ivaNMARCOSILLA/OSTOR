@@ -12,6 +12,7 @@ from datetime import datetime
 from flask import Blueprint,jsonify,request,Response
 from membership import database,get_user,now_utc,stamp,require_admin
 from moderation import validate_public_text,normalized
+from sticker_phrases import phrase_for
 
 bp=Blueprint('rewards',__name__)
 STICKERS=[
@@ -62,7 +63,7 @@ def catalog(seconds,conn=None):
   items[row['id']]={'id':row['id'],'name':row['name'],'minutes':row['points']//10,'points':row['points'],'image':'/api/stickers/'+row['id']+'/image?v='+row['updated_at'],'series':items.get(row['id'],{}).get('series','Personalizados')}
  ordered=sorted(items.values(),key=lambda item:(item['id']!='hello',item['points'],item['name']))
  for item in ordered:item.setdefault('series','Ol')
- for number,item in enumerate(ordered,1):item.update(number=number,unlocked=(seconds//60)*10>=item['points'])
+ for number,item in enumerate(ordered,1):item.update(number=number,unlocked=(seconds//60)*10>=item['points'],phrase=phrase_for(item['id']))
  return ordered
 
 

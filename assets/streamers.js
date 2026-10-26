@@ -1,7 +1,7 @@
-import {founderBadge} from '/assets/badges.js?v=9.3.2';
+import {founderBadge} from '/assets/badges.js?v=9.4.0';
 'use strict';
-import {StreamCommunity} from '/assets/community.js?v=9.3.2';
-import {StudioTools} from '/assets/studio-tools.js?v=9.3.2';
+import {StreamCommunity} from '/assets/community.js?v=9.4.0';
+import {StudioTools} from '/assets/studio-tools.js?v=9.4.0';
 const $=id=>document.getElementById(id);
 let publicInfo=null,liveCategory='all';
 const categoryNames={videojuegos:'Videojuegos',musica:'Música',entretenimiento:'Entretenimiento',actualidad:'Actualidad'};
@@ -58,7 +58,7 @@ function navigateSection(hash){
  if(!['#creator-panel','#stream-studio'].includes(hash))return;
  if(!window.MaggySession.premium){$('stream-access').querySelector('a').href='/account?next='+encodeURIComponent('/live'+hash);focusSection($('stream-access'),$('stream-access').querySelector('h2'));return;}
  if(!info){status('No se pudo comprobar el acceso al estudio. Pulsa «Actualizar canales» para reintentar.');focusSection($('live-catalogue'),$('catalogue-title'));return;}
- if(!info.streamer_active){$('creator-access-message').textContent=info.streamer_sales_available?'Para crear un canal y emitir necesitas el plan Ol Live Creador de 8 € por un mes. Consulta tu cuenta para gestionar tu acceso.':'Puedes ver los directos con tu acceso habitual cuando estén disponibles. Crear y emitir requiere el plan Ol Live Creador; sus altas y cobros siguen bloqueados mientras se prepara el servicio.';focusSection($('creator-access'),$('creator-access-title'));return;}
+ if(!info.streamer_active){$('creator-access-message').textContent=info.streamer_sales_available?'Activa tus tres meses de prueba de Ol Live desde tu cuenta. Después, si quieres continuar, el pago único es de 25 €.':'Puedes ver los directos con tu acceso habitual cuando estén disponibles. Crear y emitir requiere el plan Ol Live Creador; sus altas y cobros siguen bloqueados mientras se prepara el servicio.';focusSection($('creator-access'),$('creator-access-title'));return;}
  if(hash==='#creator-panel'||!info.mine){focusSection($('creator-panel'),$('creator-form-title'));return;}
  showStudio();
 }

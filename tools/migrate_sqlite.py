@@ -10,6 +10,11 @@ from urllib.parse import quote
 ROOT=Path(__file__).resolve().parents[1]
 TABLES={
     'members':['id','username','password_hash','role','created_at','access_until','welcome_used','session_version'],
+    'live_launch':['id','started_at'],
+    'live_entitlements':['member_id','trial_started_at','trial_until','paid_at','revoked_at'],
+    'founder_activity':['member_id','total_seconds','session_seconds','last_verified_at','qualification_until','first_completed_at'],
+    'creator_daily_activity':['member_id','day','seconds'],
+    'promotion_metrics':['day','event','amount'],
     'live_founders':['member_id','number','claimed_at','revoked_at'],
     'founder_signatures':['member_id','mode','letter','caption','audio_json','updated_at'],
     'sticker_designs':['id','name','points','image_data','updated_at'],
@@ -38,7 +43,7 @@ def migrate(source,app):
         rows={}
         for table,columns in TABLES.items():
             actual=[row['name'] for row in original.execute('PRAGMA table_info('+table+')')]
-            if not actual and table in {'founder_signatures','live_founders','sticker_designs','member_rewards','friend_access','streamer_access','streamer_channels','community_messages','admin_notifications','live_channel_settings'}:
+            if not actual and table in {'live_launch','live_entitlements','founder_activity','creator_daily_activity','promotion_metrics','founder_signatures','live_founders','sticker_designs','member_rewards','friend_access','streamer_access','streamer_channels','community_messages','admin_notifications','live_channel_settings'}:
                 rows[table]=[];continue
             if set(actual)!=set(columns):raise ValueError('La estructura SQLite no es compatible: '+table)
             rows[table]=[dict(row) for row in original.execute('SELECT '+','.join(columns)+' FROM '+table)]

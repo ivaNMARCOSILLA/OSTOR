@@ -2,7 +2,7 @@
 
 Música gratuita desde Audius, Internet Archive, Wikimedia Commons y Radio Browser. Favoritos, historial, listas y temporizador gratuitos. La cuenta gratuita permite guardar el progreso de una colección base de 1.000 stickers con sonido.
 
-**Ol Live** reúne vídeo en directo, categorías, comentarios moderados y regalos externos sin comisión de Ol. Los pagos solo corresponden a ver o emitir Ol Live: 1 € de bienvenida por 14 días, 6 €/mes para espectadores y 8 €/mes para creadores. Las primeras 100 reservas de fundador incluyen acceso de creador gratuito sin vencimiento e insignia numerada personalizable. Los cobros siguen bloqueados hasta que el vídeo esté disponible.
+**Ol Live · Ol del bueno** incluye vídeo, categorías, comentarios y regalos externos sin comisión de Ol. Acceso completo durante tres meses de prueba y, después, 25 € en un único pago voluntario, sin renovación. La prueba no empieza mientras el vídeo no esté disponible. Las primeras 100 plazas de fundador requieren un primer directo verificado de 30 minutos durante la prueba y 2 horas cada 30 días después. Solo la plaza n.º 1 podrá optar a una cesión futura; todavía no hay compraventa. La reserva exige comprobación visual de un solo uso.
 
 Flask + PostgreSQL persistente en Vercel; SQLite para desarrollo local. Nunca guardar secretos ni datos de cuentas en Git. Consulta [la guía de administración](docs/ADMIN_OL.md) para configuración, correo, invitaciones y moderación.
 
