@@ -1,6 +1,6 @@
 /* Shared operational state; public status is never a payment confirmation. */
 const $=id=>document.getElementById(id);
-async function api(path,data){let options={cache:'no-store'};if(data!==undefined){const r=await fetch('/api/account/me',{cache:'no-store'}),a=await r.json();options={...options,method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':a.csrf},body:JSON.stringify(data)};}const r=await fetch(path,options),d=await r.json();if(!r.ok)throw Error((d.error||'No se pudo completar la operación.')+(d.code?' (Referencia: '+d.code+')':'')+(d.diagnostic?' · Stripe: '+d.diagnostic:''));return d;}
+async function api(path,data){let options={cache:'no-store'};if(data!==undefined){const r=await fetch('/api/account/me',{cache:'no-store'}),a=await r.json();options={...options,method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':a.csrf},body:JSON.stringify(data)};}const r=await fetch(path,{...options,signal:AbortSignal.timeout(20000)}),d=await r.json();if(!r.ok)throw Error((d.error||'No se pudo completar la operación.')+(d.code?' (Referencia: '+d.code+')':'')+(d.diagnostic?' · Stripe: '+d.diagnostic:''));return d;}
 let inspecting=false;
 async function inspect(){if(inspecting)return;inspecting=true;try{await(window.OlAccountReady||window.MaggySession?.ready||Promise.resolve());
  const d=await api('/api/status');let banner=$('ol-maintenance-banner');if(!banner){banner=document.createElement('p');banner.id='ol-maintenance-banner';banner.setAttribute('role','status');document.body.prepend(banner);}banner.hidden=d.maintenance.scope==='off';banner.textContent=(d.maintenance.scope==='payments'?'Pagos de Ol Live en preparación · ':d.maintenance.scope==='live'?'Ol Live en preparación · ':'Ol en mantenimiento · ')+d.maintenance.message;
@@ -30,3 +30,38 @@ window.addEventListener('ol:account-refreshed',inspect);window.addEventListener(
 $('fan-alias-form')?.addEventListener('submit',async e=>{e.preventDefault();try{await api('/api/account/fan-alias',{alias:$('fan-alias').value});$('fan-alias-status').textContent='Apodo guardado. Tu usuario de acceso no cambia.';}catch(error){$('fan-alias-status').textContent=error.message;}});
 
 $('stripe-test-checkout')?.addEventListener('click',async e=>{e.target.disabled=true;try{const d=await api('/api/admin/payments/test-checkout',{});location.assign(d.url);}catch(error){$('stripe-test-status').textContent=error.message;e.target.disabled=false;}});
+
+// Read-only administrative diagnostics. No background work for public visitors.
+let maintenanceBusy=false,maintenanceLast=null,maintenanceTimer=null;
+const maintenanceHistory=[];
+const maintenanceLabels={ok:'Correcto',pending:'Pendiente',error:'Error'};
+async function reviewMaintenance(){
+ if(maintenanceBusy||!$('maintenance-check-now'))return;
+ maintenanceBusy=true;$('maintenance-check-now').disabled=true;
+ $('maintenance-check-status').textContent='Revisando el sistema…';
+ try{
+  const report=await api('/api/admin/maintenance-report');
+  const navigation=window.OlNavigation?.check();
+  if(navigation)report.checks.push({name:'Enlaces de esta página',status:navigation.broken.length?'error':'ok',detail:navigation.broken.length+' destinos pendientes; '+navigation.repaired+' ajustes de enlaces conocidos.'});
+  report.ok=!report.checks.some(row=>row.status==='error');
+  maintenanceLast=report;
+  const date=new Date(report.at).toLocaleString('es-ES');
+  const errors=report.checks.filter(row=>row.status==='error').length,pending=report.checks.filter(row=>row.status==='pending').length;
+  const summary=date+' · '+errors+' errores · '+pending+' pendientes.';
+  $('maintenance-check-status').textContent=summary;
+  $('maintenance-check-results').replaceChildren();
+  for(const row of report.checks){const li=document.createElement('li');li.textContent=row.name+' · '+maintenanceLabels[row.status]+': '+row.detail;$('maintenance-check-results').append(li);}
+  maintenanceHistory.unshift(summary);maintenanceHistory.splice(12);
+  $('maintenance-check-history').replaceChildren(...maintenanceHistory.map(text=>{const li=document.createElement('li');li.textContent=text;return li;}));
+  $('maintenance-download').disabled=false;
+ }catch(error){$('maintenance-check-status').textContent='No se pudo completar la revisión: '+error.message;}
+ finally{maintenanceBusy=false;$('maintenance-check-now').disabled=false;}
+}
+$('maintenance-check-now')?.addEventListener('click',reviewMaintenance);
+$('maintenance-download')?.addEventListener('click',()=>{if(!maintenanceLast)return;const url=URL.createObjectURL(new Blob([JSON.stringify(maintenanceLast,null,2)],{type:'application/json'}));const link=document.createElement('a');link.href=url;link.download='ol-mantenimiento.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
+async function startMaintenanceReviews(){
+ if(!$('maintenance-check-now'))return;
+ try{await(window.OlAccountReady||Promise.resolve());const account=await api('/api/account/me');if(account.user?.role!=='admin'){clearInterval(maintenanceTimer);maintenanceTimer=null;return;}if(maintenanceTimer)return;await reviewMaintenance();maintenanceTimer=setInterval(()=>{if(!document.hidden)reviewMaintenance();},1800000);}catch{}
+}
+window.addEventListener('ol:account-refreshed',startMaintenanceReviews);
+startMaintenanceReviews();

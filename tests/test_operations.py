@@ -42,3 +42,23 @@ class OperationsTests(unittest.TestCase):
   self.assertEqual(self.admin.get('/api/account/fan-alias').json['alias'],'Loles')
   self.assertEqual(self.admin.get('/api/account/me').json['user']['username'],'test-admin')
   self.assertEqual(self.post(self.admin,'/api/account/fan-alias',{'alias':''}).status_code,200)
+
+ def test_maintenance_report_is_admin_only_read_only_and_no_store(self):
+  public=app.app.test_client()
+  self.assertEqual(public.get('/api/admin/maintenance-report').status_code,403)
+  with app.app.app_context(),m.database() as c:
+   before=c.execute('SELECT COUNT(*) AS n FROM members').fetchone()['n']
+  with patch('notifications.mail_ready',return_value=False),patch('streamers.live_ready',return_value=False):
+   response=self.admin.get('/api/admin/maintenance-report')
+  self.assertEqual(response.status_code,200)
+  self.assertEqual(response.headers['Cache-Control'],'no-store')
+  report=response.json
+  self.assertTrue(report['configuration_only'])
+  rows={row['name']:row for row in report['checks']}
+  self.assertEqual(rows['Base de datos']['status'],'ok')
+  self.assertEqual(rows['Archivos esenciales']['status'],'ok')
+  self.assertEqual(rows['Correos']['status'],'pending')
+  self.assertEqual(rows['Ol Live']['status'],'pending')
+  self.assertNotIn('SECRET',response.get_data(as_text=True))
+  with app.app.app_context(),m.database() as c:
+   self.assertEqual(c.execute('SELECT COUNT(*) AS n FROM members').fetchone()['n'],before)

@@ -74,6 +74,36 @@ def launch_readiness():
  if provider()=='legacy_paypal':checks['payments']={'PAYPAL_MANUAL_VERIFICATION':True,'MAGGY_STREAMER_SALES_ENABLED':os.getenv('MAGGY_STREAMER_SALES_ENABLED')=='1'}
  return jsonify(environment=os.getenv('VERCEL_ENV','local'),checks=checks,stripe_test_confirmed=test>0,video_configuration_complete=live_ready(),live_payments_enabled=ready(),configuration_only=True,packaging={'web_pwa':True,'play_signing_configured':bool(os.getenv('OL_ANDROID_SHA256')),'play_publication_verified':False},message='Los datos presentes no sustituyen probar vídeo entre dos dispositivos ni verificar la cuenta comercial de Stripe.')
 
+@bp.get('/api/admin/maintenance-report')
+@require_admin
+def maintenance_report():
+ from pathlib import Path
+ from app import VERSION
+ from notifications import mail_ready
+ from streamers import live_ready
+ from payments import ready
+ rows=[]
+ def add(name,status,detail):rows.append({'name':name,'status':status,'detail':detail})
+ try:
+  with database() as c:c.execute('SELECT 1').fetchone()
+  add('Base de datos','ok','Conexión comprobada sin modificar cuentas ni pagos.')
+ except Exception:
+  add('Base de datos','error','No se pudo completar la lectura. Revisa la conexión en Vercel.')
+ root=Path(__file__).resolve().parent
+ required=['index.html','assets/account.html','assets/streamers.html','assets/account.js','assets/navigation.js','assets/operations.js','assets/ol-theme.css','assets/ol-live-jungle-leaves.webp','manifest.webmanifest','sw.js']
+ missing=[name for name in required if not (root/name).is_file()]
+ add('Archivos esenciales','error' if missing else 'ok','Faltan: '+', '.join(missing) if missing else 'Páginas, acceso, decoración y recursos de la aplicación presentes.')
+ add('Correos','ok' if mail_ready() else 'pending','Servicio configurado; esta revisión no envía correos ni confirma su llegada.' if mail_ready() else 'Configura el remitente y Resend o SMTP antes de probar confirmación y recuperación.')
+ add('Ol Live','pending' if premiere() or not live_ready() else 'ok','Próximo estreno; la prueba pública sigue detenida.' if premiere() else 'Configuración de vídeo presente; comprueba una emisión entre dos dispositivos.' if live_ready() else 'Falta completar la configuración de vídeo.')
+ add('Cobros','ok' if ready() else 'pending','Cobros habilitados según configuración; esta revisión no realiza transacciones.' if ready() else 'Cobros desactivados o pendientes de configuración. No se ha cambiado este estado.')
+ try:
+  scope=state()['scope']
+  add('Aviso de mantenimiento','ok' if scope=='off' else 'pending','Sin cierre de mantenimiento.' if scope=='off' else 'Aviso activo: '+scope+'. Puedes gestionarlo desde el formulario de mantenimiento.')
+ except Exception:add('Aviso de mantenimiento','error','No se pudo leer el estado de mantenimiento.')
+ response=jsonify(at=stamp(now_utc()),version=VERSION,checks=rows,ok=not any(row['status']=='error' for row in rows),configuration_only=True)
+ response.headers['Cache-Control']='no-store'
+ return response
+
 @bp.get('/api/admin/supervisor')
 @require_admin
 def supervisor_status():return jsonify(supervisor=None,retired=True)
