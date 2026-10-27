@@ -10,15 +10,29 @@ def run():
   page.locator('#maintenance-check-now').click()
   page.wait_for_function("!document.querySelector('#maintenance-check-now').disabled")
   assert 'errores' in page.locator('#maintenance-check-status').inner_text()
+  terminal=page.locator('#maintenance-terminal')
+  assert 'CONSULTA · GET /api/admin/maintenance-report' in terminal.inner_text()
+  assert 'Base de datos' in terminal.inner_text() and 'FIN ·' in terminal.inner_text()
+  with page.expect_download() as trace:page.locator('#maintenance-terminal-download').click()
+  assert trace.value.suggested_filename=='ol-terminal-mantenimiento.txt'
+  page.evaluate("for(let i=0;i<210;i++)window.dispatchEvent(new CustomEvent('ol:navigation-checked',{detail:{repaired:0,broken:[]}}))")
+  assert terminal.locator('span').count()==200
+  page.locator('#maintenance-terminal-clear').click()
+  assert terminal.locator('span').count()==1 and 'Vista limpiada' in terminal.inner_text()
+
   with page.expect_download() as download:page.locator('#maintenance-download').click()
   assert download.value.suggested_filename=='ol-mantenimiento.json'
   page.route('**/api/admin/maintenance-report',lambda route:route.fulfill(status=503,json={'error':'Revisión temporalmente indisponible.'}))
   page.locator('#maintenance-check-now').click()
   page.wait_for_function("document.querySelector('#maintenance-check-status').textContent.includes('No se pudo completar')")
   assert page.locator('#maintenance-check-now').is_enabled()
+  assert 'ERROR · Revisión temporalmente indisponible.' in terminal.inner_text()
   page.unroute('**/api/admin/maintenance-report')
   page.locator('#maintenance-check-now').click()
   page.wait_for_function("document.querySelector('#maintenance-check-status').textContent.includes('errores')")
+  for width in [320,390,1440]:
+   page.set_viewport_size({'width':width,'height':900});assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+2'),width
+  page.set_viewport_size({'width':390,'height':844})
   page.locator('#fan-alias-panel').wait_for(state='visible');page.locator('#fan-alias').select_option('Loles');page.locator('#fan-alias-form button').click();page.wait_for_function("document.querySelector('#fan-alias-status').textContent.includes('Apodo guardado')")
   page.reload();page.wait_for_function("document.querySelector('#fan-alias').value==='Loles'")
   page.locator('#operations-admin > summary').click();page.locator('#maintenance-scope').select_option('all');page.locator('#maintenance-message').fill('Ol en mantenimiento. Estamos mejorando tu mejor momento.');page.locator('#maintenance-form button').click();page.wait_for_function("document.querySelector('#operations-status').textContent.includes('Estado guardado')")

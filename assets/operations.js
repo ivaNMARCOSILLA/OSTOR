@@ -35,12 +35,36 @@ $('stripe-test-checkout')?.addEventListener('click',async e=>{e.target.disabled=
 let maintenanceBusy=false,maintenanceLast=null,maintenanceTimer=null;
 const maintenanceHistory=[];
 const maintenanceLabels={ok:'Correcto',pending:'Pendiente',error:'Error'};
-async function reviewMaintenance(){
+const maintenanceTrace=[];
+function traceMaintenance(message){
+ const terminal=$('maintenance-terminal');if(!terminal)return;
+ const line='['+new Date().toLocaleTimeString('es-ES')+'] '+message;
+ maintenanceTrace.push(line);if(maintenanceTrace.length>200)maintenanceTrace.splice(0,maintenanceTrace.length-200);
+ const row=document.createElement('span');row.textContent=line+'\n';terminal.append(row);
+ while(terminal.children.length>200)terminal.firstElementChild.remove();
+ if($('maintenance-terminal-follow')?.checked)terminal.scrollTop=terminal.scrollHeight;
+}
+function downloadMaintenanceTrace(){
+ const url=URL.createObjectURL(new Blob([maintenanceTrace.join('\n')+'\n'],{type:'text/plain;charset=utf-8'}));
+ const link=document.createElement('a');link.href=url;link.download='ol-terminal-mantenimiento.txt';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+$('maintenance-terminal-download')?.addEventListener('click',downloadMaintenanceTrace);
+$('maintenance-terminal-clear')?.addEventListener('click',()=>{maintenanceTrace.length=0;$('maintenance-terminal')?.replaceChildren();traceMaintenance('Vista limpiada. Los datos y las revisiones externas se conservan.');});
+window.addEventListener('ol:navigation-checked',event=>{
+ if(!maintenanceTimer&&!maintenanceBusy)return;
+ const record=event.detail;traceMaintenance('ENLACES · '+record.repaired+' ajustes conocidos · '+record.broken.length+' destinos pendientes.');
+ for(const path of record.broken)traceMaintenance('PENDIENTE · Destino: '+path);
+});
+async function reviewMaintenance(source='manual'){
  if(maintenanceBusy||!$('maintenance-check-now'))return;
  maintenanceBusy=true;$('maintenance-check-now').disabled=true;
+ traceMaintenance('INICIO · Revisión '+source+'.');
+ traceMaintenance('CONSULTA · GET /api/admin/maintenance-report');
  $('maintenance-check-status').textContent='Revisando el sistema…';
  try{
   const report=await api('/api/admin/maintenance-report');
+  traceMaintenance('SERVIDOR · Respuesta recibida · Ol '+report.version);
+  for(const row of report.checks)traceMaintenance(maintenanceLabels[row.status].toUpperCase()+' · '+row.name+' · '+row.detail);
   const navigation=window.OlNavigation?.check();
   if(navigation)report.checks.push({name:'Enlaces de esta página',status:navigation.broken.length?'error':'ok',detail:navigation.broken.length+' destinos pendientes; '+navigation.repaired+' ajustes de enlaces conocidos.'});
   report.ok=!report.checks.some(row=>row.status==='error');
@@ -49,19 +73,20 @@ async function reviewMaintenance(){
   const errors=report.checks.filter(row=>row.status==='error').length,pending=report.checks.filter(row=>row.status==='pending').length;
   const summary=date+' · '+errors+' errores · '+pending+' pendientes.';
   $('maintenance-check-status').textContent=summary;
+  traceMaintenance('FIN · '+errors+' errores · '+pending+' pendientes.');
   $('maintenance-check-results').replaceChildren();
   for(const row of report.checks){const li=document.createElement('li');li.textContent=row.name+' · '+maintenanceLabels[row.status]+': '+row.detail;$('maintenance-check-results').append(li);}
   maintenanceHistory.unshift(summary);maintenanceHistory.splice(12);
   $('maintenance-check-history').replaceChildren(...maintenanceHistory.map(text=>{const li=document.createElement('li');li.textContent=text;return li;}));
   $('maintenance-download').disabled=false;
- }catch(error){$('maintenance-check-status').textContent='No se pudo completar la revisión: '+error.message;}
+ }catch(error){$('maintenance-check-status').textContent='No se pudo completar la revisión: '+error.message;traceMaintenance('ERROR · '+error.message);traceMaintenance('FIN · Revisión incompleta. Puedes volver a intentarlo.');}
  finally{maintenanceBusy=false;$('maintenance-check-now').disabled=false;}
 }
-$('maintenance-check-now')?.addEventListener('click',reviewMaintenance);
+$('maintenance-check-now')?.addEventListener('click',()=>reviewMaintenance('manual'));
 $('maintenance-download')?.addEventListener('click',()=>{if(!maintenanceLast)return;const url=URL.createObjectURL(new Blob([JSON.stringify(maintenanceLast,null,2)],{type:'application/json'}));const link=document.createElement('a');link.href=url;link.download='ol-mantenimiento.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
 async function startMaintenanceReviews(){
  if(!$('maintenance-check-now'))return;
- try{await(window.OlAccountReady||Promise.resolve());const account=await api('/api/account/me');if(account.user?.role!=='admin'){clearInterval(maintenanceTimer);maintenanceTimer=null;return;}if(maintenanceTimer)return;await reviewMaintenance();maintenanceTimer=setInterval(()=>{if(!document.hidden)reviewMaintenance();},1800000);}catch{}
+ try{await(window.OlAccountReady||Promise.resolve());const account=await api('/api/account/me');if(account.user?.role!=='admin'){clearInterval(maintenanceTimer);maintenanceTimer=null;return;}if(maintenanceTimer)return;traceMaintenance('PROGRAMACIÓN · Diagnóstico cada 30 minutos con el panel visible.');await reviewMaintenance('inicial');maintenanceTimer=setInterval(()=>{if(!document.hidden)reviewMaintenance('automática');},1800000);}catch{}
 }
 window.addEventListener('ol:account-refreshed',startMaintenanceReviews);
 startMaintenanceReviews();
