@@ -1,7 +1,7 @@
 /* Repair known navigation aliases only; never submit forms or activate paid access. */
 (()=>{
  let availability={premiere:document.body.classList.contains('ol-live-premiere-only'),admin:false},timer;
- const aliases={'#register':'#register-form','#create-account':'#register-form','#login':'#login-form','#my-space':'#mi-espacio'};
+ const aliases={'#register':'#credentials','#create-account':'#credentials','#register-form':'#credentials','#login':'#login-form','#my-space':'#mi-espacio'};
  const livePaths=new Set(['/live','/streamers']);
  const reports=[];
  function visibleTarget(id){const target=document.getElementById(id);if(!target)return null;for(let p=target.parentElement;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;return target;}
