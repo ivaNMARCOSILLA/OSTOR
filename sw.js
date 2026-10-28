@@ -1,7 +1,7 @@
-/* ELECTRONICAMA PRO 9.10.8 · caché de interfaz, NO de música ni APIs.
+/* ELECTRONICAMA PRO 9.10.9 · caché de interfaz, NO de música ni APIs.
    © 2026 Iván Marcos Illa, edición de esta aplicación. */
-const CACHE = 'electronicama-shell-v9-10-8';
-const STATIC = ['/assets/session.js?v=9.10.8', '/assets/styles.css?v=9.10.8', '/assets/ol-theme.css?v=9.10.8', '/assets/app.js?v=9.10.8', '/assets/maggy.js?v=9.10.8', '/manifest.webmanifest', '/assets/favicon.svg', '/assets/app-icon-192.png'];
+const CACHE = 'electronicama-shell-v9-10-9';
+const STATIC = ['/assets/session.js?v=9.10.9', '/assets/styles.css?v=9.10.9', '/assets/ol-theme.css?v=9.10.9', '/assets/app.js?v=9.10.9', '/assets/maggy.js?v=9.10.9', '/manifest.webmanifest', '/assets/favicon.svg', '/assets/app-icon-192.png'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(STATIC)).then(() => self.skipWaiting()));
 });

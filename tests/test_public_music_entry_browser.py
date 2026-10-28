@@ -12,6 +12,12 @@ def run():
    assert page.locator('.header-account').get_attribute('href')=='#library'
    assert page.locator('#main-nav a[href="/account"],#mobile-nav a[href="/account"]').count()==0
    assert not page.locator('.content a[href="/account"]:visible').count()
+  page.goto(BASE_URL+'/live');page.wait_for_function("document.body.classList.contains('ol-live-premiere-only')")
+  assert page.locator('a[href="/account"]:visible').count()==0
+  for link in page.locator('#ol-live-premiere a,.premiere-public-actions a').all():
+   assert link.is_visible() and link.get_attribute('href').startswith('/#')
+   assert link.bounding_box()['height']>=44
+  page.locator('#ol-live-premiere a').click();page.wait_for_url('**/#library')
   page.goto(BASE_URL+'/account?manage=1');assert page.locator('#login-form').is_visible()
   page.goto(BASE_URL+'/account#reset-password=example');assert page.locator('#password-reset-form').is_visible()
   b.close()
