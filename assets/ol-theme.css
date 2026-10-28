@@ -140,3 +140,24 @@ body,body:has(>.back){background-image:linear-gradient(transparent,transparent),
 .mobile-brand strong,.account-shell .logo{display:inline-flex;align-items:center;gap:.25em;max-width:100%;white-space:nowrap;overflow-wrap:normal;font:650 clamp(18px,4.5vw,24px)/1.3 Inter,system-ui,sans-serif;letter-spacing:-.6px}
 .mobile-brand .brand-word{color:inherit;text-shadow:none}.mobile-brand{flex:0 1 auto;max-width:100%}.topbar-right{min-width:0}.platform-header .logo{min-width:0}
 @media(max-width:420px){#mobile-menu-label{display:none}.mobile-brand{gap:6px}.content>.topbar{flex-wrap:wrap;row-gap:4px}.topbar-right{margin-left:auto}.header-account{padding:7px 9px;font-size:11px}}
+
+/* Readable copy and quiet organic contours throughout the platform. */
+:where(.content,.account-shell,.platform-content,.panel,.maggy-section,.mix-section,.track-card,.section-header,.hero-copy,.collection-panel,.founders-copy,.holo-controls){min-width:0;box-sizing:border-box}
+:where(h1,h2,h3,h4,p,blockquote,summary,label,td,th,.result-status,.notice){overflow-wrap:anywhere;word-break:normal}
+:where(p,blockquote,label,.notice){line-height:1.65}
+:where(button,.button,.nav-item,.header-account){max-width:100%;white-space:normal;overflow-wrap:anywhere;line-height:1.4}
+:where(input,select,textarea){box-sizing:border-box;min-width:0;max-width:100%}
+:where(.panel,.maggy-section,.mix-section,.collection-panel,.founders-promo,.preview-banner,.ol-live-premiere,.ol-intro,.external-catalog){height:auto;max-height:none;border-radius:24px 32px 25px 36px / 28px 24px 34px 23px}
+.content>#library,.content>#hero{border-radius:24px 30px 25px 34px / 28px 23px 32px 24px}
+:where(.track-card,.moment-grid button,.pricing-grid article,.holo-stage){border-radius:20px 25px 19px 27px / 23px 19px 27px 20px}
+:where(button,.button,.nav-item,input,select,textarea){border-radius:14px 18px 13px 19px / 17px 13px 19px 14px}
+:where(.track-title,.track-channel,.track-card h3,.track-card p){white-space:normal;overflow:visible;text-overflow:clip;display:block;-webkit-line-clamp:unset;overflow-wrap:anywhere;line-height:1.45;height:auto;max-height:none}
+:where(.section-header,.section-topline,.filter-row,.quick-searches,.hero-pills){flex-wrap:wrap}
+:where(.panel,.maggy-section,.collection-panel) :where(a,code){overflow-wrap:anywhere}
+.hologram-message{border-radius:21px 28px 22px 30px;line-height:1.75}
+hr{height:12px;border:0;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='12' viewBox='0 0 100 12'%3E%3Cpath d='M0 6Q25 0 50 6T100 6' fill='none' stroke='%2391a6b9' stroke-width='1.5'/%3E%3C/svg%3E") repeat-x center}
+@media(max-width:650px){.search-form{flex-wrap:wrap}.search-form input{flex:1 1 120px;width:0}.search-form button{flex:0 0 auto}.panel h2,.maggy-section h2,.collection-panel h2{font-size:clamp(21px,6vw,28px);line-height:1.3}.account-shell header{flex-wrap:wrap;gap:10px}.account-shell header>span{max-width:100%}.table-scroll{max-width:100%;overflow-x:auto}.holo-caption{overflow-wrap:anywhere}.content .track-card{min-width:0}}
+.content .track-title,.content .track-artist,.content .track-origin{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere;line-height:1.5;height:auto;max-height:none}
+.content .track-card,.content .moment-grid button,.account-shell .pricing-grid article{border-radius:20px 25px 19px 27px / 23px 19px 27px 20px}
+.content .maggy-section,.content .mix-section,.account-shell .panel,.content .collection-panel,.content .ol-live-premiere{border-radius:24px 32px 25px 36px / 28px 24px 34px 23px}
+.player-details strong,.player-details small{white-space:normal;overflow-wrap:anywhere}

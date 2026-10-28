@@ -6,7 +6,7 @@ def run():
  with sync_playwright() as p:
   browser=p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox']);page=browser.new_page(viewport={'width':390,'height':900});errors=[];queries=[]
   page.on('pageerror',lambda error:errors.append(str(error)))
-  tracks=[{'id':'archive_'+str(i),'source':'ARCHIVE','title':'Música '+str(i),'channel':'Artista'} for i in range(4)]
+  tracks=[{'id':'archive_'+str(i),'source':'ARCHIVE','title':'Música '+str(i)+' · Una cançó amb un títol molt llarg que cal poder llegir completament','channel':'Artista'} for i in range(4)]
   def search(route):queries.append(route.request.url);route.fulfill(json=tracks)
   page.route('**/api/search?*',search);page.goto(BASE_URL+'/');page.locator('#consent-decline').click();page.locator('.track-card').first.wait_for()
   assert page.locator('#library #search-form').count()==1
@@ -19,6 +19,8 @@ def run():
   for width in [320,390,768,1440]:
    page.set_viewport_size({'width':width,'height':900});page.evaluate('scrollTo(0,0)')
    assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+2'),width
+   for title in page.locator('.track-title').all():
+    assert title.evaluate('(el)=>el.scrollWidth<=el.clientWidth+1 && getComputedStyle(el).whiteSpace!=="nowrap"'),(width,'clipped track title')
    metrics=page.evaluate("""()=>{const box=id=>document.getElementById(id).getBoundingClientRect();return {search:box('search-form').top,gap:box('track-grid').top-box('search-form').bottom,hero:box('hero').height,music:box('track-grid').top,styles:box('momentos').top,ad:box('ol-live-premiere').top,libraryEnd:box('library').bottom}}""")
    assert metrics['search']<450,(width,metrics)
    assert 0<=metrics['gap']<280,(width,metrics)
