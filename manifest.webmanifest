@@ -22,5 +22,22 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "Inicio de Ol",
+      "short_name": "Inicio",
+      "url": "/#hero"
+    },
+    {
+      "name": "Mis favoritos",
+      "short_name": "Favoritos",
+      "url": "/?view=favorites"
+    },
+    {
+      "name": "Fondo de Ol",
+      "short_name": "Fondo",
+      "url": "/#fondos-ol"
+    }
   ]
 }

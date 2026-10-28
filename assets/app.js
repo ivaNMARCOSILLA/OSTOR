@@ -8,7 +8,7 @@
 await window.MaggySession.ready;
 const storageKey = name => window.MaggySession ? window.MaggySession.key(name) : name;
 
-const VERSION = '9.9.0';
+const VERSION = '9.9.1';
 const KEY = Object.freeze({ favorites: storageKey('electronicama_v7_favorites'), history: storageKey('electronicama_v7_history'), ads: storageKey('electronicama_ads_consent_v1') });
 const MAX_FAVORITES = 160;
 const MAX_HISTORY = 75;
@@ -66,7 +66,7 @@ function toggleFavorite(track) {
   byId('favorites-count').textContent = String(state.favorites.filter(supportedTrack).length);
   if (state.currentTrack) {
     const button = byId('player-favorite');
-    button.textContent = isFavorite(state.currentTrack.id) ? '♥' : '♡';
+    button.textContent = isFavorite(state.currentTrack.id) ? '★' : '☆';
     button.classList.toggle('saved', isFavorite(state.currentTrack.id));
     button.setAttribute('aria-label', isFavorite(state.currentTrack.id) ? 'Quitar de favoritos' : 'Guardar en favoritos');
   }
@@ -311,6 +311,7 @@ function destroyMedia() {
   if (state.audio) { state.audio.pause(); state.audio.removeAttribute('src'); state.audio.load(); state.audio = null; }
   byId('player-media').replaceChildren();
   if ('mediaSession' in navigator) {
+    for(const name of mediaActions){try{navigator.mediaSession.setActionHandler(name,null);}catch{}}
     try { navigator.mediaSession.playbackState = 'none'; navigator.mediaSession.metadata = null; navigator.mediaSession.setPositionState?.(); } catch { /* no compatible */ }
   }
 }
@@ -327,12 +328,16 @@ function playTrack(track, queue = filteredTracks()) {
   state.queue = queue.filter(supportedTrack);
   state.currentIndex = Math.max(0, state.queue.findIndex(x => x.id === track.id));
   byId('player').classList.remove('hidden');
+  setCompactPlayer(track.source!=='YOUTUBE'&&compactPreferred);
+  byId('player-compact').disabled=track.source==='YOUTUBE';
+  byId('player-compact').title=track.source==='YOUTUBE'?'El vídeo de YouTube debe permanecer visible.':'Reducir los controles de audio dentro de Ol.';
   byId('player-title').textContent = track.title;
   byId('player-artist').textContent = `${track.channel || 'Artista'} · ${track.source}`;
   byId('player-art').replaceChildren(cover(track.thumbnail, `Portada de ${track.title}`));
   byId('previous-track').disabled = state.currentIndex <= 0;
   byId('next-track').disabled = state.currentIndex >= state.queue.length - 1;
-  byId('player-favorite').textContent = isFavorite(track.id) ? '♥' : '♡';
+  byId('player-favorite').textContent = isFavorite(track.id) ? '★' : '☆';
+  byId('player-favorite').setAttribute('aria-label',isFavorite(track.id)?'Quitar de favoritos':'Guardar en favoritos');
   byId('player-favorite').classList.toggle('saved', isFavorite(track.id));
   byId('toggle-play').textContent = '▶';
   byId('toggle-play').setAttribute('aria-label', 'Reproducir');
@@ -423,20 +428,29 @@ function playbackRejected(error) {
   // AbortError is expected when switching tracks quickly; media errors retry above.
 }
 
-/** Controles nativos del teléfono SOLO para streaming de Audius/Archive. */
+// Standard multimedia actions for native audio; operating systems decide which to show.
+const mediaActions=['play','pause','stop','nexttrack','previoustrack','seekbackward','seekforward','seekto'];
+let compactPreferred=false;
+try{compactPreferred=localStorage.getItem(storageKey('ol_compact_player'))==='1';}catch{}
+function setCompactPlayer(compact){
+ byId('player').classList.toggle('compact',compact);
+ byId('player-compact').setAttribute('aria-pressed',String(compact));
+ byId('player-compact').textContent=compact?'Mostrar reproductor':'Minimizar audio';
+ if(compact){byId('player').classList.remove('expanded');byId('player-expand').setAttribute('aria-expanded','false');byId('player-expand').textContent='Ampliar reproductor ↑';}
+}
 function mediaSessionPlayback(value) {
   if (!('mediaSession' in navigator)) return;
   try { navigator.mediaSession.playbackState = value; } catch { /* no compatible */ }
 }
 function setupAudioMediaSession(track) {
-  if (!track || !('mediaSession' in navigator)) return;
+  if (!track || track.source==='YOUTUBE' || !('mediaSession' in navigator)) return;
   try {
-    const artwork = safeImage(track.thumbnail) ? [{src: safeImage(track.thumbnail), }] : [];
+    const artwork = safeImage(track.thumbnail) ? [{src: safeImage(track.thumbnail)}] : [{src:new URL('/assets/app-icon-192.png',location.origin).href,sizes:'192x192',type:'image/png'}];
     if ('MediaMetadata' in window) navigator.mediaSession.metadata = new MediaMetadata({
       title: track.title, artist: track.channel || 'Artista', album: 'Ol', artwork
     });
     for (const [name, fn] of [
-      ['play', togglePlayFromSystem], ['pause', () => state.audio?.pause()],
+      ['play', togglePlayFromSystem], ['pause', () => state.audio?.pause()], ['stop',closePlayer],
       ['nexttrack', playNext], ['previoustrack', playPrevious],
       ['seekbackward', details => seekAudio(-(details.seekOffset || 15))],
       ['seekforward', details => seekAudio(details.seekOffset || 15)],
@@ -446,9 +460,16 @@ function setupAudioMediaSession(track) {
     }
   } catch { /* media session opcional */ }
 }
-function playNext() { if (state.currentIndex < state.queue.length - 1) playTrack(state.queue[state.currentIndex + 1], state.queue); else setStatus('Fin de la lista.'); }
-function playPrevious() { if (state.currentIndex > 0) playTrack(state.queue[state.currentIndex - 1], state.queue); }
-function togglePlayFromSystem() { state.audio?.play().catch(() => setStatus('Pulsa reproducir en Ol para continuar.')); }
+function adjacentTrack(step){
+ for(let i=state.currentIndex+step;i>=0&&i<state.queue.length;i+=step){
+  if(document.hidden&&state.queue[i].source==='YOUTUBE')continue;
+  playTrack(state.queue[i],state.queue);return;
+ }
+ setStatus(document.hidden?'No hay más audio disponible en esta dirección. Abre Ol para elegir otra fuente.':'Fin de la lista.');
+}
+function playNext(){adjacentTrack(1);}
+function playPrevious(){adjacentTrack(-1);}
+function togglePlayFromSystem(){if(state.currentTrack?.source!=='YOUTUBE'&&state.audio&&(state.audio.paused||state.audio.error))togglePlay();}
 function togglePlay() {
   if(state.currentTrack?.source==='YOUTUBE'){if(state.youtubeReady){state.youtube.getPlayerState()===1?state.youtube.pauseVideo():state.youtube.playVideo();}else if(!state.youtubeLoading)playTrack(state.currentTrack,state.queue);return;}
   if (state.audio) {
@@ -495,6 +516,8 @@ function init() {
     if (!window.confirm('¿Borrar el historial guardado en este navegador?')) return;
     state.history = []; writeList(KEY.history, []); render(); message('Historial borrado.');
   });
+  byId('player-home').addEventListener('click',()=>{goView('discover');byId('hero').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});byId('search-input').focus({preventScroll:true});});
+  byId('player-compact').addEventListener('click',()=>{if(state.currentTrack?.source==='YOUTUBE')return;compactPreferred=!byId('player').classList.contains('compact');setCompactPlayer(compactPreferred);try{localStorage.setItem(storageKey('ol_compact_player'),compactPreferred?'1':'0');}catch{}});
   byId('player-expand').addEventListener('click', () => {
     const expanded = byId('player').classList.toggle('expanded');
     byId('player-expand').setAttribute('aria-expanded', String(expanded));
@@ -525,7 +548,8 @@ function init() {
   }
   window.addEventListener('maggy:access-changed', event => { if (!event.detail.active) closePlayer(); render(); });
   render();
-  requestSearch(state.query);
+  const initialView=new URLSearchParams(location.search).get('view');
+  if(['favorites','history'].includes(initialView))goView(initialView);else requestSearch(state.query);
   console.info(`Ol PRO ${VERSION} · Edición Iván Marcos Illa`);
 }
 window.addEventListener('maggy:play', event => { const list = Array.isArray(event.detail) ? event.detail : [event.detail]; if (list[0]?.id && list[0]?.source) playTrack(list[0], list); });
