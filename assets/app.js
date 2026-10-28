@@ -8,7 +8,7 @@
 await window.MaggySession.ready;
 const storageKey = name => window.MaggySession ? window.MaggySession.key(name) : name;
 
-const VERSION = '9.9.2';
+const VERSION = '9.9.3';
 const KEY = Object.freeze({ favorites: storageKey('electronicama_v7_favorites'), history: storageKey('electronicama_v7_history'), ads: storageKey('electronicama_ads_consent_v1') });
 const MAX_FAVORITES = 160;
 const MAX_HISTORY = 75;
@@ -136,6 +136,7 @@ function render() {
   byId('results-meta').textContent = `${list.length} ${list.length === 1 ? 'PISTA' : 'PISTAS'}`;
   byId('clear-history').classList.toggle('hidden', state.view !== 'history' || state.history.length === 0);
   byId('quick-searches').classList.toggle('hidden', state.view !== 'discover');
+  byId('quick-style-picker').classList.toggle('hidden',state.view!=='discover');
   byId('hero').classList.toggle('hidden', state.view !== 'discover');
   document.querySelectorAll('[data-view]').forEach(button => {
     button.classList.toggle('active', button.dataset.view === state.view);

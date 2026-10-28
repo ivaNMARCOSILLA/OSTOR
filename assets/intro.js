@@ -8,5 +8,5 @@
  function finish(name){event(name);try{localStorage.setItem(key,'done');}catch{}panel.classList.add('hidden');document.getElementById('search-input')?.focus({preventScroll:true});}
  $('intro-next').addEventListener('click',()=>{if(step===2){finish('complete');return;}event('next');step++;$('ol-intro-title').textContent=slides[step][0];$('ol-intro-copy').textContent=slides[step][1];$('intro-position').textContent=(step+1)+' / 3';$('intro-next').textContent=step===2?'Terminar':'Siguiente';$('intro-start').classList.toggle('hidden',step!==2);$('intro-feedback').textContent=slides[step][0];});
  $('intro-skip').addEventListener('click',()=>finish('skip'));
- $('intro-start').addEventListener('click',()=>finish('complete'));event('shown');
+ $('intro-start').addEventListener('click',()=>finish('complete'));if('IntersectionObserver' in window){const observer=new IntersectionObserver(entries=>{if(entries.some(entry=>entry.isIntersecting)){event('shown');observer.disconnect();}},{threshold:.25});observer.observe(panel);}else event('shown');
 })();

@@ -50,7 +50,7 @@ jobs:
       - name: Pruebas de servidor
         run: python -m unittest discover -s tests -p 'test_*.py'
       - name: Navegación, registro, sesión, cámara y administración
-        run: python tests/run_browsers.py test_home_menu_browser.py test_live_navigation_browser.py test_registration_browser.py test_email_browser.py test_youtube_browser.py test_background_browser.py test_audio_browser.py test_membership_browser.py test_two_factor_browser.py test_streamers_browser.py test_operations_browser.py test_shortcuts_browser.py
+        run: python tests/run_browsers.py test_home_menu_browser.py test_home_layout_browser.py test_live_navigation_browser.py test_registration_browser.py test_email_browser.py test_youtube_browser.py test_background_browser.py test_audio_browser.py test_membership_browser.py test_two_factor_browser.py test_streamers_browser.py test_operations_browser.py test_shortcuts_browser.py
       - name: Estado de próximo estreno
         env:
           OL_LIVE_PREMIERE: '1'
