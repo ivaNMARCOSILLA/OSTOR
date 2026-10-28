@@ -43,3 +43,14 @@ class AnalyticsTests(unittest.TestCase):
   response=self.post(guest,'/api/presence');self.assertEqual(response.status_code,200)
   self.assertIn('HttpOnly',response.headers['Set-Cookie'])
   self.assertEqual(self.admin.get('/api/admin/statistics').json['online']['guests'],1)
+
+ def test_unaccepted_invitations_do_not_inflate_customer_statistics(self):
+  result=self.post(self.admin,'/api/admin/invite',{'username':'not-accepted-stats'})
+  self.assertEqual(result.status_code,201)
+  data=self.admin.get('/api/admin/statistics').json
+  self.assertEqual(data['accounts']['registered'],0)
+  self.assertEqual(data['friends'],0)
+  friend=app.app.test_client();token=result.json['path'].split('=',1)[1]
+  self.assertEqual(self.post(friend,'/api/account/accept-invite',{'token':token,'password':'accepted-stats-password-123'}).status_code,200)
+  activated=self.admin.get('/api/admin/statistics').json
+  self.assertEqual(activated['accounts']['registered'],1);self.assertEqual(activated['friends'],1)

@@ -47,15 +47,15 @@ def statistics():
     instant = now_utc()
     month = stamp(instant.replace(day=1,hour=0,minute=0,second=0))
     with database() as conn:
-        counts = conn.execute("SELECT COUNT(*) AS registered,COALESCE(SUM(CASE WHEN created_at>=? THEN 1 ELSE 0 END),0) AS new_week,COALESCE(SUM(CASE WHEN access_until>? THEN 1 ELSE 0 END),0) AS paid_active FROM members WHERE role!='admin'", (stamp(instant-timedelta(days=7)), stamp(instant))).fetchone()
+        counts = conn.execute("SELECT COUNT(*) AS registered,COALESCE(SUM(CASE WHEN created_at>=? THEN 1 ELSE 0 END),0) AS new_week,COALESCE(SUM(CASE WHEN access_until>? THEN 1 ELSE 0 END),0) AS paid_active FROM members WHERE role!='admin' AND COALESCE(password_hash,'')!=''", (stamp(instant-timedelta(days=7)), stamp(instant))).fetchone()
         payments = conn.execute('SELECT COUNT(*) AS count,COALESCE(SUM(amount_cents),0) AS total_cents,COALESCE(SUM(CASE WHEN verified_at>=? THEN amount_cents ELSE 0 END),0) AS month_cents FROM payments', (month,)).fetchone()
         founders = conn.execute('SELECT COUNT(*) AS n FROM live_founders WHERE revoked_at IS NULL').fetchone()['n']
-        friends = conn.execute('SELECT COUNT(*) AS n FROM friend_access WHERE revoked_at IS NULL').fetchone()['n']
+        friends = conn.execute("SELECT COUNT(*) AS n FROM friend_access f JOIN members m ON m.id=f.member_id WHERE f.revoked_at IS NULL AND COALESCE(m.password_hash,'')!=''").fetchone()['n']
         live = conn.execute('SELECT COUNT(*) AS n FROM streamer_channels WHERE live_until>?', (stamp(instant),)).fetchone()['n']
         channels = conn.execute('SELECT COUNT(*) AS n FROM streamer_channels').fetchone()['n']
         pending = conn.execute("SELECT COUNT(*) AS n FROM admin_notifications WHERE status IN ('pending','failed')").fetchone()['n']
         start = instant.replace(hour=0,minute=0,second=0)-timedelta(days=6)
-        registrations = conn.execute("SELECT SUBSTR(created_at,1,10) AS day,COUNT(*) AS n FROM members WHERE role!='admin' AND created_at>=? GROUP BY SUBSTR(created_at,1,10)", (stamp(start),)).fetchall()
+        registrations = conn.execute("SELECT SUBSTR(created_at,1,10) AS day,COUNT(*) AS n FROM members WHERE role!='admin' AND COALESCE(password_hash,'')!='' AND created_at>=? GROUP BY SUBSTR(created_at,1,10)", (stamp(start),)).fetchall()
         revenue = conn.execute('SELECT SUBSTR(verified_at,1,10) AS day,COUNT(*) AS n,SUM(amount_cents) AS cents FROM payments WHERE verified_at>=? GROUP BY SUBSTR(verified_at,1,10)', (stamp(start),)).fetchall()
         promotion = conn.execute("SELECT event,SUM(amount) AS n FROM promotion_metrics GROUP BY event").fetchall()
         presence = online(conn)

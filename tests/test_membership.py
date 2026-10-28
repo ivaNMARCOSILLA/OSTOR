@@ -152,3 +152,24 @@ class MembershipTests(unittest.TestCase):
         self.assertEqual(self.post(client,'/api/account/accept-invite',{'token':second,'password':'reissued-password-123'}).status_code,200)
         self.assertTrue(client.get('/api/account/me').json['user']['complimentary'])
         self.assertEqual(self.post(self.admin,'/api/admin/invite',{'username':'reissued-friend'}).status_code,409)
+
+    def test_cleanup_unaccepted_invites_preserves_accepted_accounts_and_access(self):
+        tokens={}
+        for name in ['pending-one','pending-two','accepted-friend']:
+            tokens[name]=self.post(self.admin,'/api/admin/invite',{'username':name}).json['path'].split('=',1)[1]
+        accepted=self.app.test_client()
+        self.assertEqual(self.post(accepted,'/api/account/accept-invite',{'token':tokens['accepted-friend'],'password':'accepted-password-123'}).status_code,200)
+        summary=self.admin.get('/api/admin/invitations?summary=1').json
+        self.assertEqual(summary,{'total':3,'pending':2})
+        listing=self.admin.get('/api/admin/members').json['members']
+        self.assertFalse(next(row for row in listing if row['username']=='pending-one')['account_activated'])
+        self.assertTrue(next(row for row in listing if row['username']=='accepted-friend')['account_activated'])
+        self.assertEqual(self.post(self.client,'/api/admin/invitations/clear',{'pending':True}).status_code,403)
+        response=self.post(self.admin,'/api/admin/invitations/clear',{'pending':True})
+        self.assertEqual(response.status_code,200);self.assertEqual(response.json['deleted'],2)
+        self.assertEqual(self.admin.get('/api/admin/invitations?summary=1').json,{'total':1,'pending':0})
+        self.assertTrue(accepted.get('/api/account/me').json['user']['complimentary'])
+        self.assertEqual(self.post(self.app.test_client(),'/api/account/accept-invite',{'token':tokens['pending-one'],'password':'never-accepted-123'}).status_code,400)
+        self.assertEqual(self.post(self.admin,'/api/admin/invitations/clear',{'pending':True}).json['deleted'],0)
+        self.assertEqual(self.post(self.admin,'/api/admin/invitations/clear',{'completed':True}).json['deleted'],1)
+        self.assertTrue(accepted.get('/api/account/me').json['user']['complimentary'])

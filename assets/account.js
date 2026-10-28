@@ -56,7 +56,7 @@ async function refresh() {
 async function loadAdmin() {
   const data = await api('/api/admin/members'); members = data.members; payments = data.payments;
   renderMembers();
-  if($('invitation-history').open)await loadInvitations();
+  if($('invitation-history').open)await loadInvitations();else{const summary=await api('/api/admin/invitations?summary=1');$('clients-invitation-count').textContent=`${summary.pending??0} invitaciones no aceptadas · ${summary.total} registros en el historial.`;}
   $('admin-payments').replaceChildren();
   for (const payment of payments) {
     const row=document.createElement('tr');
@@ -67,16 +67,16 @@ async function loadAdmin() {
   await loadStatistics();
 }
 function renderMembers(){
-  const clients=members.filter(member=>member.role!=='admin');
+  const clients=members.filter(member=>member.role!=='admin'&&member.account_activated!==false);
   $('admin-counters').textContent=`${clients.length} clientes · ${clients.filter(member=>member.active).length} con Ol Live · ${clients.filter(member=>member.complimentary).length} amigos con Ol Live gratuito`;
-  const query=$('admin-member-search').value.trim().toLowerCase();const matches=members.filter(member=>member.username.toLowerCase().includes(query));
+  const query=$('admin-member-search').value.trim().toLowerCase();const matches=members.filter(member=>(member.account_activated!==false||$('show-unactivated-members').checked)&&member.username.toLowerCase().includes(query));
   const pages=Math.max(1,Math.ceil(matches.length/25));memberPage=Math.min(memberPage,pages);
   $('member-page').textContent=`Página ${memberPage} de ${pages} · ${matches.length} cuentas`;
   $('members-prev').disabled=memberPage===1;$('members-next').disabled=memberPage===pages;
   $('admin-members').replaceChildren();
   for (const member of matches.slice((memberPage-1)*25,memberPage*25)) {
     const row = document.createElement('tr');
-    for (const value of [member.username, member.role === 'admin' ? 'Administrador' : member.founder_active ? 'Fundador n.º '+member.founder_number : member.complimentary ? 'Amigo · gratuito' : member.streamer_active ? 'Ol Live Creador' : 'Cliente', member.active ? 'Ol Live activo' : 'Cuenta gratuita', member.founder_active ? 'Fundador · actividad requerida' : member.live_lifetime ? 'Sin vencimiento · pago único' : member.trial_active ? 'Prueba hasta '+date(member.live_trial_until) : member.complimentary ? 'Sin vencimiento · invitación gratuita' : member.streamer_until ? `Ol: ${date(member.access_until)} · Ol Live Creador: ${date(member.streamer_until)}` : date(member.access_until)]) row.append(text('td', value));
+    for (const value of [member.username, member.account_activated===false?'Sin activar':member.role === 'admin' ? 'Administrador' : member.founder_active ? 'Fundador n.º '+member.founder_number : member.complimentary ? 'Amigo · gratuito' : member.streamer_active ? 'Ol Live Creador' : 'Cliente', member.account_activated===false?'Cuenta sin activar':member.active ? 'Ol Live activo' : 'Cuenta gratuita', member.account_activated===false?'Pendiente de activar':member.founder_active ? 'Fundador · actividad requerida' : member.live_lifetime ? 'Sin vencimiento · pago único' : member.trial_active ? 'Prueba hasta '+date(member.live_trial_until) : member.complimentary ? 'Sin vencimiento · invitación gratuita' : member.streamer_until ? `Ol: ${date(member.access_until)} · Ol Live Creador: ${date(member.streamer_until)}` : date(member.access_until)]) row.append(text('td', value));
     const actions = document.createElement('td');
     if (member.role !== 'admin') {
       const friend=text('button',member.complimentary?'Retirar acceso gratuito':'Dar acceso gratuito');friend.type='button';
@@ -89,7 +89,8 @@ function renderMembers(){
  }
 async function loadInvitations(){
  const data=await api('/api/admin/invitations?page='+invitationPage);invitationPage=data.page;
- $('invitation-count').textContent=`${data.total} invitaciones registradas. Mostrando hasta 25 por página.`;
+ $('invitation-count').textContent=`${data.total} registros · ${data.pending??0} invitaciones no aceptadas. Mostrando hasta 25 por página.`;
+ $('clients-invitation-count').textContent=`${data.pending??0} invitaciones no aceptadas · ${data.total} registros en el historial.`;
  $('invitation-page').textContent=`Página ${data.page} de ${data.pages}`;
  $('invitations-prev').disabled=data.page===1;$('invitations-next').disabled=data.page===data.pages;
  $('admin-invitations').replaceChildren();
@@ -99,7 +100,21 @@ $('admin-member-search').addEventListener('input',()=>{memberPage=1;renderMember
 $('members-prev').addEventListener('click',()=>{memberPage-=1;renderMembers();});$('members-next').addEventListener('click',()=>{memberPage+=1;renderMembers();});
 $('invitation-history').addEventListener('toggle',()=>{if($('invitation-history').open)loadInvitations().catch(error=>status(error.message));});
 $('invitations-prev').addEventListener('click',()=>{invitationPage-=1;loadInvitations().catch(error=>status(error.message));});$('invitations-next').addEventListener('click',()=>{invitationPage+=1;loadInvitations().catch(error=>status(error.message));});
-$('clear-invitations').addEventListener('click',async()=>{const button=$('clear-invitations');button.disabled=true;try{await api('/api/admin/invitations/clear',{completed:true});await loadInvitations();status('Historial usado y caducado eliminado. Se conservan las cuentas, el acceso y los pagos.');}catch(error){status(error.message);}finally{button.disabled=false;}});
+let clearingInvitations=false;
+async function clearInvitations(pending){
+ if(clearingInvitations)return;clearingInvitations=true;
+ const buttons=['clear-invitations','clear-pending-invitations','clients-clear-pending','clients-clear-history'].map($);buttons.forEach(button=>button.disabled=true);
+ $('clients-invitation-status').textContent='Limpiando invitaciones…';
+ try{const data=await api('/api/admin/invitations/clear',pending?{pending:true}:{completed:true});invitationPage=1;await loadInvitations();const message=(pending?'Invitaciones no aceptadas canceladas: ':'Registros usados o caducados eliminados: ')+(data.deleted??0)+'. Se conservan las cuentas activadas, los accesos y los pagos.';$('clients-invitation-status').textContent=message;status(message);}
+ catch(error){$('clients-invitation-status').textContent=error.message;status(error.message);}
+ finally{clearingInvitations=false;buttons.forEach(button=>button.disabled=false);}
+}
+$('clear-invitations').addEventListener('click',()=>clearInvitations(false));
+$('clear-pending-invitations').addEventListener('click',()=>clearInvitations(true));
+$('clients-clear-pending').addEventListener('click',()=>clearInvitations(true));
+$('clients-clear-history').addEventListener('click',()=>clearInvitations(false));
+$('clients-show-history').addEventListener('click',()=>{const panel=$('invitation-history');panel.open=true;panel.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});panel.querySelector('summary').focus();});
+$('show-unactivated-members').addEventListener('change',()=>{memberPage=1;renderMembers();});
 let moderationPage=1;
 async function loadModeration(){const data=await api('/api/admin/moderation?page='+moderationPage+'&flagged='+$('moderation-filter').value);moderationPage=data.page;$('moderation-count').textContent=`${data.total} registros · conservación: ${data.retention_days} días`;$('moderation-page').textContent=`Página ${data.page} de ${data.pages}`;$('moderation-prev').disabled=data.page===1;$('moderation-next').disabled=data.page===data.pages;$('admin-moderation').replaceChildren();const categories={insult:'Insulto',threat:'Amenaza',sexual_minors:'Menores / contenido sexual',illicit_trade:'Oferta ilegal',report:'Denuncia'};for(const record of data.records){const row=document.createElement('tr');for(const value of [date(record.created_at),record.username+' / '+record.channel,record.kind==='sticker'?'Sticker':record.kind==='transcript'?'Voz transcrita':record.kind==='report'?'Denuncia':'Comentario',categories[record.category]||'Sin detección',record.body])row.append(text('td',value));$('admin-moderation').append(row);}}
 $('moderation-history').addEventListener('toggle',()=>{if($('moderation-history').open)loadModeration().catch(error=>status(error.message));});

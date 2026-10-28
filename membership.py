@@ -369,7 +369,7 @@ def logout():
 def list_members():
     with database() as conn:
         from live_access import founder_activity
-        users = [user_public(row,founder_state=founder_activity(row['id'],conn) if row['founder_number'] else None) for row in conn.execute('SELECT m.*,p.nickname AS nickname,p.email AS profile_email,p.email_verified AS profile_email_verified,s.until_at AS streamer_until,f.granted_at AS friend_granted_at,f.revoked_at AS friend_revoked_at,l.number AS founder_number,l.revoked_at AS founder_revoked_at,e.trial_until AS live_trial_until,e.paid_at AS live_paid_at,e.revoked_at AS live_revoked_at FROM members m LEFT JOIN member_profiles p ON p.member_id=m.id LEFT JOIN streamer_access s ON s.member_id=m.id LEFT JOIN friend_access f ON f.member_id=m.id LEFT JOIN live_founders l ON l.member_id=m.id LEFT JOIN live_entitlements e ON e.member_id=m.id ORDER BY m.created_at DESC')]
+        users = [user_public(row,founder_state=founder_activity(row['id'],conn) if row['founder_number'] else None)|{'account_activated':bool(row['password_hash'])} for row in conn.execute('SELECT m.*,p.nickname AS nickname,p.email AS profile_email,p.email_verified AS profile_email_verified,s.until_at AS streamer_until,f.granted_at AS friend_granted_at,f.revoked_at AS friend_revoked_at,l.number AS founder_number,l.revoked_at AS founder_revoked_at,e.trial_until AS live_trial_until,e.paid_at AS live_paid_at,e.revoked_at AS live_revoked_at FROM members m LEFT JOIN member_profiles p ON p.member_id=m.id LEFT JOIN streamer_access s ON s.member_id=m.id LEFT JOIN friend_access f ON f.member_id=m.id LEFT JOIN live_founders l ON l.member_id=m.id LEFT JOIN live_entitlements e ON e.member_id=m.id ORDER BY m.created_at DESC')]
         payments = [dict(row) for row in conn.execute('SELECT p.*,m.username FROM payments p JOIN members m ON m.id=p.member_id ORDER BY verified_at DESC LIMIT 300')]
     return jsonify(members=users, payments=payments)
 
@@ -380,10 +380,12 @@ def invitation_history():
     try: page=max(1,int(request.args.get('page','1')))
     except ValueError: page=1
     with database() as conn:
-        total=conn.execute("SELECT COUNT(*) AS n FROM invitations i JOIN members m ON m.id=i.member_id WHERE m.role='member'").fetchone()['n']
+        stats=conn.execute("SELECT COUNT(*) AS total,COALESCE(SUM(CASE WHEN i.used_at IS NULL THEN 1 ELSE 0 END),0) AS pending FROM invitations i JOIN members m ON m.id=i.member_id WHERE m.role='member'").fetchone()
+        total=stats['total']
+        if request.args.get('summary')=='1':return jsonify(total=total,pending=stats['pending'])
         pages=max(1,(total+24)//25);page=min(page,pages)
         rows=conn.execute("SELECT i.member_id,m.username,i.expires_at,i.used_at FROM invitations i JOIN members m ON m.id=i.member_id WHERE m.role='member' ORDER BY i.expires_at DESC LIMIT 25 OFFSET ?",((page-1)*25,)).fetchall()
-    return jsonify(invitations=[dict(row) for row in rows],total=total,page=page,pages=pages)
+    return jsonify(invitations=[dict(row) for row in rows],total=total,page=page,pages=pages,pending=stats['pending'])
 
 
 @bp.post('/api/admin/invitations/clear')
@@ -393,11 +395,15 @@ def clear_invitation_history():
     with database() as conn:
         conn.execute('BEGIN IMMEDIATE')
         if data.get('member_id'):
-            conn.execute("DELETE FROM invitations WHERE member_id IN (SELECT id FROM members WHERE id=? AND role='member')",(str(data['member_id']),))
+            result=conn.execute("DELETE FROM invitations WHERE member_id IN (SELECT id FROM members WHERE id=? AND role='member')",(str(data['member_id']),))
+        elif data.get('pending') is True:
+            result=conn.execute("DELETE FROM invitations WHERE used_at IS NULL AND member_id IN (SELECT id FROM members WHERE role='member')")
         elif data.get('completed') is True:
-            conn.execute("DELETE FROM invitations WHERE (used_at IS NOT NULL OR expires_at<=?) AND member_id IN (SELECT id FROM members WHERE role='member')",(stamp(now_utc()),))
-        else: return jsonify(error='Selecciona una invitación o el historial usado y caducado.'),400
-    return jsonify(ok=True)
+            result=conn.execute("DELETE FROM invitations WHERE (used_at IS NOT NULL OR expires_at<=?) AND member_id IN (SELECT id FROM members WHERE role='member')",(stamp(now_utc()),))
+        else: return jsonify(error='Selecciona una invitación, las no aceptadas o el historial usado y caducado.'),400
+        deleted=max(0,result.rowcount)
+    return jsonify(ok=True,deleted=deleted)
+
 
 
 @bp.post('/api/admin/invite')
