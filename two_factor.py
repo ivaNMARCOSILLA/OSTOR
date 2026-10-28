@@ -77,7 +77,7 @@ def setup():
   nonce=secrets.token_hex(24)
   conn.execute('INSERT INTO member_two_factor(member_id,pending_nonce,pending_until) VALUES(?,?,?) ON CONFLICT(member_id) DO UPDATE SET pending_nonce=excluded.pending_nonce,pending_until=excluded.pending_until',(user['id'],nonce,stamp(now_utc()+timedelta(minutes=10))))
  secret=base64.b32encode(key_for(user['id'],nonce)).decode().rstrip('=')
- uri='otpauth://totp/'+quote('Ol del bueno:'+user['username'],safe='')+'?'+urlencode(dict(secret=secret,issuer='Ol del bueno',algorithm='SHA1',digits=6,period=30))
+ uri='otpauth://totp/'+quote('electronicama del bueno:'+user['username'],safe='')+'?'+urlencode(dict(secret=secret,issuer='electronicama del bueno',algorithm='SHA1',digits=6,period=30))
  return jsonify(secret=secret,provisioning_uri=uri,expires_seconds=600)
 
 @bp.post('/api/account/2fa/enable')

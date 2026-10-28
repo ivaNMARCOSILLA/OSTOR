@@ -9,7 +9,7 @@ from moderation import validate_public_text
 from notifications import mail_ready,deliver_to
 bp=Blueprint('email_security',__name__)
 ORIGIN='https://electronicama.com'
-GENERIC='Si ese correo está confirmado en Ol, recibirás un enlace para cambiar la contraseña. Revisa también spam.'
+GENERIC='Si ese correo está confirmado en electronicama, recibirás un enlace para cambiar la contraseña. Revisa también spam.'
 
 def clean_email(value):
  email=str(value or '').strip().lower()

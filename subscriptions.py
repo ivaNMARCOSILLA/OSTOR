@@ -256,7 +256,7 @@ def confirm_subscription(channel_id):
    conn.execute('INSERT INTO creator_subscriptions(id,channel_id,member_id,agreement_id,amount_cents,benefits_json,starts_at,ends_at,verified_at,verified_by,reference) VALUES(?,?,?,?,?,?,?,?,?,?,?)',(secrets.token_hex(16),channel_id,member['id'],row['id'],row['price_cents'],row['benefits_json'],stamp(start),end,stamp(now_utc()),user['id'],reference))
   from notifications import notify
   import hashlib
-  notify('creator_payment','Ingreso de suscripción confirmado por un creador',f'Un creador ha confirmado un ingreso de {row["price_cents"]/100:.2f} € en su propio PayPal para una suscripción de canal. Este importe no es ingreso ni saldo de Ol. Revisa los registros privados del canal.',event_key='creator-receipt:'+hashlib.sha256(reference.encode()).hexdigest())
+  notify('creator_payment','Ingreso de suscripción confirmado por un creador',f'Un creador ha confirmado un ingreso de {row["price_cents"]/100:.2f} € en su propio PayPal para una suscripción de canal. Este importe no es ingreso ni saldo de electronicama. Revisa los registros privados del canal.',event_key='creator-receipt:'+hashlib.sha256(reference.encode()).hexdigest())
   return jsonify(ok=True,ends_at=end)
  except INTEGRITY_ERRORS:return jsonify(error='Esa referencia ya se utilizó; no se ha duplicado la suscripción.'),409
 

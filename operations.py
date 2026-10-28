@@ -17,7 +17,7 @@ def premiere():return os.getenv('OL_LIVE_PREMIERE','1')=='1'
 
 def state():
  with database() as c:r=c.execute("SELECT scope,message,updated_at FROM ol_operations WHERE id='maintenance'").fetchone()
- d=dict(r) if r else {'scope':'off','message':'Ol en mantenimiento. Estamos preparando tu mejor momento. Vuelve en unos minutos.','updated_at':None}
+ d=dict(r) if r else {'scope':'off','message':'electronicama en mantenimiento. Estamos preparando tu mejor momento. Vuelve en unos minutos.','updated_at':None}
  if os.getenv('OL_MAINTENANCE')=='1':d['scope']='all'
  return d
 
@@ -126,7 +126,7 @@ def guard():
  if path.startswith('/api/'):response=make_response(jsonify(error=d['message'],code='ol_maintenance'),503)
  else:
   from html import escape
-  response=make_response('<!doctype html><html lang="es"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ol en mantenimiento</title><link rel="stylesheet" href="/assets/maintenance.css"><main><a href="/">Ol ∞</a><h1>Ol en mantenimiento</h1><p>'+escape(d['message'])+'</p><p>Tu cuenta y tus beneficios permanecen guardados.</p><a href="/account">Mi cuenta</a> · <button onclick="location.reload()">Volver a comprobar</button></main></html>',503)
+  response=make_response('<!doctype html><html lang="es"><meta name="viewport" content="width=device-width,initial-scale=1"><title>electronicama en mantenimiento</title><link rel="stylesheet" href="/assets/maintenance.css"><main><a href="/">electronicama ∞</a><h1>electronicama en mantenimiento</h1><p>'+escape(d['message'])+'</p><p>Tu cuenta y tus beneficios permanecen guardados.</p><a href="/account">Mi cuenta</a> · <button onclick="location.reload()">Volver a comprobar</button></main></html>',503)
  response.headers.update({'Retry-After':'60','Cache-Control':'no-store'});return response
 
 def install(app):

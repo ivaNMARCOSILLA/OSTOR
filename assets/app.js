@@ -1,5 +1,5 @@
 /**
- * Ol PRO 8.3.0 · Frontend modular sin compilación ni dependencias.
+ * electronicama PRO 8.3.0 · Frontend modular sin compilación ni dependencias.
  * Edición y mantenimiento: Iván Marcos Illa · 2026-10-24.
  * © 2026 Iván Marcos Illa sobre las aportaciones originales de esta edición.
  * Audius, Internet Archive y sus contenidos pertenecen a sus titulares.
@@ -73,8 +73,8 @@ function toggleFavorite(track) {
   render();
 }
 function maggyCover() {
-  const img = document.createElement('img'); img.src = '/assets/app-icon-192.png?v=9.8.4'; img.alt = 'Logo de Ol'; img.loading = 'lazy';
-  img.addEventListener('error', () => img.replaceWith(emptyNode('span', 'cover-fallback', 'Ol')), {once:true});
+  const img = document.createElement('img'); img.src = '/assets/app-icon-192.png?v=9.8.4'; img.alt = 'Logo de electronicama'; img.loading = 'lazy';
+  img.addEventListener('error', () => img.replaceWith(emptyNode('span', 'cover-fallback', 'electronicama')), {once:true});
   return img;
 }
 function cover(src, alt) {
@@ -334,7 +334,7 @@ function playTrack(track, queue = filteredTracks()) {
   byId('player').classList.remove('hidden');
   setCompactPlayer(track.source!=='YOUTUBE'&&compactPreferred);
   byId('player-compact').disabled=track.source==='YOUTUBE';
-  byId('player-compact').title=track.source==='YOUTUBE'?'El vídeo de YouTube debe permanecer visible.':'Reducir los controles de audio dentro de Ol.';
+  byId('player-compact').title=track.source==='YOUTUBE'?'El vídeo de YouTube debe permanecer visible.':'Reducir los controles de audio dentro de electronicama.';
   byId('player-title').textContent = track.title;
   byId('player-artist').textContent = `${track.channel || 'Artista'} · ${track.source}`;
   byId('player-art').replaceChildren(cover(track.thumbnail, `Portada de ${track.title}`));
@@ -367,7 +367,7 @@ async function startYouTube(track,serial){
  state.youtubeLoading=true;byId('player').classList.add('youtube-mode');
  const link=emptyNode('a','youtube-source-link','Abrir este vídeo en YouTube ↗');link.href='https://www.youtube.com/watch?v='+id;link.target='_blank';link.rel='noopener noreferrer';
  const mount=document.createElement('div');mount.id='ol-youtube-mount';
- const note=emptyNode('small','youtube-player-note','Reproductor oficial de YouTube. Ol no ordena la pausa al cambiar de aplicación. La continuidad con otra app o la pantalla bloqueada depende de YouTube y del navegador. Al reproducir se aplican las condiciones y privacidad de YouTube.');
+ const note=emptyNode('small','youtube-player-note','Reproductor oficial de YouTube. electronicama no ordena la pausa al cambiar de aplicación. La continuidad con otra app o la pantalla bloqueada depende de YouTube y del navegador. Al reproducir se aplican las condiciones y privacidad de YouTube.');
  const diagnostics=document.createElement('details');diagnostics.className='youtube-diagnostics';
  const summary=emptyNode('summary','','Si se detiene: ver diagnóstico');
  const trace=document.createElement('pre');trace.id='youtube-playback-trace';
@@ -398,7 +398,7 @@ function traceYouTube(message){
  youtubeTrace.push('['+new Date().toLocaleTimeString('es-ES')+'] '+message);if(youtubeTrace.length>40)youtubeTrace.splice(0,youtubeTrace.length-40);
  const output=byId('youtube-playback-trace');if(output)output.textContent=youtubeTrace.join('\n');
 }
-document.addEventListener('visibilitychange',()=>{if(state.currentTrack?.source==='YOUTUBE'){traceYouTube(document.hidden?'Página oculta: Ol no envía una orden de pausa.':'Página visible de nuevo.');if(state.youtubeReady)updateMediaPosition();}});
+document.addEventListener('visibilitychange',()=>{if(state.currentTrack?.source==='YOUTUBE'){traceYouTube(document.hidden?'Página oculta: electronicama no envía una orden de pausa.':'Página visible de nuevo.');if(state.youtubeReady)updateMediaPosition();}});
 let nativeWatchdog=null;
 function watchNativeAudio(audio){
  if(state.audio!==audio)return;
@@ -470,7 +470,7 @@ function setupPlaybackMediaSession(track) {
   try {
     const artwork = safeImage(track.thumbnail) ? [{src: safeImage(track.thumbnail)}] : [{src:new URL('/assets/app-icon-192.png',location.origin).href,sizes:'192x192',type:'image/png'}];
     if ('MediaMetadata' in window) navigator.mediaSession.metadata = new MediaMetadata({
-      title: track.title, artist: track.channel || 'Artista', album: 'Ol', artwork
+      title: track.title, artist: track.channel || 'Artista', album: 'electronicama', artwork
     });
     for (const [name, fn] of [
       ['play', togglePlayFromSystem], ['pause', pauseFromSystem], ['stop',closePlayer],
@@ -576,7 +576,7 @@ function init() {
   render();
   const initialView=new URLSearchParams(location.search).get('view');
   if(['favorites','history'].includes(initialView))goView(initialView);else requestSearch(state.query);
-  console.info(`Ol PRO ${VERSION} · Edición Iván Marcos Illa`);
+  console.info(`electronicama PRO ${VERSION} · Edición Iván Marcos Illa`);
 }
 window.addEventListener('maggy:play', event => { const list = Array.isArray(event.detail) ? event.detail : [event.detail]; if (list[0]?.id && list[0]?.source) playTrack(list[0], list); });
 init();

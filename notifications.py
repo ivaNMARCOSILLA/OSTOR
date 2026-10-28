@@ -19,9 +19,9 @@ def deliver_to(recipient,title,body):
     sender=os.environ['OL_EMAIL_FROM']
     if any('\n' in v or '\r' in v for v in [sender,recipient,title]):raise ValueError('mail header')
     if os.getenv('RESEND_API_KEY'):
-        response=requests.post('https://api.resend.com/emails',headers={'Authorization':'Bearer '+os.environ['RESEND_API_KEY']},json={'from':sender,'to':[recipient],'subject':'Ol · '+title,'text':body},timeout=(2,5))
+        response=requests.post('https://api.resend.com/emails',headers={'Authorization':'Bearer '+os.environ['RESEND_API_KEY']},json={'from':sender,'to':[recipient],'subject':'electronicama · '+title,'text':body},timeout=(2,5))
         response.raise_for_status();return
-    message=EmailMessage();message['From']=sender;message['To']=recipient;message['Subject']='Ol · '+title
+    message=EmailMessage();message['From']=sender;message['To']=recipient;message['Subject']='electronicama · '+title
     message.set_content(body)
     host=os.environ['SMTP_HOST'];port=int(os.getenv('SMTP_PORT','465'));context=ssl.create_default_context()
     if port==465:

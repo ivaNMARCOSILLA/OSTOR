@@ -12,7 +12,7 @@ class PaymentError(Exception):
 
 
 def provider():
- # Legacy imports remain readable locally; deployed Ol only offers Stripe.
+ # Legacy imports remain readable locally; deployed electronicama only offers Stripe.
  return 'stripe' if os.getenv('VERCEL_ENV') in {'production','preview'} else os.getenv('OL_PAYMENT_PROVIDER','stripe')
 def configured():
  if provider()=='legacy_paypal':return True
@@ -102,7 +102,7 @@ def test_checkout():
    with database() as c:c.execute("UPDATE stripe_orders SET state='abandoned' WHERE id=? AND checkout_id IS NULL",(ident,))
    ident=secrets.token_hex(16)
    with database() as c:c.execute("INSERT INTO stripe_orders(id,member_id,kind,account_id,amount_cents,currency,created_at,state) VALUES(?,?,'test','',2500,'eur',?,'open')",(ident,user['id'],stamp(now_utc())))
-  result=stripe('POST','/checkout/sessions',{'mode':'payment','managed_payments[enabled]':'false','success_url':ORIGIN+'/account?test_payment=processing','cancel_url':ORIGIN+'/account?test_payment=cancelled','metadata[ol_order]':ident,'client_reference_id':ident,'line_items[0][quantity]':'1','line_items[0][price_data][currency]':'eur','line_items[0][price_data][unit_amount]':'2500','line_items[0][price_data][product_data][name]':'Ol · PRUEBA SIN DINERO REAL · no activa acceso','payment_method_types[0]':'card','expires_at':str(int(time.time())+1860)},idempotency='ol-test-'+ident,sandbox=True)
+  result=stripe('POST','/checkout/sessions',{'mode':'payment','managed_payments[enabled]':'false','success_url':ORIGIN+'/account?test_payment=processing','cancel_url':ORIGIN+'/account?test_payment=cancelled','metadata[ol_order]':ident,'client_reference_id':ident,'line_items[0][quantity]':'1','line_items[0][price_data][currency]':'eur','line_items[0][price_data][unit_amount]':'2500','line_items[0][price_data][product_data][name]':'electronicama · PRUEBA SIN DINERO REAL · no activa acceso','payment_method_types[0]':'card','expires_at':str(int(time.time())+1860)},idempotency='ol-test-'+ident,sandbox=True)
   if not str(result.get('id','')).startswith('cs_test_') or not str(result.get('url','')).startswith('https://checkout.stripe.com/'):raise PaymentError('Stripe no devolvió una sesión válida de pruebas.')
   with database() as c:c.execute('UPDATE stripe_orders SET checkout_id=? WHERE id=?',(result['id'],ident))
   return jsonify(url=result['url'],mode='test',grants_access=False)
@@ -126,7 +126,7 @@ def connect():
 @bp.get('/api/payments/connect-return')
 def connect_return():
  user=get_user();token=request.args.get('state','');code=request.args.get('code','')
- if not user or not token or not code:return jsonify(error='Vuelve a entrar en Ol y conecta tu cuenta desde tu canal.'),400
+ if not user or not token or not code:return jsonify(error='Vuelve a entrar en electronicama y conecta tu cuenta desde tu canal.'),400
  with database() as c:
   c.execute('BEGIN IMMEDIATE');r=c.execute('SELECT member_id,expires_at FROM stripe_connect_states WHERE token_hash=?',(hashlib.sha256(token.encode()).hexdigest(),)).fetchone()
   if not r or r['member_id']!=user['id'] or r['expires_at']<stamp(now_utc()):return jsonify(error='La autorización ha caducado o pertenece a otra cuenta.'),403
@@ -165,7 +165,7 @@ def validate_order(c,user,channel_id=None):
 def checkout():
  user=get_user()
  if not user:return jsonify(error='Entra antes de pagar.'),401
- if provider()!='stripe' or not ready():return jsonify(error='Ol está preparando el gestor de pagos. Todavía no se habilitan cobros.'),409
+ if provider()!='stripe' or not ready():return jsonify(error='electronicama está preparando el gestor de pagos. Todavía no se habilitan cobros.'),409
  if not allow_attempt('stripe-checkout',limit=8):return jsonify(error='Espera unos minutos antes de volver a pagar.'),429
  channel_id=payload().get('channel_id')
  if channel_id is not None and not isinstance(channel_id,str):return jsonify(error='Canal no válido.'),400
@@ -259,7 +259,7 @@ def webhook(scope):
  except (ValueError,TypeError):return jsonify(error='El evento no coincide con el pedido registrado.'),400
  if changed:
   from notifications import notify
-  notify('payment' if order['kind']=='platform' else 'creator_payment','Pago confirmado por Stripe','Stripe ha confirmado un pago de '+format(order['amount_cents']/100,'.2f')+' €. Consulta el detalle privado en Ol y en el gestor.',event_key='stripe-order:'+order['id'])
+  notify('payment' if order['kind']=='platform' else 'creator_payment','Pago confirmado por Stripe','Stripe ha confirmado un pago de '+format(order['amount_cents']/100,'.2f')+' €. Consulta el detalle privado en electronicama y en el gestor.',event_key='stripe-order:'+order['id'])
  return jsonify(ok=True)
 
 def install(app):

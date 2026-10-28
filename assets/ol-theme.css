@@ -126,3 +126,9 @@ body,body:has(>.back){background-image:linear-gradient(transparent,transparent),
 @media(max-width:900px){.holo-workspace{grid-template-columns:1fr}.holo-stage{height:360px}.holo-controls{gap:12px}}@media(max-width:400px){.holo-stage{height:280px}.holo-controls .holo-buttons{gap:6px}}
 
 .client-history-tools{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.client-history-tools button{min-height:44px;max-width:100%;white-space:normal}#clients-invitation-status{line-height:1.7;overflow-wrap:anywhere}
+
+/* Platform wordmark: keep the full name readable on small screens. */
+.brand{font-size:23px;letter-spacing:-.6px}.mobile-brand strong{font-size:clamp(16px,4vw,22px);letter-spacing:-.6px}.mobile-brand{min-width:0}.mobile-brand strong{white-space:nowrap}
+@media(max-width:380px){.topbar{flex-wrap:wrap}.topbar-right{margin-left:auto}}
+
+.logo{font-size:clamp(20px,5vw,30px);overflow-wrap:anywhere}@media(max-width:600px){.content>#hero{padding:0!important}.content>#hero h1{font-size:25px}.content>#hero .hero-copy{padding:12px 14px}.hero .eyebrow{letter-spacing:1px}}

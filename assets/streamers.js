@@ -111,7 +111,7 @@ async function privatePreview(){
  stopPreview();const generation=previewGeneration;$('preview-camera').disabled=true;$('preview-camera').textContent='Activando cámara…';$('close-preview').classList.remove('hidden');
  $('studio-status').textContent='Autoriza la cámara y el micrófono en el navegador. Esta vista es privada.';
  try{
-  if(!navigator.mediaDevices?.getUserMedia)throw new Error('Abre Ol mediante HTTPS en Safari, Chrome o Edge para usar la cámara.');
+  if(!navigator.mediaDevices?.getUserMedia)throw new Error('Abre electronicama mediante HTTPS en Safari, Chrome o Edge para usar la cámara.');
   const media=await navigator.mediaDevices.getUserMedia(tools.captureOptions());
   if(generation!==previewGeneration||!window.MaggySession.premium||!info.streamer_active){media.getTracks().forEach(track=>track.stop());return;}
   previewStream=media;$('preview-video').srcObject=media;await $('preview-video').play();if(generation!==previewGeneration)return;

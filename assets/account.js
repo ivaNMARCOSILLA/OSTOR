@@ -31,7 +31,7 @@ async function refresh() {
   window.dispatchEvent(new Event('ol:account-refreshed'));
   const videoReady=Boolean(data.live_video_ready)&&!data.live_premiere;
   document.querySelectorAll('[data-stripe-setup]').forEach(el=>el.hidden=current?.role!=='admin');
-  $('premium-availability').textContent=videoReady?'Ol del bueno: siete días de prueba y, después, 25 € en un único pago si decides continuar.':'El vídeo aún se está preparando. Tu prueba de siete días todavía no empieza y no se solicita ningún pago.';
+  $('premium-availability').textContent=videoReady?'electronicama del bueno: siete días de prueba y, después, 25 € en un único pago si decides continuar.':'El vídeo aún se está preparando. Tu prueba de siete días todavía no empieza y no se solicita ningún pago.';
   $('trial-start').disabled=!videoReady||Boolean(current?.live_trial_until||current?.live_lifetime||current?.complimentary);
   $('trial-start').textContent=data.live_premiere?'Próximo estreno · Ol Live':current?.trial_active?'Prueba activa hasta '+date(current.live_trial_until):current?.live_trial_until?'Prueba ya utilizada':'Iniciar mis siete días';
   if (!current) return;
@@ -76,7 +76,7 @@ function renderMembers(){
   $('admin-members').replaceChildren();
   for (const member of matches.slice((memberPage-1)*25,memberPage*25)) {
     const row = document.createElement('tr');
-    for (const value of [member.username, member.account_activated===false?'Sin activar':member.role === 'admin' ? 'Administrador' : member.founder_active ? 'Fundador n.º '+member.founder_number : member.complimentary ? 'Amigo · gratuito' : member.streamer_active ? 'Ol Live Creador' : 'Cliente', member.account_activated===false?'Cuenta sin activar':member.active ? 'Ol Live activo' : 'Cuenta gratuita', member.account_activated===false?'Pendiente de activar':member.founder_active ? 'Fundador · actividad requerida' : member.live_lifetime ? 'Sin vencimiento · pago único' : member.trial_active ? 'Prueba hasta '+date(member.live_trial_until) : member.complimentary ? 'Sin vencimiento · invitación gratuita' : member.streamer_until ? `Ol: ${date(member.access_until)} · Ol Live Creador: ${date(member.streamer_until)}` : date(member.access_until)]) row.append(text('td', value));
+    for (const value of [member.username, member.account_activated===false?'Sin activar':member.role === 'admin' ? 'Administrador' : member.founder_active ? 'Fundador n.º '+member.founder_number : member.complimentary ? 'Amigo · gratuito' : member.streamer_active ? 'Ol Live Creador' : 'Cliente', member.account_activated===false?'Cuenta sin activar':member.active ? 'Ol Live activo' : 'Cuenta gratuita', member.account_activated===false?'Pendiente de activar':member.founder_active ? 'Fundador · actividad requerida' : member.live_lifetime ? 'Sin vencimiento · pago único' : member.trial_active ? 'Prueba hasta '+date(member.live_trial_until) : member.complimentary ? 'Sin vencimiento · invitación gratuita' : member.streamer_until ? `electronicama: ${date(member.access_until)} · Ol Live Creador: ${date(member.streamer_until)}` : date(member.access_until)]) row.append(text('td', value));
     const actions = document.createElement('td');
     if (member.role !== 'admin') {
       const friend=text('button',member.complimentary?'Retirar acceso gratuito':'Dar acceso gratuito');friend.type='button';
@@ -185,7 +185,7 @@ for (const [id,endpoint] of [['login-form','login'],['invite-form','accept-invit
 }
 $('logout').addEventListener('click',async()=>{try{await api('/api/account/logout',{});location.assign('/account');}catch(error){status(error.message);}});
 $('create-invite').addEventListener('submit',async event=>{event.preventDefault();try{const result=await api('/api/admin/invite',Object.fromEntries(new FormData(event.target)));const link=text('a',`${location.origin}${result.path}`);link.href=result.path;$('invite-result').replaceChildren(text('span','Acceso gratuito incluido. Comparte esta invitación privada con tu amigo (48 horas para aceptarla): '),link);event.target.reset();await loadAdmin();}catch(error){status(error.message);}});
-window.OlAccountReady=refresh().then(()=>{if(!current&&!inviteToken&&!$('registration-panel').hidden)loadRegistrationCheck();if(new URLSearchParams(location.search).get('password_reset')==='1')status('Contraseña cambiada. Inicia sesión con tu contraseña nueva.');if(current&&new URLSearchParams(location.search).get('registered')==='1'){status('Cuenta creada. Ya estás dentro de Ol. No necesitas autorización.');$('member-title').scrollIntoView({block:'start'});}if(streamReturn&&current)location.assign(streamReturn);}).catch(error=>status(error.message));
+window.OlAccountReady=refresh().then(()=>{if(!current&&!inviteToken&&!$('registration-panel').hidden)loadRegistrationCheck();if(new URLSearchParams(location.search).get('password_reset')==='1')status('Contraseña cambiada. Inicia sesión con tu contraseña nueva.');if(current&&new URLSearchParams(location.search).get('registered')==='1'){status('Cuenta creada. Ya estás dentro de electronicama. No necesitas autorización.');$('member-title').scrollIntoView({block:'start'});}if(streamReturn&&current)location.assign(streamReturn);}).catch(error=>status(error.message));
 
 if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('/sw.js').catch(()=>{});
 

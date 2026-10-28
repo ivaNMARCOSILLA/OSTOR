@@ -16,8 +16,8 @@ from sticker_phrases import phrase_for
 
 bp=Blueprint('rewards',__name__)
 STICKERS=[
- ('hello','Creador de Ol',0),('spark','Chispa',1),('wave','Buena onda',5),('heart','Con cariño',15),
- ('star','Estrella Ol',30),('planet','Una hora en órbita',60),('leaf','A tu ritmo',120),('compass','Explorador',240),
+ ('hello','Creador de electronicama',0),('spark','Chispa',1),('wave','Buena onda',5),('heart','Con cariño',15),
+ ('star','Estrella electronicama',30),('planet','Una hora en órbita',60),('leaf','A tu ritmo',120),('compass','Explorador',240),
  ('moon','Luz de luna',480),('bolt','Energía compartida',960),('infinity','Sin límites',1440),('crown','Gran colección',2880)]
 
 
@@ -47,14 +47,14 @@ def paged(items,page=1,query='',series='',owned=False):
  query=normalized(query)
  matches=[item for item in items if (not owned or item['unlocked']) and (not series or item.get('series')==series) and (not query or (item['number']==int(query) if query.isdecimal() else query in normalized(item['name']+' '+item.get('series',''))))]
  pages=max(1,(len(matches)+23)//24);page=min(max(1,page),pages)
- return dict(stickers=matches[(page-1)*24:page*24],page=page,pages=pages,filtered_total=len(matches),total=len(items),series=sorted({item.get('series','Ol') for item in items}))
+ return dict(stickers=matches[(page-1)*24:page*24],page=page,pages=pages,filtered_total=len(matches),total=len(items),series=sorted({item.get('series','electronicama') for item in items}))
 
 
 def catalog(seconds,conn=None):
  if conn is None:
   with database() as connection:return catalog(seconds,connection)
  items={ident:{'id':ident,'name':name,'minutes':minutes,'points':minutes*10,'image':'/assets/stickers/'+ident+'.svg'} for ident,name,minutes in STICKERS}
- items['hello']['image']='/assets/stickers/creator.webp';items['hello']['series']='Ol'
+ items['hello']['image']='/assets/stickers/creator.webp';items['hello']['series']='electronicama'
  illustrated=illustrated_catalogue()
  if illustrated:
   items={'hello':items['hello']}
@@ -62,7 +62,7 @@ def catalog(seconds,conn=None):
  for row in conn.execute('SELECT id,name,points,updated_at FROM sticker_designs ORDER BY updated_at,id'):
   items[row['id']]={'id':row['id'],'name':row['name'],'minutes':row['points']//10,'points':row['points'],'image':'/api/stickers/'+row['id']+'/image?v='+row['updated_at'],'series':items.get(row['id'],{}).get('series','Personalizados')}
  ordered=sorted(items.values(),key=lambda item:(item['id']!='hello',item['points'],item['name']))
- for item in ordered:item.setdefault('series','Ol')
+ for item in ordered:item.setdefault('series','electronicama')
  for number,item in enumerate(ordered,1):item.update(number=number,unlocked=(seconds//60)*10>=item['points'],phrase=phrase_for(item['id']))
  return ordered
 
