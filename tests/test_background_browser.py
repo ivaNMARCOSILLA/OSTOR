@@ -25,7 +25,7 @@ def run():
   before=page.locator('audio').evaluate('e=>e.currentTime');page.locator('#player-home').click();assert page.locator('audio').evaluate('e=>e.currentTime')>=before
   page.evaluate('deviceMedia.handlers.pause()');assert page.locator('audio').evaluate('e=>e.paused')
   page.evaluate('deviceMedia.handlers.play()');page.wait_for_function("!document.querySelector('audio').paused")
-  queue=[tracks[0],{'id':'youtube_abcdefghijk','video_id':'abcdefghijk','source':'YOUTUBE','title':'Visible video'},tracks[1]]
+  queue=[tracks[0],tracks[1]]
   page.evaluate('items=>window.dispatchEvent(new CustomEvent("maggy:play",{detail:items}))',queue)
   page.wait_for_function("document.querySelector('audio')?.currentTime>0")
   page.evaluate("window.olHidden=true;document.dispatchEvent(new Event('visibilitychange'))")
@@ -43,5 +43,5 @@ def run():
   page.goto(BASE_URL+'/?view=favorites');page.wait_for_function("document.querySelector('#main-nav [data-view=favorites]').getAttribute('aria-pressed')==='true'")
   assert page.locator('.track-card').count()==1
   assert not errors,errors;browser.close()
- print('OK: wallpaper PNG download, compact audio without stopping, star/home, media play/pause/stop/next, background visibility, video skipped in background, launcher shortcut and four widths')
+ print('OK: wallpaper PNG download, compact audio without stopping, star/home, media play/pause/stop/next, background visibility, launcher shortcut and four widths')
 if __name__=='__main__':run()

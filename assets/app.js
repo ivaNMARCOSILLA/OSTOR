@@ -8,7 +8,7 @@
 await window.MaggySession.ready;
 const storageKey = name => window.MaggySession ? window.MaggySession.key(name) : name;
 
-const VERSION = '9.9.1';
+const VERSION = '9.9.2';
 const KEY = Object.freeze({ favorites: storageKey('electronicama_v7_favorites'), history: storageKey('electronicama_v7_history'), ads: storageKey('electronicama_ads_consent_v1') });
 const MAX_FAVORITES = 160;
 const MAX_HISTORY = 75;
@@ -284,7 +284,7 @@ function updateSleepTimer() {
   const remaining = sleepDeadline - Date.now();
   if (remaining <= 0) {
     sleepDeadline = 0;
-    state.playSerial += 1; // Cancel a pending resolve so it cannot start after the deadline.
+    if(!state.youtubeReady){state.playSerial += 1;if(state.youtubeLoading)destroyMedia();} // Cancel pending starts without invalidating active YouTube controls.
     state.audio?.pause();
     if(state.youtubeReady)state.youtube?.pauseVideo();
     byId('sleep-timer').value = '0';
@@ -292,16 +292,19 @@ function updateSleepTimer() {
   } else byId('sleep-status').textContent = `Se pausará en ${Math.ceil(remaining / 60000)} min.`;
 }
 function seekAudio(offset, absolute = false) {
-  if(state.youtubeReady){const duration=state.youtube.getDuration();if(duration>0)state.youtube.seekTo(Math.min(duration,Math.max(0,absolute?offset:state.youtube.getCurrentTime()+offset)),true);return;}
+  if(state.youtubeReady){const duration=state.youtube.getDuration();if(duration>0)state.youtube.seekTo(Math.min(duration,Math.max(0,absolute?offset:state.youtube.getCurrentTime()+offset)),true);updateMediaPosition();return;}
   const audio = state.audio;
   if (!audio || !Number.isFinite(audio.duration) || audio.duration <= 0) return;
   audio.currentTime = Math.min(audio.duration, Math.max(0, absolute ? offset : audio.currentTime + offset));
   updateMediaPosition();
 }
 function updateMediaPosition() {
-  const audio = state.audio;
-  if (!navigator.mediaSession?.setPositionState || !audio || !Number.isFinite(audio.duration) || audio.duration <= 0) return;
-  try { navigator.mediaSession.setPositionState({duration: audio.duration, playbackRate: audio.playbackRate, position: Math.min(audio.duration, Math.max(0, audio.currentTime))}); } catch { /* Optional browser support. */ }
+ if(!navigator.mediaSession?.setPositionState)return;
+ try{
+  const media=state.youtubeReady?{duration:state.youtube.getDuration(),playbackRate:1,currentTime:state.youtube.getCurrentTime()}:state.audio;
+  if(!media||!Number.isFinite(media.duration)||media.duration<=0)return;
+  navigator.mediaSession.setPositionState({duration:media.duration,playbackRate:media.playbackRate||1,position:Math.min(media.duration,Math.max(0,media.currentTime))});
+ }catch{}
 }
 function destroyMedia() {
   clearTimeout(nativeWatchdog);
@@ -363,19 +366,38 @@ async function startYouTube(track,serial){
  state.youtubeLoading=true;byId('player').classList.add('youtube-mode');
  const link=emptyNode('a','youtube-source-link','Abrir este vídeo en YouTube ↗');link.href='https://www.youtube.com/watch?v='+id;link.target='_blank';link.rel='noopener noreferrer';
  const mount=document.createElement('div');mount.id='ol-youtube-mount';
- const note=emptyNode('small','youtube-player-note','Reproductor oficial de YouTube. Al reproducir, te conectas con YouTube y se aplican sus condiciones y privacidad.');
- byId('player-media').replaceChildren(mount,note,link);setStatus('Preparando YouTube…');
+ const note=emptyNode('small','youtube-player-note','Reproductor oficial de YouTube. Ol no ordena la pausa al cambiar de aplicación. La continuidad con otra app o la pantalla bloqueada depende de YouTube y del navegador. Al reproducir se aplican las condiciones y privacidad de YouTube.');
+ const diagnostics=document.createElement('details');diagnostics.className='youtube-diagnostics';
+ const summary=emptyNode('summary','','Si se detiene: ver diagnóstico');
+ const trace=document.createElement('pre');trace.id='youtube-playback-trace';
+ const download=emptyNode('button','ghost-button','Descargar diagnóstico');download.type='button';download.addEventListener('click',()=>{const url=URL.createObjectURL(new Blob([youtubeTrace.join('\n')+'\n'],{type:'text/plain;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='ol-youtube-reproduccion.txt';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
+ diagnostics.append(summary,trace,download);byId('player-media').replaceChildren(mount,note,link,diagnostics);traceYouTube('Preparación del reproductor oficial.');setStatus('Preparando YouTube…');
  try{
   const YT=await loadYouTubeAPI();if(serial!==state.playSerial)return;
   state.youtube=new YT.Player(mount,{host:'https://www.youtube-nocookie.com',width:'100%',height:'220',videoId:id,playerVars:{playsinline:1,controls:1,autoplay:0,origin:location.origin},events:{
-   onReady:()=>{if(serial!==state.playSerial)return;state.youtubeReady=true;state.youtubeLoading=false;setStatus('Pulsa ▶ en el vídeo si no empieza automáticamente.');if(!document.hidden)state.youtube.playVideo();},
-   onStateChange:event=>{if(serial!==state.playSerial)return;const playing=event.data===1;byId('toggle-play').textContent=playing?'Ⅱ':'▶';byId('toggle-play').setAttribute('aria-label',playing?'Pausar':'Reproducir');if(playing){rememberTrack(track);setStatus('Reproduciendo en YouTube');}else if(event.data===2)setStatus('YouTube en pausa.');else if(event.data===3)setStatus('Cargando vídeo…');else if(event.data===0){const expired=sleepDeadline&&Date.now()>=sleepDeadline;updateSleepTimer();if(!expired)playNext();}},
-   onAutoplayBlocked:()=>{if(serial===state.playSerial)setStatus('Pulsa ▶ directamente en el vídeo para empezar.');},
-   onError:event=>{if(serial!==state.playSerial)return;state.youtubeLoading=false;setStatus([101,150].includes(event.data)?'El creador no permite reproducir este vídeo aquí. Usa «Abrir este vídeo en YouTube».':event.data===100?'Vídeo retirado o privado. Elige otro o ábrelo en YouTube.':event.data===153?'YouTube no reconoce este navegador. Abre el vídeo en YouTube o prueba otro navegador.':'Este vídeo no se puede reproducir aquí. Usa el enlace a YouTube o elige otro.');}
+   onReady:()=>{if(serial!==state.playSerial)return;state.youtubeReady=true;state.youtubeLoading=false;setupPlaybackMediaSession(track);traceYouTube('Reproductor preparado.');setStatus('Pulsa ▶ en el vídeo si no empieza automáticamente.');state.youtube.playVideo();},
+   onStateChange:event=>{
+    if(serial!==state.playSerial)return;
+    const playing=event.data===1;
+    traceYouTube('Estado de YouTube: '+({[-1]:'sin iniciar',0:'finalizado',1:'reproduciendo',2:'pausado',3:'cargando',5:'preparado'}[event.data]||String(event.data))+(document.hidden?' · página oculta':' · página visible'));
+    byId('toggle-play').textContent=playing?'Ⅱ':'▶';byId('toggle-play').setAttribute('aria-label',playing?'Pausar':'Reproducir');
+    if(playing){rememberTrack(track);setStatus('Reproduciendo en YouTube');mediaSessionPlayback('playing');updateMediaPosition();}
+    else if(event.data===2){setStatus('YouTube en pausa. Usa ▶ o los controles multimedia para reanudar si el navegador lo permite.');mediaSessionPlayback('paused');updateMediaPosition();}
+    else if(event.data===3)setStatus('Cargando vídeo…');
+    else if(event.data===0){mediaSessionPlayback('none');const expired=sleepDeadline&&Date.now()>=sleepDeadline;updateSleepTimer();if(!expired)playNext();}
+   },
+   onAutoplayBlocked:()=>{if(serial===state.playSerial){traceYouTube('El navegador ha bloqueado el inicio automático.');mediaSessionPlayback('paused');setStatus('Pulsa ▶ directamente en el vídeo para empezar.');}},
+   onError:event=>{if(serial!==state.playSerial)return;state.youtubeLoading=false;traceYouTube('Error del reproductor: '+String(event.data));mediaSessionPlayback('paused');setStatus([101,150].includes(event.data)?'El creador no permite reproducir este vídeo aquí. Usa «Abrir este vídeo en YouTube».':event.data===100?'Vídeo retirado o privado. Elige otro o ábrelo en YouTube.':event.data===153?'YouTube no reconoce este navegador. Abre el vídeo en YouTube o prueba otro navegador.':'Este vídeo no se puede reproducir aquí. Usa el enlace a YouTube o elige otro.');}
   }});
- }catch(error){if(serial===state.playSerial){state.youtubeLoading=false;setStatus(error.message);}}
+ }catch(error){if(serial===state.playSerial){state.youtubeLoading=false;traceYouTube('No se pudo preparar YouTube: '+error.message);setStatus(error.message);}}
 }
-document.addEventListener('visibilitychange',()=>{if(document.hidden&&state.youtubeReady)state.youtube?.pauseVideo();});
+// Keep the real browser visibility state. Only explicit controls and the sleep timer request a pause.
+const youtubeTrace=[];
+function traceYouTube(message){
+ youtubeTrace.push('['+new Date().toLocaleTimeString('es-ES')+'] '+message);if(youtubeTrace.length>40)youtubeTrace.splice(0,youtubeTrace.length-40);
+ const output=byId('youtube-playback-trace');if(output)output.textContent=youtubeTrace.join('\n');
+}
+document.addEventListener('visibilitychange',()=>{if(state.currentTrack?.source==='YOUTUBE'){traceYouTube(document.hidden?'Página oculta: Ol no envía una orden de pausa.':'Página visible de nuevo.');if(state.youtubeReady)updateMediaPosition();}});
 let nativeWatchdog=null;
 function watchNativeAudio(audio){
  if(state.audio!==audio)return;
@@ -419,7 +441,7 @@ function startAudio(url) {
   }
   state.audioRetries = 0;
   audio.src = url;
-  setupAudioMediaSession(state.currentTrack);
+  setupPlaybackMediaSession(state.currentTrack);
   audio.play().catch(playbackRejected);watchNativeAudio(audio);
 }
 function playbackRejected(error) {
@@ -428,7 +450,7 @@ function playbackRejected(error) {
   // AbortError is expected when switching tracks quickly; media errors retry above.
 }
 
-// Standard multimedia actions for native audio; operating systems decide which to show.
+// Standard multimedia actions; operating systems decide which to show and allow.
 const mediaActions=['play','pause','stop','nexttrack','previoustrack','seekbackward','seekforward','seekto'];
 let compactPreferred=false;
 try{compactPreferred=localStorage.getItem(storageKey('ol_compact_player'))==='1';}catch{}
@@ -442,15 +464,15 @@ function mediaSessionPlayback(value) {
   if (!('mediaSession' in navigator)) return;
   try { navigator.mediaSession.playbackState = value; } catch { /* no compatible */ }
 }
-function setupAudioMediaSession(track) {
-  if (!track || track.source==='YOUTUBE' || !('mediaSession' in navigator)) return;
+function setupPlaybackMediaSession(track) {
+  if (!track || !('mediaSession' in navigator)) return;
   try {
     const artwork = safeImage(track.thumbnail) ? [{src: safeImage(track.thumbnail)}] : [{src:new URL('/assets/app-icon-192.png',location.origin).href,sizes:'192x192',type:'image/png'}];
     if ('MediaMetadata' in window) navigator.mediaSession.metadata = new MediaMetadata({
       title: track.title, artist: track.channel || 'Artista', album: 'Ol', artwork
     });
     for (const [name, fn] of [
-      ['play', togglePlayFromSystem], ['pause', () => state.audio?.pause()], ['stop',closePlayer],
+      ['play', togglePlayFromSystem], ['pause', pauseFromSystem], ['stop',closePlayer],
       ['nexttrack', playNext], ['previoustrack', playPrevious],
       ['seekbackward', details => seekAudio(-(details.seekOffset || 15))],
       ['seekforward', details => seekAudio(details.seekOffset || 15)],
@@ -462,14 +484,17 @@ function setupAudioMediaSession(track) {
 }
 function adjacentTrack(step){
  for(let i=state.currentIndex+step;i>=0&&i<state.queue.length;i+=step){
-  if(document.hidden&&state.queue[i].source==='YOUTUBE')continue;
   playTrack(state.queue[i],state.queue);return;
  }
- setStatus(document.hidden?'No hay más audio disponible en esta dirección. Abre Ol para elegir otra fuente.':'Fin de la lista.');
+ setStatus('Fin de la lista.');
 }
 function playNext(){adjacentTrack(1);}
 function playPrevious(){adjacentTrack(-1);}
-function togglePlayFromSystem(){if(state.currentTrack?.source!=='YOUTUBE'&&state.audio&&(state.audio.paused||state.audio.error))togglePlay();}
+function togglePlayFromSystem(){
+ if(state.currentTrack?.source==='YOUTUBE'){if(state.youtubeReady&&state.youtube.getPlayerState()!==1){traceYouTube('Reanudar desde los controles multimedia.');state.youtube.playVideo();}return;}
+ if(state.audio&&(state.audio.paused||state.audio.error))togglePlay();
+}
+function pauseFromSystem(){if(state.youtubeReady){traceYouTube('Pausa solicitada desde los controles multimedia.');state.youtube.pauseVideo();}else state.audio?.pause();}
 function togglePlay() {
   if(state.currentTrack?.source==='YOUTUBE'){if(state.youtubeReady){state.youtube.getPlayerState()===1?state.youtube.pauseVideo():state.youtube.playVideo();}else if(!state.youtubeLoading)playTrack(state.currentTrack,state.queue);return;}
   if (state.audio) {
