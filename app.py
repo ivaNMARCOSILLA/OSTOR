@@ -30,7 +30,7 @@ app = Flask(__name__, static_folder=os.path.join(ROOT, "assets"), static_url_pat
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 app.logger.setLevel(logging.INFO)
 
-VERSION = "9.9.4"
+VERSION = "9.10.0"
 AUDIUS_APP_NAME = os.getenv("AUDIUS_APP_NAME", "electronicama")
 SEARCH_CACHE_SECONDS = max(15, min(int(os.getenv("SEARCH_CACHE_SECONDS", "300")), 3600))
 ARCHIVE_CACHE_SECONDS = max(60, min(int(os.getenv("ARCHIVE_CACHE_SECONDS", "3600")), 86400))
@@ -444,7 +444,7 @@ def multi_search(query: str, page: int = 1, source: str = "ALL") -> list:
 def response_headers(response):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["Permissions-Policy"] = "camera=(self), microphone=(self), display-capture=(self), geolocation=()" if request.path in {"/streamers","/live"} else "camera=(), microphone=(), display-capture=(), geolocation=()"
+    response.headers["Permissions-Policy"] = "camera=(self), microphone=(self), display-capture=(self), geolocation=()" if request.path in {"/streamers","/live"} else "camera=(self), microphone=(), display-capture=(), geolocation=()" if request.path=="/" else "camera=(), microphone=(), display-capture=(), geolocation=()"
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
     if request.path.startswith("/assets/"):
         response.headers["Cache-Control"] = "public, max-age=3600"

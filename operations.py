@@ -90,7 +90,7 @@ def maintenance_report():
  except Exception:
   add('Base de datos','error','No se pudo completar la lectura. Revisa la conexión en Vercel.')
  root=Path(__file__).resolve().parent
- required=['index.html','assets/account.html','assets/streamers.html','assets/account.js','assets/navigation.js','assets/operations.js','assets/ol-theme.css','assets/ol-live-jungle-leaves.webp','manifest.webmanifest','sw.js']
+ required=['index.html','assets/account.html','assets/streamers.html','assets/account.js','assets/navigation.js','assets/operations.js','assets/ol-theme.css','assets/holograms-launcher.js','assets/holograms.js','assets/vendor/three/build/three.module.js','assets/vendor/hands/hands.js','assets/ol-live-jungle-leaves.webp','manifest.webmanifest','sw.js']
  missing=[name for name in required if not (root/name).is_file()]
  add('Archivos esenciales','error' if missing else 'ok','Faltan: '+', '.join(missing) if missing else 'Páginas, acceso, decoración y recursos de la aplicación presentes.')
  add('Correos','ok' if mail_ready() else 'pending','Servicio configurado; esta revisión no envía correos ni confirma su llegada.' if mail_ready() else 'Configura el remitente y Resend o SMTP antes de probar confirmación y recuperación.')
