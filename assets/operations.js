@@ -90,3 +90,11 @@ async function startMaintenanceReviews(){
 }
 window.addEventListener('ol:account-refreshed',startMaintenanceReviews);
 startMaintenanceReviews();
+
+$('youtube-check-now')?.addEventListener('click',async event=>{
+ const button=event.currentTarget;button.disabled=true;
+ $('youtube-check-status').textContent='Comprobando conexión con YouTube…';traceMaintenance('CONSULTA · Prueba de conexión con YouTube.');
+ try{const result=await api('/api/admin/youtube-diagnostic');$('youtube-check-status').textContent=result.message+' Resultados: '+result.result_count+'.';traceMaintenance('CORRECTO · Conexión con YouTube · '+result.result_count+' resultados.');}
+ catch(error){$('youtube-check-status').textContent=error.message;traceMaintenance('ERROR · YouTube · '+error.message);}
+ finally{button.disabled=false;}
+});

@@ -30,7 +30,7 @@ app = Flask(__name__, static_folder=os.path.join(ROOT, "assets"), static_url_pat
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 app.logger.setLevel(logging.INFO)
 
-VERSION = "9.8.10"
+VERSION = "9.9.0"
 AUDIUS_APP_NAME = os.getenv("AUDIUS_APP_NAME", "electronicama")
 SEARCH_CACHE_SECONDS = max(15, min(int(os.getenv("SEARCH_CACHE_SECONDS", "300")), 3600))
 ARCHIVE_CACHE_SECONDS = max(60, min(int(os.getenv("ARCHIVE_CACHE_SECONDS", "3600")), 86400))
@@ -47,6 +47,7 @@ _search_cache: OrderedDict[tuple, tuple[float, list]] = OrderedDict()
 _archive_cache: OrderedDict[str, tuple[float, str]] = OrderedDict()
 _commons_cache: OrderedDict[str, tuple] = OrderedDict()
 _radio_cache: OrderedDict[str, tuple] = OrderedDict()
+_youtube_cache: OrderedDict[tuple, tuple] = OrderedDict()
 _rate_lock = threading.Lock()
 _request_buckets: dict[tuple[str, str], deque] = {}
 
@@ -353,6 +354,44 @@ def resolve_radio(ident):
     raise LookupError("No hay una emisión HTTPS compatible")
 
 
+class YouTubeUnavailable(Exception):
+    def __init__(self, code, message, status=503):
+        self.code,self.message,self.status=code,message,status
+
+
+def search_youtube(query, page=1):
+    key=os.getenv('YOUTUBE_API_KEY','').strip()
+    if not key:raise YouTubeUnavailable('youtube_not_configured','YouTube aún no está configurado. Administración debe revisar YOUTUBE_API_KEY en Vercel.')
+    if page>3:return []
+    query=sanitize_query(query)
+    cached=cached_get(_youtube_cache,(query.casefold(),page),600)
+    if cached is not None:return cached['tracks']
+    token=''
+    if page>1:
+        search_youtube(query,page-1)
+        previous=cached_get(_youtube_cache,(query.casefold(),page-1),600)
+        token=(previous or {}).get('next','')
+        if not token:return []
+    params={'part':'snippet','q':query,'maxResults':50,'type':'video','videoCategoryId':'10','videoEmbeddable':'true','videoSyndicated':'true','safeSearch':'strict','relevanceLanguage':'es','key':key}
+    if token:params['pageToken']=token
+    try:
+        response=requests.get('https://www.googleapis.com/youtube/v3/search',params=params,timeout=(2.5,6))
+        if response.status_code!=200:
+            if response.status_code in (403,429):raise YouTubeUnavailable('youtube_access_or_quota','YouTube ha limitado la consulta. Revisa la cuota y los permisos de la API en Google Cloud.')
+            raise YouTubeUnavailable('youtube_unavailable','YouTube no responde ahora. Vuelve a intentarlo.')
+        data=response.json();tracks=[]
+        if not isinstance(data,dict):raise ValueError('provider response')
+        for item in data.get('items',[]):
+            ident=(item.get('id') or {}).get('videoId','');snippet=item.get('snippet') or {}
+            if not re.fullmatch(r'[A-Za-z0-9_-]{11}',ident):continue
+            tracks.append({'id':'youtube_'+ident,'video_id':ident,'source':'YOUTUBE','title':html.unescape(str(snippet.get('title') or 'YouTube'))[:140],'channel':html.unescape(str(snippet.get('channelTitle') or 'YouTube'))[:90],'description':str(snippet.get('description') or '')[:600],'thumbnail':'https://i.ytimg.com/vi/'+ident+'/hqdefault.jpg','url':'https://www.youtube.com/watch?v='+ident})
+        cached_put(_youtube_cache,(query.casefold(),page),{'tracks':tracks,'next':str(data.get('nextPageToken') or '')})
+        return tracks
+    except (requests.RequestException,ValueError,TypeError):
+        # Never log provider exceptions: their URL may contain the private API key.
+        raise YouTubeUnavailable('youtube_unavailable','No se pudo consultar YouTube. Vuelve a intentarlo.') from None
+
+
 def multi_search(query: str, page: int = 1, source: str = "ALL") -> list:
     cache_key = (normalize(query), page, source)
     ranking_query = provider_query(query)
@@ -445,7 +484,8 @@ def pwa_service_worker():
 @app.get("/health")
 def health():
     return jsonify({"status": "ok", "version": VERSION,
-                    "providers": ["ARCHIVE", "AUDIUS", "COMMONS", "RADIO"],
+                    "providers": ["ARCHIVE", "AUDIUS", "COMMONS", "RADIO"] + (["YOUTUBE"] if os.getenv("YOUTUBE_API_KEY", "").strip() else []),
+                    "youtube_configured": bool(os.getenv("YOUTUBE_API_KEY", "").strip()),
                     "search_cache": "instance-local"})
 
 
@@ -455,7 +495,7 @@ def health():
 
 def catalogue_response(tracks):
     # Public playback metadata; never return internal provider/debug fields.
-    fields={'id','title','channel','description','source','thumbnail','url','stream_url','mime','license','license_url','attribution','page_url'}
+    fields={'id','title','channel','description','source','thumbnail','url','stream_url','mime','license','license_url','attribution','page_url','video_id'}
     return [{key:value for key,value in track.items() if key in fields}|{'locked':False} for track in tracks]
 
 
@@ -471,10 +511,27 @@ def api_search():
     except ValueError:
         page = 1
     source = request.args.get("source", "ALL").upper()
-    if source not in {"ALL", "ARCHIVE", "AUDIUS", "COMMONS", "RADIO", "MIX"}:
+    if source not in {"ALL", "ARCHIVE", "AUDIUS", "COMMONS", "RADIO", "MIX", "YOUTUBE"}:
         return jsonify({"error": "Plataforma no válida"}), 400
+    if source=='YOUTUBE':
+        if not rate_allowed('youtube-search',12):return jsonify(error='Espera un minuto antes de repetir la búsqueda de YouTube.'),429
+        try:return jsonify(catalogue_response(search_youtube(query,page)))
+        except YouTubeUnavailable as error:return jsonify(error=error.message,code=error.code),error.status
     tracks = multi_search(query, page=page) if source == "ALL" else multi_search(query, page=page, source=source)
     return jsonify(catalogue_response(tracks))
+
+
+@app.get('/api/admin/youtube-diagnostic')
+def youtube_diagnostic():
+    from membership import get_user
+    user=get_user()
+    if not user or user['role']!='admin':return jsonify(error='Se requiere administración.'),403
+    if not rate_allowed('youtube-diagnostic',2):return jsonify(error='Espera un minuto antes de repetir la prueba.'),429
+    try:
+        tracks=search_youtube('piano',1)
+        return jsonify(configured=True,connected=True,result_count=len(tracks),message='Conexión con YouTube comprobada. Los vídeos bloqueados dependen de cada creador.')
+    except YouTubeUnavailable as error:
+        return jsonify(configured=bool(os.getenv('YOUTUBE_API_KEY','').strip()),connected=False,error=error.message,code=error.code),error.status
 
 
 @app.get("/api/trending")

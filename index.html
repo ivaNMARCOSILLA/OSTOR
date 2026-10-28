@@ -10,7 +10,7 @@
   <meta name="apple-mobile-web-app-title" content="Ol">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/assets/app-icon-192.png?v=9.8.4">
-  <meta name="description" content="Ol: descubre y escucha música en Audius e Internet Archive. Guarda tus favoritos y consulta tu historial.">
+  <meta name="description" content="Ol: descubre música en Audius, Internet Archive y el reproductor oficial de YouTube. Guarda tus favoritos y consulta tu historial.">
   <link rel="canonical" href="https://electronicama.com/">
   <meta property="og:title" content="Ol · Tu música, otra órbita">
   <meta property="og:description" content="Tu estación musical personal en electronicama.com">
@@ -35,9 +35,9 @@
     }
   </script>
   <script defer src="/assets/session.js?v=9.8.4"></script>
-  <script type="module" src="/assets/app.js?v=9.8.4"></script>
-  <script type="module" src="/assets/maggy.js?v=9.8.4"></script>
-<link rel="stylesheet" href="/assets/ol-theme.css?v=9.8.9"><script type="module" src="/assets/rewards.js?v=9.8.4"></script><script type="module" src="/assets/founders.js?v=9.8.4"></script><script defer src="/assets/presence.js?v=9.8.4"></script><script defer src="/assets/intro.js?v=9.8.4"></script><script type="module" src="/assets/operations.js?v=9.8.8"></script><script defer src="/assets/navigation.js?v=9.8.4"></script></head>
+  <script type="module" src="/assets/app.js?v=9.9.0"></script>
+  <script type="module" src="/assets/maggy.js?v=9.9.0"></script>
+<link rel="stylesheet" href="/assets/ol-theme.css?v=9.9.0"><script type="module" src="/assets/rewards.js?v=9.8.4"></script><script type="module" src="/assets/founders.js?v=9.8.4"></script><script defer src="/assets/presence.js?v=9.8.4"></script><script defer src="/assets/intro.js?v=9.8.4"></script><script type="module" src="/assets/operations.js?v=9.9.0"></script><script defer src="/assets/navigation.js?v=9.8.4"></script></head>
 <body><div class="online-counter" data-online-counter role="status" aria-live="off">Comprobando personas en línea…</div>
   <div class="app-shell">
     <aside class="sidebar" aria-label="Navegación principal">
@@ -71,7 +71,7 @@
             <input id="search-input" type="search" maxlength="90" autocomplete="off" placeholder="Busca un artista, una canción, un ritmo...">
             <button type="submit" id="search-button">BUSCAR <span aria-hidden="true">↗</span></button>
           </form>
-          <div class="hero-pills"><span>AUDIUS</span><span>INTERNET ARCHIVE</span></div>
+          <div class="hero-pills"><span>AUDIUS</span><span>INTERNET ARCHIVE</span><span>YOUTUBE · VÍDEO</span></div>
         </div>
         <div class="hero-visual" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="vinyl"><div class="vinyl-label"><span>∞</span></div></div><div class="visual-caption">EL INSTANTE ES AHORA</div></div>
       </section>
@@ -91,6 +91,7 @@
         </div>
         <div class="filter-row" id="source-filters" role="group" aria-label="Filtrar por plataforma">
           <button type="button" data-source="ALL" class="filter active" aria-pressed="true">TODAS</button>
+          <button type="button" data-source="YOUTUBE" class="filter" aria-pressed="false">YOUTUBE · VÍDEO</button>
           <button type="button" data-source="AUDIUS" class="filter" aria-pressed="false">AUDIUS</button>
           <button type="button" data-source="MIX" class="filter mix-filter" aria-pressed="false">MEZCLA ♫</button>
           <button type="button" data-source="ARCHIVE" class="filter" aria-pressed="false">ARCHIVE</button>

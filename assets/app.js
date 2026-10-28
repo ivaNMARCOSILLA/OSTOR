@@ -8,23 +8,23 @@
 await window.MaggySession.ready;
 const storageKey = name => window.MaggySession ? window.MaggySession.key(name) : name;
 
-const VERSION = '9.8.4';
+const VERSION = '9.9.0';
 const KEY = Object.freeze({ favorites: storageKey('electronicama_v7_favorites'), history: storageKey('electronicama_v7_history'), ads: storageKey('electronicama_ads_consent_v1') });
 const MAX_FAVORITES = 160;
 const MAX_HISTORY = 75;
 const SEARCH_TARGET = 120;
 const AUTO_SEARCH_PAGES = 4;
-const SOURCE_NAMES = { AUDIUS: 'AUDIUS', ARCHIVE: 'ARCHIVE', COMMONS: 'MEZCLA · COMMONS', RADIO: 'MEZCLA · RADIO EN DIRECTO' };
+const SOURCE_NAMES = { YOUTUBE: 'YOUTUBE · VÍDEO', AUDIUS: 'AUDIUS', ARCHIVE: 'ARCHIVE', COMMONS: 'MEZCLA · COMMONS', RADIO: 'MEZCLA · RADIO EN DIRECTO' };
 const byId = id => document.getElementById(id);
 
-const supportedTrack = track => ['ARCHIVE', 'AUDIUS', 'COMMONS', 'RADIO'].includes(track?.source);
+const supportedTrack = track => ['ARCHIVE', 'AUDIUS', 'COMMONS', 'RADIO', 'YOUTUBE'].includes(track?.source) && (track.source !== 'YOUTUBE' || /^[A-Za-z0-9_-]{11}$/.test(track.video_id || track.id?.slice(8)));
 
 const state = {
   view: 'discover', source: 'ALL', query: 'electronic music', page: 1,
   results: [], favorites: readList(KEY.favorites), history: readList(KEY.history),
   mixResults: [], mixQuery: 'piano', mixPage: 1, mixLoading: false, mixRequest: null, mixLoaded: false,
   loading: false, request: null, currentTrack: null, queue: [], currentIndex: -1,
-  audio: null, playSerial: 0
+  audio: null, youtube: null, youtubeReady:false, youtubeLoading:false, playSerial: 0
 };
 
 function readList(key) {
@@ -48,7 +48,7 @@ function setStatus(text) { byId('player-message').textContent = text || ''; }
 function emptyNode(tag, className, text) { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = String(text); return node; }
 function compactTrack(track) {
   const result = {};
-  for (const key of ['id', 'title', 'channel', 'description', 'source', 'thumbnail', 'url', 'stream_url', 'mime', 'license', 'license_url', 'attribution', 'page_url']) {
+  for (const key of ['id', 'title', 'channel', 'description', 'source', 'thumbnail', 'url', 'stream_url', 'mime', 'license', 'license_url', 'attribution', 'page_url', 'video_id']) {
     if (typeof track[key] === 'string') result[key] = track[key].slice(0, 1200);
   }
   return result;
@@ -155,7 +155,7 @@ function render() {
     for (const track of list) frag.append(trackCard(track, list));
     grid.append(frag);
   }
-  byId('load-more').classList.toggle('hidden', state.source === 'MIX' ? !list.length || state.mixPage >= 10 : state.view !== 'discover' || state.results.length === 0 || state.page >= 10);
+  byId('load-more').classList.toggle('hidden', state.source === 'MIX' ? !list.length || state.mixPage >= 10 : state.view !== 'discover' || state.results.length === 0 || state.page >= (state.source==='YOUTUBE'?3:10));
   if (state.source === 'MIX') byId('load-more').disabled = state.mixLoading;
 }
 function closeMobileMenu(){
@@ -196,14 +196,16 @@ async function requestSearch(query, append = false) {
   state.request?.abort();
   const controller = new AbortController(); state.request = controller;
   state.view = 'discover';
-  if (!append) { state.query = query; state.page = 1; state.results = []; state.source = state.source === 'MIX' ? 'MIX' : 'ALL'; }
+  if (!append) { state.query = query; state.page = 1; state.results = []; state.source = ['MIX','YOUTUBE'].includes(state.source) ? state.source : 'ALL'; }
   const page = state.page;
   state.loading = true;
   byId('search-button').disabled = true; byId('load-more').disabled = true;
   byId('search-input').value = query;
   updateExternalSearch(query);
-  message(`Buscando «${query}»… Objetivo: al menos 120 coincidencias disponibles.`); render();
-  const sources = ['AUDIUS', 'ARCHIVE'];
+  message(state.source==='YOUTUBE'?`Buscando vídeos de YouTube para «${query}»…`:`Buscando «${query}»… Objetivo: al menos 120 coincidencias disponibles.`); render();
+  const youtubeOnly=state.source==='YOUTUBE';
+  const sources = youtubeOnly ? ['YOUTUBE'] : ['AUDIUS', 'ARCHIVE'];
+  let providerError='';
   let failures = 0, received = 0;
   const deadline = setTimeout(() => controller.abort(), 14000);
   await Promise.allSettled(sources.map(async source => {
@@ -212,7 +214,7 @@ async function requestSearch(query, append = false) {
       let data = searchMemory.get(key);
       if (!data || Date.now() - data.time > 60000) {
         const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&page=${page}&source=${source}`, {signal: controller.signal, headers: {Accept: 'application/json'}});
-        if (!response.ok) throw new Error('Buscador no disponible');
+        if (!response.ok) { const failure=await response.json().catch(()=>({}));throw new Error(failure.error||'Buscador no disponible'); }
         const raw = await response.json();
         if (!Array.isArray(raw)) throw new Error('Respuesta no válida');
         data = {time: Date.now(), tracks: raw.filter(supportedTrack)};
@@ -227,16 +229,17 @@ async function requestSearch(query, append = false) {
       received += fresh.length;
       message(`${state.results.length} resultados para «${query}» · buscando al menos 120 coincidencias…`);
       render(); // The first available provider is visible immediately.
-    } catch { failures += 1; }
+    } catch (error) { failures += 1;providerError=error.message; }
   }));
   clearTimeout(deadline);
   if (state.request !== controller) return;
   state.loading = false; state.request = null;
   byId('search-button').disabled = false; byId('load-more').disabled = false;
   if (append && !received && !failures) state.page = 10;
-  if (state.results.length < SEARCH_TARGET && received > 0 && !failures && state.page < AUTO_SEARCH_PAGES) {
+  if (!youtubeOnly && state.results.length < SEARCH_TARGET && received > 0 && !failures && state.page < AUTO_SEARCH_PAGES) {
     state.page += 1; return requestSearch(query, true);
   }
+  if(youtubeOnly){message(failures?providerError:`${state.results.length} vídeos de YouTube para «${query}». ${state.page<3?'Pulsa Cargar más para ampliar la búsqueda.':'Fin de las páginas disponibles en esta búsqueda.'}`);render();return;}
   message(`${state.results.length} resultados para «${query}»${failures ? '. Una plataforma no respondió; puedes volver a buscar.' : state.results.length < SEARCH_TARGET ? '. No se han encontrado 120 resultados disponibles; puedes ampliar la búsqueda.' : ''}`);
   render();
 }
@@ -283,11 +286,13 @@ function updateSleepTimer() {
     sleepDeadline = 0;
     state.playSerial += 1; // Cancel a pending resolve so it cannot start after the deadline.
     state.audio?.pause();
+    if(state.youtubeReady)state.youtube?.pauseVideo();
     byId('sleep-timer').value = '0';
     byId('sleep-status').textContent = 'Temporizador terminado. Reproducción pausada.';
   } else byId('sleep-status').textContent = `Se pausará en ${Math.ceil(remaining / 60000)} min.`;
 }
 function seekAudio(offset, absolute = false) {
+  if(state.youtubeReady){const duration=state.youtube.getDuration();if(duration>0)state.youtube.seekTo(Math.min(duration,Math.max(0,absolute?offset:state.youtube.getCurrentTime()+offset)),true);return;}
   const audio = state.audio;
   if (!audio || !Number.isFinite(audio.duration) || audio.duration <= 0) return;
   audio.currentTime = Math.min(audio.duration, Math.max(0, absolute ? offset : audio.currentTime + offset));
@@ -299,6 +304,10 @@ function updateMediaPosition() {
   try { navigator.mediaSession.setPositionState({duration: audio.duration, playbackRate: audio.playbackRate, position: Math.min(audio.duration, Math.max(0, audio.currentTime))}); } catch { /* Optional browser support. */ }
 }
 function destroyMedia() {
+  clearTimeout(nativeWatchdog);
+  state.youtubeReady=false;state.youtubeLoading=false;
+  if(state.youtube){state.youtube.destroy();state.youtube=null;}
+  byId('player').classList.remove('youtube-mode');
   if (state.audio) { state.audio.pause(); state.audio.removeAttribute('src'); state.audio.load(); state.audio = null; }
   byId('player-media').replaceChildren();
   if ('mediaSession' in navigator) {
@@ -311,7 +320,8 @@ function playTrack(track, queue = filteredTracks()) {
   state.playSerial += 1;
   if (window.MaggySession && !window.MaggySession.requireAccess()) return;
   // Keep the same native element, and call play() in the tap event on iOS.
-  // The paid /api/play endpoint checks access authoritatively on every track.
+  // Music playback is free; Ol Live access is managed separately.
+  if(track.source==='YOUTUBE'||state.youtube||state.youtubeLoading)destroyMedia();
   state.audio?.pause();
   state.currentTrack = track;
   state.queue = queue.filter(supportedTrack);
@@ -326,9 +336,53 @@ function playTrack(track, queue = filteredTracks()) {
   byId('player-favorite').classList.toggle('saved', isFavorite(track.id));
   byId('toggle-play').textContent = '▶';
   byId('toggle-play').setAttribute('aria-label', 'Reproducir');
-  setStatus('Preparando el audio…');
-  startAudio(`/api/play/${encodeURIComponent(track.id)}`);
+  if(track.source==='YOUTUBE'){startYouTube(track,state.playSerial);}
+  else{setStatus('Preparando el audio…');startAudio(`/api/play/${encodeURIComponent(track.id)}`);}
   render();
+}
+let youtubeAPI=null;
+function loadYouTubeAPI(){
+ if(window.YT?.Player)return Promise.resolve(window.YT);
+ if(youtubeAPI)return youtubeAPI;
+ youtubeAPI=new Promise((resolve,reject)=>{
+  const script=document.createElement('script');script.src='https://www.youtube.com/iframe_api';script.async=true;
+  const timeout=setTimeout(()=>{script.remove();youtubeAPI=null;reject(Error('YouTube tarda en responder. Pulsa reproducir para reintentar.'));},15000);
+  const prior=window.onYouTubeIframeAPIReady;
+  window.onYouTubeIframeAPIReady=()=>{clearTimeout(timeout);prior?.();resolve(window.YT);};
+  script.onerror=()=>{clearTimeout(timeout);script.remove();youtubeAPI=null;reject(Error('No se pudo cargar YouTube. Comprueba la conexión o el bloqueador del navegador.'));};
+  document.head.append(script);
+ });return youtubeAPI;
+}
+async function startYouTube(track,serial){
+ const id=track.video_id||track.id.slice(8);if(!/^[A-Za-z0-9_-]{11}$/.test(id))return;
+ state.youtubeLoading=true;byId('player').classList.add('youtube-mode');
+ const link=emptyNode('a','youtube-source-link','Abrir este vídeo en YouTube ↗');link.href='https://www.youtube.com/watch?v='+id;link.target='_blank';link.rel='noopener noreferrer';
+ const mount=document.createElement('div');mount.id='ol-youtube-mount';
+ const note=emptyNode('small','youtube-player-note','Reproductor oficial de YouTube. Al reproducir, te conectas con YouTube y se aplican sus condiciones y privacidad.');
+ byId('player-media').replaceChildren(mount,note,link);setStatus('Preparando YouTube…');
+ try{
+  const YT=await loadYouTubeAPI();if(serial!==state.playSerial)return;
+  state.youtube=new YT.Player(mount,{host:'https://www.youtube-nocookie.com',width:'100%',height:'220',videoId:id,playerVars:{playsinline:1,controls:1,autoplay:0,origin:location.origin},events:{
+   onReady:()=>{if(serial!==state.playSerial)return;state.youtubeReady=true;state.youtubeLoading=false;setStatus('Pulsa ▶ en el vídeo si no empieza automáticamente.');if(!document.hidden)state.youtube.playVideo();},
+   onStateChange:event=>{if(serial!==state.playSerial)return;const playing=event.data===1;byId('toggle-play').textContent=playing?'Ⅱ':'▶';byId('toggle-play').setAttribute('aria-label',playing?'Pausar':'Reproducir');if(playing){rememberTrack(track);setStatus('Reproduciendo en YouTube');}else if(event.data===2)setStatus('YouTube en pausa.');else if(event.data===3)setStatus('Cargando vídeo…');else if(event.data===0){const expired=sleepDeadline&&Date.now()>=sleepDeadline;updateSleepTimer();if(!expired)playNext();}},
+   onAutoplayBlocked:()=>{if(serial===state.playSerial)setStatus('Pulsa ▶ directamente en el vídeo para empezar.');},
+   onError:event=>{if(serial!==state.playSerial)return;state.youtubeLoading=false;setStatus([101,150].includes(event.data)?'El creador no permite reproducir este vídeo aquí. Usa «Abrir este vídeo en YouTube».':event.data===100?'Vídeo retirado o privado. Elige otro o ábrelo en YouTube.':event.data===153?'YouTube no reconoce este navegador. Abre el vídeo en YouTube o prueba otro navegador.':'Este vídeo no se puede reproducir aquí. Usa el enlace a YouTube o elige otro.');}
+  }});
+ }catch(error){if(serial===state.playSerial){state.youtubeLoading=false;setStatus(error.message);}}
+}
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&state.youtubeReady)state.youtube?.pauseVideo();});
+let nativeWatchdog=null;
+function watchNativeAudio(audio){
+ if(state.audio!==audio)return;
+ clearTimeout(nativeWatchdog);const serial=state.playSerial;
+ nativeWatchdog=setTimeout(()=>{if(serial===state.playSerial&&state.audio===audio&&!audio.paused&&!audio.ended)nativeAudioFailure(audio);},15000);
+}
+async function nativeAudioFailure(audio){
+ clearTimeout(nativeWatchdog);
+ if(state.audio!==audio||!state.currentTrack||state.currentTrack.source==='YOUTUBE')return;
+ if(!state.audioRetries){state.audioRetries=1;setStatus('Probando una conexión alternativa…');audio.src=`/api/play/${encodeURIComponent(state.currentTrack.id)}?retry=1`;audio.play().catch(playbackRejected);watchNativeAudio(audio);return;}
+ const serial=state.playSerial;const active=await window.MaggySession.verifyAccess();
+ if(serial===state.playSerial&&active){audio.pause();setStatus('Esta pista no responde o no permite reproducción. Pulsa ▶ para reintentar o elige otra.');}
 }
 function startAudio(url) {
   if (!url.startsWith('/api/play/')) { setStatus('Enlace de audio no válido.'); return; }
@@ -336,42 +390,36 @@ function startAudio(url) {
   if (!audio) {
     audio = document.createElement('audio');
     audio.controls = true; audio.setAttribute('playsinline', ''); audio.preload = 'auto';
-    audio.addEventListener('ended', () => { const expired = sleepDeadline && Date.now() >= sleepDeadline; updateSleepTimer(); if (!expired) playNext(); });
+    audio.addEventListener('ended', () => { if(state.audio!==audio)return;const expired = sleepDeadline && Date.now() >= sleepDeadline; updateSleepTimer(); if (!expired) playNext(); });
     audio.addEventListener('timeupdate', updateSleepTimer);
     for (const name of ['loadedmetadata', 'timeupdate', 'ratechange', 'seeked']) audio.addEventListener(name, updateMediaPosition);
     audio.addEventListener('playing', () => {
+      if(state.audio!==audio)return;
+      clearTimeout(nativeWatchdog);
       byId('toggle-play').textContent = 'Ⅱ'; byId('toggle-play').setAttribute('aria-label', 'Pausar');
       if (state.currentTrack) rememberTrack(state.currentTrack);
       setStatus('Reproduciendo'); mediaSessionPlayback('playing');
     });
-    audio.addEventListener('waiting', () => setStatus('Cargando audio…'));
+    audio.addEventListener('waiting', () => {if(state.audio!==audio)return;setStatus('Cargando audio…');watchNativeAudio(audio);});
+    audio.addEventListener('stalled',()=>watchNativeAudio(audio));
     audio.addEventListener('pause', () => {
+      if(state.audio!==audio)return;
+      clearTimeout(nativeWatchdog);
       byId('toggle-play').textContent = '▶'; byId('toggle-play').setAttribute('aria-label', 'Reproducir');
       mediaSessionPlayback('paused');
     });
-    audio.addEventListener('error', async () => {
-      if (state.audio !== audio || !state.currentTrack) return;
-      if (!state.audioRetries) {
-        state.audioRetries = 1;
-        setStatus('Probando una conexión alternativa…');
-        audio.src = `/api/play/${encodeURIComponent(state.currentTrack.id)}?retry=1`;
-        audio.play().catch(playbackRejected);
-        return;
-      }
-      const serial = state.playSerial;
-      const active = await window.MaggySession.verifyAccess();
-      if (serial === state.playSerial && active) setStatus('Esta pista no responde o no permite reproducción. Pulsa ▶ para reintentar o elige otra.');
-    });
+    audio.addEventListener('error',()=>nativeAudioFailure(audio));
     state.audio = audio;
     byId('player-media').replaceChildren(audio);
   }
   state.audioRetries = 0;
   audio.src = url;
   setupAudioMediaSession(state.currentTrack);
-  audio.play().catch(playbackRejected);
+  audio.play().catch(playbackRejected);watchNativeAudio(audio);
 }
 function playbackRejected(error) {
-  if (error.name === 'NotAllowedError') setStatus('Safari necesita tu permiso: pulsa ▶ para escuchar.');
+  if (error.name === 'NotAllowedError') setStatus('El navegador necesita tu permiso: pulsa ▶ para escuchar.');
+  else if(!['AbortError','NotSupportedError'].includes(error.name))setStatus('No se pudo iniciar el audio. Pulsa ▶ para reintentar.');
   // AbortError is expected when switching tracks quickly; media errors retry above.
 }
 
@@ -402,6 +450,7 @@ function playNext() { if (state.currentIndex < state.queue.length - 1) playTrack
 function playPrevious() { if (state.currentIndex > 0) playTrack(state.queue[state.currentIndex - 1], state.queue); }
 function togglePlayFromSystem() { state.audio?.play().catch(() => setStatus('Pulsa reproducir en Ol para continuar.')); }
 function togglePlay() {
+  if(state.currentTrack?.source==='YOUTUBE'){if(state.youtubeReady){state.youtube.getPlayerState()===1?state.youtube.pauseVideo():state.youtube.playVideo();}else if(!state.youtubeLoading)playTrack(state.currentTrack,state.queue);return;}
   if (state.audio) {
     if (state.audio.error && state.currentTrack) startAudio(`/api/play/${encodeURIComponent(state.currentTrack.id)}?retry=1`);
     else if (state.audio.paused) state.audio.play().catch(playbackRejected);
@@ -422,7 +471,7 @@ function consentInit(){let stored=null;try{stored=localStorage.getItem(KEY.ads);
 function init() {
   byId('favorites-count').textContent = String(state.favorites.filter(supportedTrack).length);
   document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => goView(button.dataset.view)));
-  document.querySelectorAll('[data-source]').forEach(button => button.addEventListener('click', () => { state.source = button.dataset.source; if (state.source === 'MIX') { state.view = 'discover'; if (!state.mixLoaded && !state.mixLoading) requestMixSearch(state.mixQuery); } render(); }));
+  document.querySelectorAll('[data-source]').forEach(button => button.addEventListener('click', () => { const previous=state.source;state.source = button.dataset.source; if (state.source === 'MIX') { state.view = 'discover'; if (!state.mixLoaded && !state.mixLoading) requestMixSearch(state.mixQuery); } else if(state.view==='discover'&&(state.source==='YOUTUBE'||previous==='YOUTUBE')){requestSearch(state.query);} render(); }));
   document.querySelectorAll('[data-query]').forEach(button => button.addEventListener('click', () => {
     byId('library').scrollIntoView({ behavior: 'smooth' });
     requestSearch(button.dataset.query);

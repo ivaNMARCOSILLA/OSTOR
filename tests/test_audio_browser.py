@@ -8,7 +8,7 @@ from browser_support import BASE_URL,login_context
 
 def run():
     valid=[{'id':'archive_test','title':'Orbital test','channel':'Pilot','source':'ARCHIVE','stream_url':'https://test.invalid/music.wav'}, {'id':'audius_test','title':'Aurora test','channel':'Pilot','source':'AUDIUS','stream_url':'https://test.invalid/music.wav'}]
-    removed=[{'id':'youtube_abcdefghijk','title':'Removed video','source':'YOUTUBE','video_id':'abcdefghijk'},{'id':'jamendo_123','title':'Removed track','source':'JAMENDO','stream_url':'https://test.invalid/retired.mp3'}]
+    removed=[{'id':'youtube_invalid','title':'Invalid video','source':'YOUTUBE','video_id':'invalid'},{'id':'jamendo_123','title':'Removed track','source':'JAMENDO','stream_url':'https://test.invalid/retired.mp3'}]
     with sync_playwright() as p:
         browser=p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox'])
         context=browser.new_context(viewport={'width':1440,'height':1000});user=login_context(context)

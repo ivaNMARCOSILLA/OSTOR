@@ -19,7 +19,7 @@ let installPrompt;
 window.addEventListener('beforeinstallprompt', event => { event.preventDefault(); installPrompt = event; $('install-app').classList.remove('hidden'); });
 $('install-app').addEventListener('click', async () => { if (!installPrompt) return; await installPrompt.prompt(); await installPrompt.userChoice; installPrompt = null; $('install-app').classList.add('hidden'); });
 fetch('/health').then(response => { if (!response.ok) throw new Error(); return response.json(); }).then(data => {
-  $('provider-status').textContent = 'Fuentes musicales: Internet Archive, Audius y Mezcla (Commons y Radio Browser). La disponibilidad de audio depende de cada proveedor.';
+  $('provider-status').textContent = 'Fuentes musicales: Internet Archive, Audius, YouTube y Mezcla (Commons y Radio Browser). La disponibilidad de audio depende de cada proveedor.';
 }).catch(() => { $('provider-status').textContent = 'Sin conexión con el servidor. Comprueba tu conexión para buscar y reproducir.'; });
 window.addEventListener('offline', () => { $('provider-status').textContent = 'Estás sin conexión. Puedes consultar favoritos guardados; buscar y reproducir requiere internet.'; });
 
@@ -30,7 +30,7 @@ function saveChannels() {
   try { localStorage.setItem(CHANNEL_KEY, JSON.stringify(channels)); return true; }
   catch { $('channel-status').textContent = 'No se pudo guardar: almacenamiento lleno o no disponible.'; return false; }
 }
-const channelAvailable = track => ['ARCHIVE', 'AUDIUS', 'COMMONS', 'RADIO'].includes(track?.source);
+const channelAvailable = track => ['ARCHIVE', 'AUDIUS', 'COMMONS', 'RADIO', 'YOUTUBE'].includes(track?.source) && (track.source!=='YOUTUBE'||/^[A-Za-z0-9_-]{11}$/.test(track.video_id||track.id?.slice(8)));
 function renderChannels() {
   $('channels-list').replaceChildren();
   for (const channel of channels) {
