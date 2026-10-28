@@ -102,4 +102,3 @@ body,body:has(>.back){background-image:linear-gradient(transparent,transparent),
 .maintenance-console{margin:1.2rem 0;padding:1rem;border:1px solid var(--line);border-radius:12px;min-width:0}
 #maintenance-terminal{height:300px;max-height:55vh;max-width:100%;overflow:auto;background:#0d1c19;color:#c6efd7;border:1px solid #35755a;border-radius:10px;padding:1rem;font:13px/1.7 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;tab-size:2}
 #maintenance-terminal span{display:inline}.maintenance-console button{margin:.35rem .35rem .35rem 0}.maintenance-console label{display:flex;align-items:center;gap:.6rem}
-
