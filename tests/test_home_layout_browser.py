@@ -11,14 +11,20 @@ def run():
   page.route('**/api/search?*',search);page.goto(BASE_URL+'/');page.locator('#consent-decline').click();page.locator('.track-card').first.wait_for()
   assert page.locator('#library #search-form').count()==1
   assert page.locator('#hero #search-form').count()==0
+  assert page.locator('#momentos #quick-style-picker').count()==1
+  assert page.evaluate("document.querySelector('#library').compareDocumentPosition(document.querySelector('#momentos'))&Node.DOCUMENT_POSITION_FOLLOWING")
+  assert page.evaluate("document.querySelector('#mi-espacio').compareDocumentPosition(document.querySelector('#ol-collection'))&Node.DOCUMENT_POSITION_FOLLOWING")
+  assert page.evaluate("document.querySelector('#ol-collection').compareDocumentPosition(document.querySelector('#ol-live-premiere'))&Node.DOCUMENT_POSITION_FOLLOWING")
+
   for width in [320,390,768,1440]:
    page.set_viewport_size({'width':width,'height':900});page.evaluate('scrollTo(0,0)')
    assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+2'),width
-   metrics=page.evaluate("""()=>{const box=id=>document.getElementById(id).getBoundingClientRect();return {search:box('search-form').top,gap:box('track-grid').top-box('search-form').bottom,hero:box('hero').height,music:box('track-grid').top,ad:box('ol-live-premiere').top,libraryEnd:box('library').bottom}}""")
+   metrics=page.evaluate("""()=>{const box=id=>document.getElementById(id).getBoundingClientRect();return {search:box('search-form').top,gap:box('track-grid').top-box('search-form').bottom,hero:box('hero').height,music:box('track-grid').top,styles:box('momentos').top,ad:box('ol-live-premiere').top,libraryEnd:box('library').bottom}}""")
    assert metrics['search']<450,(width,metrics)
    assert 0<=metrics['gap']<280,(width,metrics)
    assert metrics['hero']<190,(width,metrics)
-   assert metrics['ad']>=metrics['libraryEnd'],(width,metrics)
+   assert metrics['styles']>=metrics['libraryEnd'],(width,metrics)
+   assert metrics['ad']>metrics['styles'],(width,metrics)
    if width==390:page.screenshot(path='/tmp/ol-home-compact-mobile.png')
    if width==1440:page.screenshot(path='/tmp/ol-home-compact-desktop.png')
   page.locator('#quick-style-picker summary').click();page.locator('#quick-searches [data-query=techno]').click()
