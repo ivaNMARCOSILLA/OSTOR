@@ -132,3 +132,11 @@ body,body:has(>.back){background-image:linear-gradient(transparent,transparent),
 @media(max-width:380px){.topbar{flex-wrap:wrap}.topbar-right{margin-left:auto}}
 
 .logo{font-size:clamp(20px,5vw,30px);overflow-wrap:anywhere}@media(max-width:600px){.content>#hero{padding:0!important}.content>#hero h1{font-size:25px}.content>#hero .hero-copy{padding:12px 14px}.hero .eyebrow{letter-spacing:1px}}
+
+/* A stable, bounded wordmark: the infinity occupies its own fixed space. */
+.sidebar .brand{display:grid;grid-template-columns:minmax(0,max-content) 1.1em;align-items:center;gap:0 .25em;max-width:100%;font:650 20px/1.3 Inter,system-ui,sans-serif;letter-spacing:-.6px;white-space:nowrap}
+.sidebar .brand small{grid-column:1/-1;margin-top:4px;font-size:9px;letter-spacing:1px}
+.brand-infinity,.platform-header .logo .brand-infinity{display:inline-block;flex:0 0 1.1em;width:1.1em;min-width:1.1em;text-align:center;font:500 1.15em/1 system-ui,sans-serif;letter-spacing:0;animation:none!important;transform:none!important;position:static;vertical-align:middle}
+.mobile-brand strong,.account-shell .logo{display:inline-flex;align-items:center;gap:.25em;max-width:100%;white-space:nowrap;overflow-wrap:normal;font:650 clamp(18px,4.5vw,24px)/1.3 Inter,system-ui,sans-serif;letter-spacing:-.6px}
+.mobile-brand .brand-word{color:inherit;text-shadow:none}.mobile-brand{flex:0 1 auto;max-width:100%}.topbar-right{min-width:0}.platform-header .logo{min-width:0}
+@media(max-width:420px){#mobile-menu-label{display:none}.mobile-brand{gap:6px}.content>.topbar{flex-wrap:wrap;row-gap:4px}.topbar-right{margin-left:auto}.header-account{padding:7px 9px;font-size:11px}}
