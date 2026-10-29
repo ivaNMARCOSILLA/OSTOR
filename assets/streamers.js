@@ -21,7 +21,9 @@ const tools=new StudioTools({getRoom:()=>publishing?room:null,getPreview:()=>pre
 async function sdk(){if(window.LivekitClient)return window.LivekitClient;if(!sdkPromise)sdkPromise=new Promise((resolve,reject)=>{const s=document.createElement('script');s.src='/assets/vendor/livekit-client-2.23.0.umd.js';s.onload=()=>resolve(window.LivekitClient);s.onerror=()=>reject(new Error('No se pudo cargar el reproductor de directos.'));document.head.append(s);});return sdkPromise;}
 async function refresh(){
  const launch=await api('/api/status');
- premiereOnly=launch.live_premiere&&(await api('/api/account/me')).user?.role!=='admin';
+ const previewUser=(await api('/api/account/me')).user;
+ premiereOnly=launch.live_premiere&&previewUser?.role!=='admin'&&!previewUser?.full_service;
+ document.body.classList.toggle('ol-private-preview',Boolean(launch.live_premiere&&previewUser?.full_service));
  if(premiereOnly){document.body.classList.add('ol-live-premiere-only');return;}
  document.body.classList.remove('ol-live-premiere-only');
  if(!window.MaggySession.premium){publicInfo=await api('/api/live/catalogue');renderCatalogue();return;}

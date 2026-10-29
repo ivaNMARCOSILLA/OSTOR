@@ -123,6 +123,9 @@ def guard():
  if not affected:return
  user=get_user()
  if user and user['role']=='admin':return
+ if scope=='live' and user:
+  from membership import user_public
+  if user_public(user).get('full_service'):return
  if path.startswith('/api/'):response=make_response(jsonify(error=d['message'],code='ol_maintenance'),503)
  else:
   from html import escape

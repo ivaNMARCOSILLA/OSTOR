@@ -171,3 +171,5 @@ hr{height:12px;border:0;background:url("data:image/svg+xml,%3Csvg xmlns='http://
 .ol-live-premiere-only .hero-actions .button:hover,.ol-live-premiere-only .ol-live-premiere>a:hover{filter:brightness(.94)}
 .ol-live-premiere-only .hero-actions{display:flex;flex-wrap:wrap;gap:12px}
 @media(max-width:600px){.ol-live-premiere-only .hero-actions .button{flex:1 1 180px}.ol-live-premiere-only .ol-live-premiere>a{width:100%;margin:0}}
+/* Keep decorative art and the wordmark contained even with explicit browser zoom. */
+.platform-content>.intro{overflow:hidden}.platform-header .logo{min-width:0;white-space:normal}.platform-header .logo .brand-gold{min-width:0;overflow-wrap:anywhere}

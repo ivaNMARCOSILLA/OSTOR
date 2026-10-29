@@ -79,6 +79,11 @@ def own_channel():
     return row
 
 
+def private_preview_allowed():
+    user=get_user()
+    return bool(user and (user['role']=='admin' or user_public(user).get('full_service')))
+
+
 def publisher_allowed():
     return bool(user_public(get_user())['streamer_active'])
 
@@ -132,7 +137,7 @@ def rate_limit():
     from operations import premiere
     if premiere() and request.path.startswith('/api/streamers') and '/admin/' not in request.path:
         user=get_user()
-        if not user or user['role']!='admin':return jsonify(error='Ol Livis · próximo estreno.',code='live_premiere'),409
+        if not private_preview_allowed():return jsonify(error='Ol Livis · próximo estreno.',code='live_premiere'),409
     limiter=current_app.extensions.get('streamer_rate_limiter')
     if request.path.startswith('/api/') and limiter and not limiter('streamers',240):
         return jsonify(error='Espera un momento antes de volver a intentarlo.'),429
@@ -147,7 +152,7 @@ def page():
 @bp.get('/api/live/catalogue')
 def public_directory():
     from operations import premiere
-    if premiere():return jsonify(video_ready=False,channels=[],categories=LIVE_CATEGORIES,premiere=True)
+    if premiere() and not private_preview_allowed():return jsonify(video_ready=False,channels=[],categories=LIVE_CATEGORIES,premiere=True)
     with database() as conn:
         rows=conn.execute('SELECT c.*,m.username,o.category,o.featured,f.number AS founder_number,sg.mode AS badge_mode,sg.letter AS badge_letter,sg.caption AS badge_caption,sg.audio_json AS badge_audio FROM streamer_channels c JOIN members m ON m.id=c.member_id LEFT JOIN live_channel_settings o ON o.channel_id=c.id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN founder_signatures sg ON sg.member_id=m.id WHERE c.live_until>? ORDER BY COALESCE(o.featured,0) DESC,c.updated_at DESC LIMIT 100',(stamp(now_utc()),)).fetchall()
     from subscriptions import decorate
@@ -192,7 +197,7 @@ def channels():
         rows=conn.execute('SELECT c.*,m.username,o.category,o.featured,f.number AS founder_number,sg.mode AS badge_mode,sg.letter AS badge_letter,sg.caption AS badge_caption,sg.audio_json AS badge_audio FROM streamer_channels c JOIN members m ON m.id=c.member_id LEFT JOIN live_channel_settings o ON o.channel_id=c.id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN founder_signatures sg ON sg.member_id=m.id WHERE c.live_until>? ORDER BY COALESCE(o.featured,0) DESC,c.updated_at DESC LIMIT 60',(stamp(now_utc()),)).fetchall()
     own=own_channel()
     from subscriptions import decorate
-    return jsonify(video_ready=live_ready(),streamer_active=publisher_allowed(),live_price_cents=2500,live_trial_months=0,live_trial_days=7,gift_commission_bps=0,
+    return jsonify(video_ready=live_ready(),streamer_active=publisher_allowed(),live_price_cents=2500,live_trial_months=0,live_trial_days=0,private_preview=private_preview_allowed(),gift_commission_bps=0,
                    channels=decorate([channel_public(row) for row in rows if not is_abusive(row['title']+' '+row['bio']+' '+row['username'])]),mine=channel_public(own) if own else None,
                    user={'id':user['id'],'username':user['username']},
                    setup_checks=video_configuration_checks() if user['role']=='admin' else None,
@@ -202,7 +207,7 @@ def channels():
 
 @bp.post('/api/streamers/me')
 def save_channel():
-    if not publisher_allowed(): return jsonify(error='Activa tu prueba de Ol Livis o revisa tu acceso completo desde tu cuenta.'),403
+    if not publisher_allowed(): return jsonify(error='Revisa tu acceso anual o tu concesión gratuita de Ol Livis desde tu cuenta.'),403
     data=request.get_json(silent=True) or {}
     title=str(data.get('title','')).strip();bio=str(data.get('bio','')).strip();category=data.get('category','entretenimiento')
     if category not in LIVE_CATEGORIES:return jsonify(error='Elige una categoría válida para Ol Livis.'),400

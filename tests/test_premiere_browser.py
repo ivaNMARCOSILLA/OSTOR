@@ -19,7 +19,7 @@ def run():
    assert page.evaluate("""()=>{const els=[...document.querySelectorAll('.ol-live-premiere .premiere-badge,.ol-live-premiere strong,.ol-live-premiere p,.ol-live-premiere small,.ol-live-premiere a')].filter(e=>e.getClientRects().length);return els.every((a,i)=>els.slice(i+1).every(b=>{const x=a.getBoundingClientRect(),y=b.getBoundingClientRect();return Math.min(x.right,y.right)-Math.max(x.left,y.left)<=1||Math.min(x.bottom,y.bottom)-Math.max(x.top,y.top)<=1}));}"""),('overlapping premiere text',width)
    assert 'paypal' not in page.locator('body').inner_text().lower()
    assert page.locator('a[href*="paypal"],a[href*="checkout.stripe.com"]').count()==0
-  page.locator('body').evaluate("e=>e.style.zoom='2'");assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+2');page.locator('body').evaluate("e=>e.style.zoom=''")
+  page.locator('body').evaluate("e=>e.style.zoom='2'");assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+2'),page.evaluate("[...document.querySelectorAll('body *')].filter(e=>e.getBoundingClientRect().right>innerWidth+2&&e.getClientRects().length).slice(0,12).map(e=>[e.tagName,e.id,e.className,e.getBoundingClientRect().right])");page.locator('body').evaluate("e=>e.style.zoom=''")
   page.goto(BASE_URL+'/account');page.wait_for_function("document.querySelector('#trial-start').textContent.includes('Próximo estreno')")
   assert page.locator('#trial-start').is_disabled()
   admin_context=browser.new_context();login_context(admin_context)

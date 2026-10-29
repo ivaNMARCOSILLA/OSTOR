@@ -9,3 +9,9 @@ La concesión permite ver, crear y emitir cuando el servicio esté disponible, y
 Clientes y amigos → Dar/Retirar acceso completo gratuito permite gestionarla. La retirada invalida las sesiones y no se deshace por un nuevo despliegue: el asiento de aplicación impide repetir la migración. Los accesos pagados o invitaciones previas son independientes; Retirar acceso gratuito revoca también la concesión completa.
 
 La ejecución real y las banderas de vídeo/cobro deben verificarse en producción. El entorno de trabajo no puede consultar su base de datos remota.
+
+## Prueba privada de vídeo (9.11.2)
+
+Las cuentas con concesión completa pueden entrar al estudio y al catálogo privado durante el próximo estreno. No se cambian las banderas de cobro ni se abre el catálogo a visitantes. Una cuenta publica únicamente en su propio canal y la otra recibe un token de espectador, sin permiso de publicación. LiveKit debe estar realmente configurado; la concesión no inventa una conexión ni elimina ese requisito.
+
+Primer dispositivo: entrar con prueba en /live#creator-panel, guardar canal, aceptar cámara/micrófono y pulsar Iniciar directo. Segundo dispositivo: entrar con prueba2 en /live#live-catalogue y abrir el canal en directo. Usar auriculares para evitar acoplamiento. La prueba entre dispositivos físicos sigue pendiente de realizar por el titular.

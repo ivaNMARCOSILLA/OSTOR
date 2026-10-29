@@ -17,6 +17,10 @@ def run():
   assert not page.locator('#pricing').is_visible();assert not page.locator('#admin-panel').is_visible()
   user=ctx.request.get(BASE_URL+'/api/account/me').json()['user'];assert user['full_service'] and user['streamer_active'] and user['role']=='member'
   assert ctx.request.get(BASE_URL+'/api/admin/members').status==403
+  page.goto(BASE_URL+'/live#creator-panel');page.wait_for_function("document.body.classList.contains('ol-private-preview')&&!document.body.classList.contains('ol-live-premiere-only')")
+  page.locator('#creator-panel').wait_for(state='visible');assert page.url.endswith('#creator-panel')
+  page.wait_for_function("document.querySelector('.premiere-badge').textContent==='PRUEBA PRIVADA'")
+  assert page.locator('#ol-live-premiere a').get_attribute('href')=='#creator-panel'
   assert not errors,errors;b.close()
  print('OK: full free service grant in admin UI, own free access message, no billing or admin permissions')
 if __name__=='__main__':run()
