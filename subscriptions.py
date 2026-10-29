@@ -165,7 +165,8 @@ def creator_dashboard():
   latest=conn.execute('SELECT * FROM subscription_agreements WHERE channel_id=? ORDER BY version DESC LIMIT 1',(channel['id'],)).fetchone()
   gross=conn.execute('SELECT COALESCE(SUM(amount_cents),0) AS n FROM creator_subscriptions WHERE channel_id=?',(channel['id'],)).fetchone()['n']
   draft=conn.execute('SELECT price_cents,benefits_json FROM channel_subscription_drafts WHERE channel_id=?',(channel['id'],)).fetchone()
-  return jsonify(current_price_cents=channel_price(conn,channel['id']),draft={'price_cents':draft['price_cents'],'benefits':json.loads(draft['benefits_json'])} if draft else None,channel=dict(id=channel['id'],title=channel['title'],subscriber_count=count(conn,channel['id']),gross_confirmed_cents=gross),latest=public_agreement(conn,latest,True),settings=settings(conn,channel['id']),benefits=BENEFITS)
+  from payments import account_for
+  return jsonify(stripe_connected=bool(account_for(conn,user['id'])),current_price_cents=channel_price(conn,channel['id']),draft={'price_cents':draft['price_cents'],'benefits':json.loads(draft['benefits_json'])} if draft else None,channel=dict(id=channel['id'],title=channel['title'],subscriber_count=count(conn,channel['id']),gross_confirmed_cents=gross),latest=public_agreement(conn,latest,True),settings=settings(conn,channel['id']),benefits=BENEFITS)
 
 @bp.post('/api/channel-subscriptions/propose')
 def propose():

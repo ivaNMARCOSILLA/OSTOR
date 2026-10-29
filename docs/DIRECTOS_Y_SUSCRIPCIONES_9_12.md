@@ -25,3 +25,7 @@ No se añaden perfiles, suscriptores o contadores ficticios. El catálogo provie
 ## Verificación
 
 207 pruebas de servidor superadas, 18 de PostgreSQL omitidas por no disponer de esa instancia. Pruebas de navegador superadas para los temporizadores 25/30/60 con sala simulada, salida explícita/revocación, captura local, controles dentro del reproductor, acuerdos de suscripción y estadísticas privadas. La simulación solo pertenece a las pruebas y no genera perfiles públicos. Las emisiones físicas entre dispositivos, el audio y los ajustes externos de Stripe/LiveKit deben comprobarse en producción; el entorno de trabajo no puede acceder a esas APIs remotas.
+
+## Conexión inicial del creador (9.13.3)
+
+Payments/Checkout y webhooks de la plataforma son distintos de la autorización Connect de cada creador. Hace falta configurar el client ID de Stripe Connect en Production y que el creador autorice su cuenta una vez desde Conectar Stripe de mi canal. No requiere editar código. El retorno OAuth confirmado recupera automáticamente el borrador existente una sola vez y abre sus ajustes; no concede aprobaciones ni inicia un cargo. Un parámetro de retorno por sí solo no demuestra conexión: el panel comprueba el vínculo almacenado por el servidor.

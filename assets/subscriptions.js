@@ -4,7 +4,7 @@ const node=(tag,value)=>{const e=document.createElement(tag);e.textContent=value
 const money=c=>new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR'}).format(c/100);
 const period=p=>p==='month'?'un mes, renovación manual':'pago único al creador';
 const date=v=>v?new Date(v).toLocaleString('es-ES',{dateStyle:'medium',timeStyle:'short'}):'Sin vencimiento';
-let reviewer=null,reviewPage=1,creator=null,memberPage=1;
+let reviewer=null,reviewPage=1,creator=null,memberPage=1,resumingStripeDraft=false;
 async function api(path,data){
  let options={};
  if(data!==undefined){const r=await fetch('/api/account/me',{cache:'no-store'});if(!r.ok)throw Error('No se pudo comprobar la sesión.');const auth=await r.json();options={method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':auth.csrf},body:JSON.stringify(data)};}
@@ -51,6 +51,9 @@ async function creatorStatus(){
  if(d.latest){$('creator-agreement-current').append(card(d.latest,d.benefits));$('creator-offer-approve').classList.toggle('hidden',d.latest.approvals.creator);$('creator-offer-approve').dataset.agreement=d.latest.id;}
  else{$('creator-agreement-current').append(node('p','Propón un precio y sus beneficios. Aún no hay tarifa.'));$('creator-offer-approve').classList.add('hidden');}
  $('creator-chat-exclusive').checked=Boolean(d.settings.subscriber_chat);$('creator-live-exclusive').checked=Boolean(d.settings.exclusive_live);
+ const returned=new URL(location.href);
+ if(returned.searchParams.get('stripe')==='connected'&&d.stripe_connected&&!resumingStripeDraft){resumingStripeDraft=true;$('channel-subscription-settings').open=true;returned.searchParams.delete('stripe');history.replaceState(null,'',returned.pathname+returned.search+returned.hash);if(d.draft){$('creator-offer-status').textContent='Stripe conectado. Recuperando tu propuesta…';const resumed=await api('/api/channel-subscriptions/propose',{price_cents:d.draft.price_cents,period:'month',benefits:d.draft.benefits});$('creator-offer-status').textContent=resumed.draft?resumed.message:'Stripe conectado y propuesta recuperada automáticamente. Ahora pueden aprobar los beneficios creador, administración y Gref.';await creatorStatus();}else $('creator-offer-status').textContent='Stripe conectado. Ya puedes guardar tu precio y beneficios.';}
+
  }catch(e){$('creator-offer-status').textContent=e.message;}
 }
 $('creator-offer-form')?.addEventListener('submit',async e=>{e.preventDefault();const b=e.target.querySelector('button');b.disabled=true;try{const d=await api('/api/channel-subscriptions/propose',{price_cents:cents($('creator-offer-price').value),period:$('creator-offer-period').value,benefits:[...document.querySelectorAll('[name=creator-benefit]:checked')].map(i=>i.value)});$('creator-offer-status').textContent=d.draft||d.automatic_price?d.message:'Propuesta guardada. Cada parte debe aprobar esta versión expresamente.';await creatorStatus();}catch(error){$('creator-offer-status').textContent=error.message;}finally{b.disabled=false;}});

@@ -151,7 +151,7 @@ def connect_return():
    if old and old!=account:raise PaymentError('Solicita a administración una revisión de los acuerdos antes de cambiar el destinatario.')
    c.execute('INSERT INTO stripe_accounts VALUES(?,?,?) ON CONFLICT(member_id) DO NOTHING',(user['id'],account,stamp(now_utc())))
  except PaymentError as e:return jsonify(error=str(e)),409
- return redirect('/live#creator-subscriptions')
+ return redirect('/live?stripe=connected#creator-subscriptions')
 
 def validate_order(c,user,channel_id=None):
  from founder_slots import release_expired,reservation,payment_allowed
