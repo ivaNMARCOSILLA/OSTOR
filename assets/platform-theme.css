@@ -85,3 +85,15 @@ body.electronicama-theme #planes a.button::before,body.electronicama-theme #plan
 body.electronicama-theme #planes a.button.secondary{background:#111!important;color:#f5d397!important;-webkit-text-fill-color:#f5d397!important}
 
 body.electronicama-theme a.annual-access-link,body.electronicama-theme a.annual-access-link:visited,body.electronicama-theme a.annual-access-link:hover,body.electronicama-theme #intro-start{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 24px;font-size:16px;font-weight:800;line-height:1.4;color:#101010!important;-webkit-text-fill-color:#101010!important;background:#f5d397!important;text-decoration:none!important;opacity:1!important;mix-blend-mode:normal!important}
+
+/* Saved announcement: remove hidden and data-announcement-archived to reuse. */
+body.electronicama-theme #ol-live-premiere[data-announcement-archived="true"]{display:none!important}
+/* Holograms identity: a few fine gold wireframes, outside interaction layers. */
+body.electronicama-theme :is(.holograms-entry,[data-holograms-link]){color:#f5d397!important;border:1px solid #b99959!important;background:#111!important;border-radius:12px;text-decoration:none;font-weight:700}
+body.electronicama-theme .holograms-entry{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;min-height:44px;box-sizing:border-box}
+body.electronicama-theme .holograms-label{display:inline-block;font:600 12px/1.5 system-ui;letter-spacing:.08em;color:#f5d397;border:1px solid #a6884d;border-radius:20px;padding:5px 12px;vertical-align:middle}
+body.electronicama-theme :is(#hero,#hologramas,.account-shell>.intro){position:relative;isolation:isolate}
+body.electronicama-theme :is(#hero,#hologramas,.account-shell>.intro)::before{content:'';position:absolute;inset:18px 18px auto auto;width:140px;height:115px;background:url('/assets/gold-geometry.svg') center/contain no-repeat;opacity:.18;pointer-events:none;z-index:-1;border:0;transform:none;animation:none}
+body.electronicama-theme #hologramas{border-width:2px}
+body.electronicama-theme #holograms-title{color:#f5d397;text-shadow:none}
+@media(max-width:600px){body.electronicama-theme :is(#hero,#hologramas,.account-shell>.intro)::before{width:95px;height:80px;opacity:.12}.electronicama-theme .platform-header nav{flex-wrap:wrap}}

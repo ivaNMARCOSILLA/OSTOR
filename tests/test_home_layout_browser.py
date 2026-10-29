@@ -26,7 +26,8 @@ def run():
    assert 0<=metrics['gap']<280,(width,metrics)
    assert metrics['hero']<190,(width,metrics)
    assert metrics['styles']>=metrics['libraryEnd'],(width,metrics)
-   assert metrics['ad']>metrics['styles'],(width,metrics)
+   assert not page.locator('#ol-live-premiere').is_visible()
+   assert page.locator('#ol-live-premiere').get_attribute('data-announcement-archived')=='true'
    if width==390:page.screenshot(path='/tmp/ol-home-compact-mobile.png')
    if width==1440:page.screenshot(path='/tmp/ol-home-compact-desktop.png')
   page.locator('#quick-style-picker summary').click();page.locator('#quick-searches [data-query=techno]').click()
