@@ -7,7 +7,7 @@ async function refreshCreatorConnection(){
  const button=$('creator-connect-stripe'),status=$('creator-processor-status');if(!button)return;
  try{const manager=await api('/api/payments/status');
  button.disabled=Boolean(manager.creator_connected);button.textContent=manager.creator_connected?'Stripe conectado':'Conectar Stripe de mi canal';
- status.textContent=manager.creator_connected?'Cuenta Stripe conectada. La verificación bancaria y los acuerdos deben estar completos para cobrar.':manager.connect_available?'Conecta tu propia cuenta Stripe para cobrar las suscripciones del canal.':'Falta completar Stripe Connect en Production: STRIPE_CONNECT_CLIENT_ID (ca_…) y una clave secreta real. Puedes volver a comprobarlo con este botón.';
+ status.textContent=manager.creator_connected?'Cuenta Stripe conectada. La verificación bancaria y los acuerdos deben estar completos para cobrar.':manager.connect_available?'Conecta tu propia cuenta Stripe para cobrar las suscripciones del canal.':(manager.connect_pending_reason||'Falta completar Stripe Connect en Production. Puedes volver a comprobarlo con este botón.');
  if(manager.play_distribution)button.hidden=true;
  }catch(error){button.disabled=false;button.textContent='Reintentar conexión con Stripe';status.textContent='No se pudo comprobar Stripe. '+error.message;}
 }

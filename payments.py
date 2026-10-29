@@ -14,6 +14,18 @@ class PaymentError(Exception):
 def provider():
  # Legacy imports remain readable locally; deployed electronicama only offers Stripe.
  return 'stripe' if os.getenv('VERCEL_ENV') in {'production','preview'} else os.getenv('OL_PAYMENT_PROVIDER','stripe')
+def connect_configuration_error():
+ if provider()!='stripe':return 'El servidor no tiene Stripe seleccionado como gestor.'
+ client=os.getenv('STRIPE_CONNECT_CLIENT_ID','').strip()
+ key=os.getenv('STRIPE_SECRET_KEY','').strip()
+ if not client:return 'Falta STRIPE_CONNECT_CLIENT_ID en el despliegue que atiende esta web. Añádelo a Production y despliega de nuevo.'
+ if not client.startswith('ca_'):return 'STRIPE_CONNECT_CLIENT_ID no es un ID de cliente OAuth válido: debe empezar por ca_.'
+ if not key:return 'Falta STRIPE_SECRET_KEY en el despliegue que atiende esta web.'
+ if key.startswith(('sk_test_','rk_test_')):return 'STRIPE_SECRET_KEY contiene una clave de pruebas. Connect requiere una clave secreta real sk_live_.'
+ if key.startswith('rk_live_'):return 'La clave de pagos es restringida. Este flujo OAuth necesita STRIPE_SECRET_KEY con una clave sk_live_.'
+ if not key.startswith('sk_live_'):return 'STRIPE_SECRET_KEY no tiene el formato secreto real sk_live_ requerido para OAuth.'
+ return None
+
 def configured():
  if provider()=='legacy_paypal':return True
  return bool(os.getenv('STRIPE_SECRET_KEY','').startswith(('sk_live_','rk_live_')) and os.getenv('STRIPE_WEBHOOK_SECRET','').startswith('whsec_') and os.getenv('STRIPE_CONNECT_WEBHOOK_SECRET','').startswith('whsec_') and os.getenv('OL_PAYMENTS_ENABLED')=='1')
@@ -40,7 +52,7 @@ def init_database():
  );''')
 
 def stripe(method,path,data=None,account=None,idempotency=None,oauth=False,sandbox=False):
- key=os.getenv('STRIPE_TEST_SECRET_KEY' if sandbox else 'STRIPE_SECRET_KEY','')
+ key=os.getenv('STRIPE_TEST_SECRET_KEY' if sandbox else 'STRIPE_SECRET_KEY','').strip()
  if sandbox and not key.startswith(('sk_test_','rk_test_')):raise PaymentError('Configura una clave secreta de pruebas en STRIPE_TEST_SECRET_KEY.')
  if not key:raise PaymentError('Stripe está pendiente de configurar.')
  if oauth:data={**(data or {}),'client_secret':key}
@@ -73,7 +85,7 @@ def account_for(c,member_id):
 def status():
  user=get_user()
  with database() as c:account=account_for(c,user['id']) if user else None
- return jsonify(provider=provider(),configured=configured(),enabled=ready(),creator_connected=bool(account),connect_available=bool(provider()=='stripe' and os.getenv('STRIPE_CONNECT_CLIENT_ID','').startswith('ca_') and os.getenv('STRIPE_SECRET_KEY','').startswith('sk_live_')),platform_price_cents=2500,currency='eur',platform_commission_percent=0,renewal='manual',billing_period='year',trial_days=0,play_distribution=bool(session.get('ol_play_distribution')),pending_reason=None if ready() else 'Ol Livis · próximo estreno. Todavía no hay cobros disponibles.')
+ return jsonify(provider=provider(),configured=configured(),enabled=ready(),creator_connected=bool(account),connect_available=connect_configuration_error() is None,connect_pending_reason=connect_configuration_error() if user else None,platform_price_cents=2500,currency='eur',platform_commission_percent=0,renewal='manual',billing_period='year',trial_days=0,play_distribution=bool(session.get('ol_play_distribution')),pending_reason=None if ready() else 'Ol Livis · próximo estreno. Todavía no hay cobros disponibles.')
 
 def sandbox_configured():return bool(os.getenv('STRIPE_TEST_SECRET_KEY','').startswith(('sk_test_','rk_test_')) and os.getenv('STRIPE_TEST_WEBHOOK_SECRET','').startswith('whsec_'))
 
@@ -125,8 +137,9 @@ def test_checkout():
 def connect():
  user=get_user()
  if not user or not user_public(user)['streamer_active']:return jsonify(error='Entra con una cuenta de creador activa.'),403
- client=os.getenv('STRIPE_CONNECT_CLIENT_ID','')
- if provider()!='stripe' or not client.startswith('ca_') or not os.getenv('STRIPE_SECRET_KEY','').startswith('sk_live_'):return jsonify(error='La conexión de creadores con Stripe está pendiente de configurar.'),409
+ client=os.getenv('STRIPE_CONNECT_CLIENT_ID','').strip()
+ problem=connect_configuration_error()
+ if problem:return jsonify(error=problem,code='connect_configuration_incomplete'),409
  if not allow_attempt('stripe-connect',limit=6):return jsonify(error='Espera unos minutos antes de volver a conectar.'),429
  token=secrets.token_urlsafe(32)
  with database() as c:
