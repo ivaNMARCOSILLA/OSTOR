@@ -72,6 +72,13 @@ def init_database():
           created_at TEXT NOT NULL, access_until TEXT,
           welcome_used INTEGER NOT NULL DEFAULT 0, session_version INTEGER NOT NULL DEFAULT 0
         );
+        CREATE TABLE IF NOT EXISTS service_grants (
+          member_id TEXT PRIMARY KEY REFERENCES members(id) ON DELETE CASCADE,
+          granted_at TEXT NOT NULL,granted_by TEXT NOT NULL REFERENCES members(id),revoked_at TEXT
+        );
+        CREATE TABLE IF NOT EXISTS owner_access_migrations (
+          id TEXT PRIMARY KEY,applied_at TEXT NOT NULL,result TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS community_roles (
           member_id TEXT PRIMARY KEY REFERENCES members(id) ON DELETE CASCADE,
           community_role TEXT NOT NULL,approved_by TEXT NOT NULL REFERENCES members(id),updated_at TEXT NOT NULL
@@ -204,7 +211,8 @@ def validate_password(value):
 
 
 def user_public(user,founder_state=None):
-    complimentary = bool('friend_granted_at' in user.keys() and user['friend_granted_at'] and not user['friend_revoked_at'])
+    full_service=bool('service_granted_at' in user.keys() and user['service_granted_at'] and not user['service_revoked_at'])
+    complimentary = full_service or bool('friend_granted_at' in user.keys() and user['friend_granted_at'] and not user['friend_revoked_at'])
     founder_number=user['founder_number'] if 'founder_number' in user.keys() else None
     founder_active=bool(founder_number and not user['founder_revoked_at']) if 'founder_revoked_at' in user.keys() else False
     trial_until=user['live_trial_until'] if 'live_trial_until' in user.keys() else None
@@ -217,18 +225,18 @@ def user_public(user,founder_state=None):
         from live_access import founder_activity
         if founder_state is None:
             with database() as conn:founder_state=founder_activity(user['id'],conn)
-        founder_active=founder_state['eligible'] and paid_current
+        founder_active=founder_state['eligible'] and (paid_current or full_service)
     active = user['role'] == 'admin' or complimentary or founder_active or paid_current or trial_active or bool(user['access_until'] and datetime.fromisoformat(user['access_until']) > now_utc())
     streamer_until=user['streamer_until'] if 'streamer_until' in user.keys() else None
-    streamer_active=active and (user['role']=='admin' or founder_active or paid_current or trial_active or bool(streamer_until and datetime.fromisoformat(streamer_until)>now_utc()))
-    return {key: user[key] for key in ('id', 'username', 'role', 'access_until', 'welcome_used')} | {'nickname':user['nickname'] if 'nickname' in user.keys() and user['nickname'] else user['username'],'active': active, 'complimentary':complimentary,'founder_number':founder_number,'founder_active':founder_active,'live_lifetime':live_lifetime,'live_annual':paid_current and not live_lifetime,'community_role':user['community_role'] if 'community_role' in user.keys() and user['community_role'] else 'activo','annual_cancelled_at':user['annual_cancelled_at'] if 'annual_cancelled_at' in user.keys() else None,'live_trial_until':trial_until,'trial_active':trial_active, 'streamer_until':streamer_until, 'streamer_active':streamer_active}
+    streamer_active=active and (full_service or user['role']=='admin' or founder_active or paid_current or trial_active or bool(streamer_until and datetime.fromisoformat(streamer_until)>now_utc()))
+    return {key: user[key] for key in ('id', 'username', 'role', 'access_until', 'welcome_used')} | {'nickname':user['nickname'] if 'nickname' in user.keys() and user['nickname'] else user['username'],'active': active, 'complimentary':complimentary,'full_service':full_service,'founder_number':founder_number,'founder_active':founder_active,'live_lifetime':live_lifetime,'live_annual':paid_current and not live_lifetime,'community_role':user['community_role'] if 'community_role' in user.keys() and user['community_role'] else 'activo','annual_cancelled_at':user['annual_cancelled_at'] if 'annual_cancelled_at' in user.keys() else None,'live_trial_until':trial_until,'trial_active':trial_active, 'streamer_until':streamer_until, 'streamer_active':streamer_active}
 
 
 def get_user():
     if hasattr(g, 'member'):
         return g.member
     with database() as conn:
-        row = conn.execute('SELECT m.*,p.nickname AS nickname,p.email AS profile_email,p.email_verified AS profile_email_verified,s.until_at AS streamer_until,f.granted_at AS friend_granted_at,f.revoked_at AS friend_revoked_at,l.number AS founder_number,l.revoked_at AS founder_revoked_at,e.trial_until AS live_trial_until,e.paid_at AS live_paid_at,e.revoked_at AS live_revoked_at,cr.community_role AS community_role,ap.cancelled_at AS annual_cancelled_at FROM members m LEFT JOIN member_profiles p ON p.member_id=m.id LEFT JOIN streamer_access s ON s.member_id=m.id LEFT JOIN friend_access f ON f.member_id=m.id LEFT JOIN live_founders l ON l.member_id=m.id LEFT JOIN live_entitlements e ON e.member_id=m.id LEFT JOIN community_roles cr ON cr.member_id=m.id LEFT JOIN annual_preferences ap ON ap.member_id=m.id WHERE m.id=?', (session.get('member_id', ''),)).fetchone()
+        row = conn.execute('SELECT m.*,p.nickname AS nickname,p.email AS profile_email,p.email_verified AS profile_email_verified,s.until_at AS streamer_until,f.granted_at AS friend_granted_at,f.revoked_at AS friend_revoked_at,l.number AS founder_number,l.revoked_at AS founder_revoked_at,e.trial_until AS live_trial_until,e.paid_at AS live_paid_at,e.revoked_at AS live_revoked_at,cr.community_role AS community_role,ap.cancelled_at AS annual_cancelled_at,sg.granted_at AS service_granted_at,sg.revoked_at AS service_revoked_at FROM members m LEFT JOIN member_profiles p ON p.member_id=m.id LEFT JOIN streamer_access s ON s.member_id=m.id LEFT JOIN friend_access f ON f.member_id=m.id LEFT JOIN live_founders l ON l.member_id=m.id LEFT JOIN live_entitlements e ON e.member_id=m.id LEFT JOIN community_roles cr ON cr.member_id=m.id LEFT JOIN annual_preferences ap ON ap.member_id=m.id LEFT JOIN service_grants sg ON sg.member_id=m.id WHERE m.id=?', (session.get('member_id', ''),)).fetchone()
     g.member = row if row and row['session_version'] == session.get('session_version') else None
     return g.member
 
@@ -378,7 +386,7 @@ def logout():
 def list_members():
     with database() as conn:
         from live_access import founder_activity
-        users = [user_public(row,founder_state=founder_activity(row['id'],conn) if row['founder_number'] else None)|{'account_activated':bool(row['password_hash'])} for row in conn.execute('SELECT m.*,p.nickname AS nickname,p.email AS profile_email,p.email_verified AS profile_email_verified,s.until_at AS streamer_until,f.granted_at AS friend_granted_at,f.revoked_at AS friend_revoked_at,l.number AS founder_number,l.revoked_at AS founder_revoked_at,e.trial_until AS live_trial_until,e.paid_at AS live_paid_at,e.revoked_at AS live_revoked_at,cr.community_role AS community_role,ap.cancelled_at AS annual_cancelled_at FROM members m LEFT JOIN member_profiles p ON p.member_id=m.id LEFT JOIN streamer_access s ON s.member_id=m.id LEFT JOIN friend_access f ON f.member_id=m.id LEFT JOIN live_founders l ON l.member_id=m.id LEFT JOIN live_entitlements e ON e.member_id=m.id LEFT JOIN community_roles cr ON cr.member_id=m.id LEFT JOIN annual_preferences ap ON ap.member_id=m.id ORDER BY m.created_at DESC')]
+        users = [user_public(row,founder_state=founder_activity(row['id'],conn) if row['founder_number'] else None)|{'account_activated':bool(row['password_hash'])} for row in conn.execute('SELECT m.*,p.nickname AS nickname,p.email AS profile_email,p.email_verified AS profile_email_verified,s.until_at AS streamer_until,f.granted_at AS friend_granted_at,f.revoked_at AS friend_revoked_at,l.number AS founder_number,l.revoked_at AS founder_revoked_at,e.trial_until AS live_trial_until,e.paid_at AS live_paid_at,e.revoked_at AS live_revoked_at,cr.community_role AS community_role,ap.cancelled_at AS annual_cancelled_at,sg.granted_at AS service_granted_at,sg.revoked_at AS service_revoked_at FROM members m LEFT JOIN member_profiles p ON p.member_id=m.id LEFT JOIN streamer_access s ON s.member_id=m.id LEFT JOIN friend_access f ON f.member_id=m.id LEFT JOIN live_founders l ON l.member_id=m.id LEFT JOIN live_entitlements e ON e.member_id=m.id LEFT JOIN community_roles cr ON cr.member_id=m.id LEFT JOIN annual_preferences ap ON ap.member_id=m.id LEFT JOIN service_grants sg ON sg.member_id=m.id ORDER BY m.created_at DESC')]
         payments = [dict(row) for row in conn.execute('SELECT p.*,m.username FROM payments p JOIN members m ON m.id=p.member_id ORDER BY verified_at DESC LIMIT 300')]
     return jsonify(members=users, payments=payments)
 
@@ -453,8 +461,45 @@ def friend_access():
             conn.execute('INSERT INTO friend_access(member_id,granted_at,granted_by,revoked_at) VALUES(?,?,?,NULL) ON CONFLICT(member_id) DO UPDATE SET granted_at=excluded.granted_at,granted_by=excluded.granted_by,revoked_at=NULL',(user['id'],stamp(now_utc()),get_user()['id']))
         else:
             conn.execute('UPDATE friend_access SET revoked_at=? WHERE member_id=?',(stamp(now_utc()),user['id']))
+            conn.execute('UPDATE service_grants SET revoked_at=? WHERE member_id=?',(stamp(now_utc()),user['id']))
             conn.execute('UPDATE members SET session_version=session_version+1 WHERE id=?',(user['id'],))
     return jsonify(ok=True,complimentary=data['active'])
+
+
+@bp.post('/api/admin/full-service-access')
+@require_admin
+def full_service_access():
+    data=payload()
+    if not isinstance(data.get('active'),bool):return jsonify(error='Indica si deseas dar o retirar el acceso completo gratuito.'),400
+    with database() as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        user=conn.execute('SELECT id,role FROM members WHERE id=?',(str(data.get('member_id','')),)).fetchone()
+        if not user or user['role']=='admin':return jsonify(error='Selecciona una cuenta de cliente.'),400
+        if data['active']:
+            conn.execute('INSERT INTO service_grants VALUES(?,?,?,NULL) ON CONFLICT(member_id) DO UPDATE SET granted_at=excluded.granted_at,granted_by=excluded.granted_by,revoked_at=NULL',(user['id'],stamp(now_utc()),get_user()['id']))
+        else:
+            conn.execute('UPDATE service_grants SET revoked_at=? WHERE member_id=?',(stamp(now_utc()),user['id']))
+            conn.execute('UPDATE members SET session_version=session_version+1 WHERE id=?',(user['id'],))
+    return jsonify(ok=True,full_service=data['active'],payment_created=False,administrative_permissions_changed=False)
+
+
+def apply_owner_access_migration():
+    """One-time owner-authorized grants for the existing prueba and prueba2 accounts.
+
+    Grants are stored by member ID and remain revocable. A ledger prevents a
+    later registration or an admin revocation from reapplying the concession.
+    """
+    if os.getenv('VERCEL_ENV')!='production':return
+    with database() as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        for name in ('prueba','prueba2'):
+            ident='owner-'+name+'-full-service-2026-10-29'
+            if conn.execute('SELECT id FROM owner_access_migrations WHERE id=?',(ident,)).fetchone():continue
+            target=conn.execute("SELECT id FROM members WHERE username=? AND role='member' AND password_hash IS NOT NULL AND password_hash<>''",(name,)).fetchone()
+            owner=conn.execute("SELECT id FROM members WHERE role='admin' ORDER BY created_at,id LIMIT 1").fetchone()
+            if target and owner:
+                conn.execute('INSERT INTO service_grants VALUES(?,?,?,NULL) ON CONFLICT(member_id) DO UPDATE SET granted_at=excluded.granted_at,granted_by=excluded.granted_by,revoked_at=NULL',(target['id'],stamp(now_utc()),owner['id']))
+            conn.execute('INSERT INTO owner_access_migrations VALUES(?,?,?)',(ident,stamp(now_utc()),'granted' if target and owner else 'skipped_missing_existing_account'))
 
 
 @bp.post('/api/account/accept-invite')
@@ -571,6 +616,7 @@ def install(app):
                       PERMANENT_SESSION_LIFETIME=timedelta(days=30), MAX_CONTENT_LENGTH=65536)
     with app.app_context():
         init_database()
+        apply_owner_access_migration()
     app.register_blueprint(bp)
     from human_check import install as install_human_check
     install_human_check(app)

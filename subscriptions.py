@@ -44,6 +44,7 @@ def moderator(conn,user,permission='review_agreements'):
 
 def active_benefits(conn,channel_id,member_id):
  if not member_id:return set()
+ if conn.execute('SELECT member_id FROM service_grants WHERE member_id=? AND revoked_at IS NULL',(member_id,)).fetchone():return set(BENEFITS)
  rows=conn.execute('SELECT benefits_json FROM creator_subscriptions WHERE channel_id=? AND member_id=? AND revoked_at IS NULL AND starts_at<=? AND (ends_at IS NULL OR ends_at>?)',(channel_id,member_id,stamp(now_utc()),stamp(now_utc()))).fetchall()
  return {benefit for row in rows for benefit in json.loads(row['benefits_json'])}
 
