@@ -52,7 +52,7 @@ def init_database():
         ); CREATE TABLE IF NOT EXISTS live_channel_settings (
             channel_id TEXT PRIMARY KEY REFERENCES streamer_channels(id) ON DELETE CASCADE,
             category TEXT NOT NULL DEFAULT 'entretenimiento',featured INTEGER NOT NULL DEFAULT 0
-        )''')
+        ); CREATE TABLE IF NOT EXISTS live_channel_views (channel_id TEXT NOT NULL REFERENCES streamer_channels(id) ON DELETE CASCADE,member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,day TEXT NOT NULL,PRIMARY KEY(channel_id,member_id,day)); CREATE INDEX IF NOT EXISTS live_views_channel ON live_channel_views(channel_id)''')
     from community import init_database as init_community_database
     init_community_database()
     from rewards import init_database as init_rewards_database
@@ -70,12 +70,12 @@ def paypal_link(value):
 
 def channel_public(row):
     from founders import signature_from_row
-    return {key:row[key] for key in ['id','title','bio','username']} | {'paypal_url':'' if os.getenv('VERCEL_ENV') in {'production','preview'} or os.getenv('OL_PAYMENT_PROVIDER','stripe')=='stripe' else row['paypal_url']} | {'live':bool(row['live_until'] and row['live_until']>stamp(now_utc())),'category':row['category'] if 'category' in row.keys() and row['category'] else 'entretenimiento','featured':bool(row['featured']) if 'featured' in row.keys() else False,'founder_number':row['founder_number'] if 'founder_number' in row.keys() else None,'founder_signature':signature_from_row(row) if 'founder_number' in row.keys() and row['founder_number'] else None}
+    return {key:row[key] for key in ['id','title','bio','username']} | {'paypal_url':'' if os.getenv('VERCEL_ENV') in {'production','preview'} or os.getenv('OL_PAYMENT_PROVIDER','stripe')=='stripe' else row['paypal_url']} | {'live':bool(row['live_until'] and row['live_until']>stamp(now_utc())),'view_count':row['view_count'] if 'view_count' in row.keys() else 0,'category':row['category'] if 'category' in row.keys() and row['category'] else 'entretenimiento','featured':bool(row['featured']) if 'featured' in row.keys() else False,'founder_number':row['founder_number'] if 'founder_number' in row.keys() else None,'founder_signature':signature_from_row(row) if 'founder_number' in row.keys() and row['founder_number'] else None}
 
 
 def own_channel():
     with database() as conn:
-        row=conn.execute('SELECT c.*,m.username,o.category,o.featured,f.number AS founder_number,sg.mode AS badge_mode,sg.letter AS badge_letter,sg.caption AS badge_caption,sg.audio_json AS badge_audio FROM streamer_channels c JOIN members m ON m.id=c.member_id LEFT JOIN live_channel_settings o ON o.channel_id=c.id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN founder_signatures sg ON sg.member_id=m.id WHERE c.member_id=?',(get_user()['id'],)).fetchone()
+        row=conn.execute('SELECT c.*,(SELECT COUNT(*) FROM live_channel_views v WHERE v.channel_id=c.id) AS view_count,m.username,o.category,o.featured,f.number AS founder_number,sg.mode AS badge_mode,sg.letter AS badge_letter,sg.caption AS badge_caption,sg.audio_json AS badge_audio FROM streamer_channels c JOIN members m ON m.id=c.member_id LEFT JOIN live_channel_settings o ON o.channel_id=c.id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN founder_signatures sg ON sg.member_id=m.id WHERE c.member_id=?',(get_user()['id'],)).fetchone()
     return row
 
 
@@ -154,7 +154,7 @@ def public_directory():
     from operations import premiere
     if premiere() and not private_preview_allowed():return jsonify(video_ready=False,channels=[],categories=LIVE_CATEGORIES,premiere=True)
     with database() as conn:
-        rows=conn.execute('SELECT c.*,m.username,o.category,o.featured,f.number AS founder_number,sg.mode AS badge_mode,sg.letter AS badge_letter,sg.caption AS badge_caption,sg.audio_json AS badge_audio FROM streamer_channels c JOIN members m ON m.id=c.member_id LEFT JOIN live_channel_settings o ON o.channel_id=c.id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN founder_signatures sg ON sg.member_id=m.id WHERE c.live_until>? ORDER BY COALESCE(o.featured,0) DESC,c.updated_at DESC LIMIT 100',(stamp(now_utc()),)).fetchall()
+        rows=conn.execute('SELECT c.*,(SELECT COUNT(*) FROM live_channel_views v WHERE v.channel_id=c.id) AS view_count,m.username,o.category,o.featured,f.number AS founder_number,sg.mode AS badge_mode,sg.letter AS badge_letter,sg.caption AS badge_caption,sg.audio_json AS badge_audio FROM streamer_channels c JOIN members m ON m.id=c.member_id LEFT JOIN live_channel_settings o ON o.channel_id=c.id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN founder_signatures sg ON sg.member_id=m.id WHERE c.live_until>? ORDER BY view_count DESC,COALESCE(o.featured,0) DESC,c.updated_at DESC LIMIT 100',(stamp(now_utc()),)).fetchall()
     from subscriptions import decorate
     return jsonify(video_ready=live_ready(),channels=decorate([channel_public(row) for row in rows if not is_abusive(row['title']+' '+row['bio']+' '+row['username'])]),categories=LIVE_CATEGORIES)
 
@@ -170,7 +170,7 @@ def _admin_live_channels():
     except ValueError:page=1
     with database() as conn:
         total=conn.execute('SELECT COUNT(*) AS n FROM streamer_channels').fetchone()['n'];pages=max(1,(total+24)//25);page=min(page,pages)
-        rows=conn.execute('SELECT c.*,m.username,o.category,o.featured,f.number AS founder_number,sg.mode AS badge_mode,sg.letter AS badge_letter,sg.caption AS badge_caption,sg.audio_json AS badge_audio FROM streamer_channels c JOIN members m ON m.id=c.member_id LEFT JOIN live_channel_settings o ON o.channel_id=c.id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN founder_signatures sg ON sg.member_id=m.id ORDER BY c.updated_at DESC LIMIT 25 OFFSET ?',((page-1)*25,)).fetchall()
+        rows=conn.execute('SELECT c.*,(SELECT COUNT(*) FROM live_channel_views v WHERE v.channel_id=c.id) AS view_count,m.username,o.category,o.featured,f.number AS founder_number,sg.mode AS badge_mode,sg.letter AS badge_letter,sg.caption AS badge_caption,sg.audio_json AS badge_audio FROM streamer_channels c JOIN members m ON m.id=c.member_id LEFT JOIN live_channel_settings o ON o.channel_id=c.id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN founder_signatures sg ON sg.member_id=m.id ORDER BY c.updated_at DESC LIMIT 25 OFFSET ?',((page-1)*25,)).fetchall()
     return jsonify(channels=[channel_public(row) for row in rows],page=page,pages=pages,total=total,categories=LIVE_CATEGORIES)
 
 
@@ -194,7 +194,7 @@ def _feature_channel():
 def channels():
     user=get_user()
     with database() as conn:
-        rows=conn.execute('SELECT c.*,m.username,o.category,o.featured,f.number AS founder_number,sg.mode AS badge_mode,sg.letter AS badge_letter,sg.caption AS badge_caption,sg.audio_json AS badge_audio FROM streamer_channels c JOIN members m ON m.id=c.member_id LEFT JOIN live_channel_settings o ON o.channel_id=c.id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN founder_signatures sg ON sg.member_id=m.id WHERE c.live_until>? ORDER BY COALESCE(o.featured,0) DESC,c.updated_at DESC LIMIT 60',(stamp(now_utc()),)).fetchall()
+        rows=conn.execute('SELECT c.*,(SELECT COUNT(*) FROM live_channel_views v WHERE v.channel_id=c.id) AS view_count,m.username,o.category,o.featured,f.number AS founder_number,sg.mode AS badge_mode,sg.letter AS badge_letter,sg.caption AS badge_caption,sg.audio_json AS badge_audio FROM streamer_channels c JOIN members m ON m.id=c.member_id LEFT JOIN live_channel_settings o ON o.channel_id=c.id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN founder_signatures sg ON sg.member_id=m.id WHERE c.live_until>? ORDER BY view_count DESC,COALESCE(o.featured,0) DESC,c.updated_at DESC LIMIT 60',(stamp(now_utc()),)).fetchall()
     own=own_channel()
     from subscriptions import decorate
     return jsonify(video_ready=live_ready(),streamer_active=publisher_allowed(),live_price_cents=2500,live_trial_months=0,live_trial_days=0,private_preview=private_preview_allowed(),gift_commission_bps=0,
@@ -255,6 +255,31 @@ def room_access(channel_id):
         layout=conn.execute('SELECT layout FROM live_stage_layouts WHERE channel_id=?',(channel_id,)).fetchone()
     return jsonify(allowed=True,layout=layout['layout'] if layout else 'auto',ended=channel['live_until'] is None,listed=bool(channel['live_until'] and channel['live_until']>stamp(now_utc())))
 
+
+def viewer_connected(channel,user):
+    """Verify the viewer is actually present in LiveKit before counting a view."""
+    try:
+        instant=int(time.time());token=sign_token({'iss':os.environ['LIVEKIT_API_KEY'].strip(),'iat':instant,'nbf':instant-5,'exp':instant+45,'video':{'roomAdmin':True,'room':channel['room_name']}})
+        url='https://'+urlparse(os.environ['LIVEKIT_URL']).netloc+'/twirp/livekit.RoomService/ListParticipants'
+        with requests.post(url,json={'room':channel['room_name']},headers={'Authorization':'Bearer '+token},timeout=(2,4),allow_redirects=False) as response:
+            if response.status_code!=200:return False
+            return any(str(p.get('identity','')).startswith('maggy-'+user['id']+'-') for p in response.json().get('participants',[]))
+    except (KeyError,TypeError,ValueError,requests.RequestException):return False
+
+@bp.post('/api/streamers/<channel_id>/view')
+def count_view(channel_id):
+    user=get_user();day=now_utc().date().isoformat()
+    with database() as conn:
+        channel=conn.execute('SELECT * FROM streamer_channels WHERE id=?',(channel_id,)).fetchone()
+        if not channel or not channel['live_until'] or channel['live_until']<=stamp(now_utc()):return jsonify(error='Este canal no está en directo.'),404
+        from subscriptions import watch_allowed
+        if not watch_allowed(conn,channel,user):return jsonify(error='Este canal es exclusivo.'),403
+        if channel['member_id']==user['id'] or conn.execute('SELECT 1 FROM live_channel_views WHERE channel_id=? AND member_id=? AND day=?',(channel_id,user['id'],day)).fetchone():return jsonify(recorded=False)
+    if not allow_attempt('live-view-count',limit=30):return jsonify(error='Espera antes de volver a intentarlo.'),429
+    if not live_ready() or not viewer_connected(channel,user):return jsonify(recorded=False),202
+    with database() as conn:
+        result=conn.execute('INSERT INTO live_channel_views(channel_id,member_id,day) VALUES(?,?,?) ON CONFLICT(channel_id,member_id,day) DO NOTHING',(channel_id,user['id'],day))
+    return jsonify(recorded=bool(result.rowcount))
 
 @bp.post('/api/streamers/<channel_id>/token')
 def token(channel_id):
