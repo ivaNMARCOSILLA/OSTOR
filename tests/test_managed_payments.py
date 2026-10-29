@@ -63,6 +63,72 @@ class ManagedPaymentTests(unittest.TestCase):
    with app.app.app_context():p.send_annual_access_emails()
    self.assertEqual(len([call for call in deliver.call_args_list if call.args[0]=='verified@example.test']),1)
 
+ def test_annual_email_delivery_failure_keeps_paid_access_and_retries(self):
+  with app.app.app_context(),m.database() as c:
+   c.execute('INSERT INTO member_profiles(member_id,email,nickname,email_verified,updated_at) VALUES(?,?,?,?,?)',(self.ident,'retry@example.test','Cliente',1,m.stamp(m.now_utc())))
+  order=self.checkout()
+  with patch('notifications.mail_ready',return_value=True),patch('notifications.notify'),patch('notifications.deliver_to',side_effect=RuntimeError('local mail outage')):
+   self.assertEqual(self.event(order).status_code,200)
+  self.assertTrue(self.client.get('/api/account/me').json['user']['live_annual'])
+  with app.app.app_context(),m.database() as c:
+   self.assertEqual(c.execute('SELECT status FROM annual_access_emails WHERE order_id=?',(order['id'],)).fetchone()['status'],'pending')
+  with patch('notifications.mail_ready',return_value=True),patch('notifications.deliver_to') as mail:
+   response=self.post(self.admin,'/api/admin/notifications/retry',{})
+   self.assertEqual(response.status_code,200)
+   self.assertEqual(len([call for call in mail.call_args_list if call.args[0]=='retry@example.test']),1)
+  with app.app.app_context(),m.database() as c:
+   self.assertEqual(c.execute('SELECT status FROM annual_access_emails WHERE order_id=?',(order['id'],)).fetchone()['status'],'sent')
+
+ def test_annual_email_never_uses_unverified_address(self):
+  with app.app.app_context(),m.database() as c:
+   c.execute('INSERT INTO member_profiles(member_id,email,nickname,email_verified,updated_at) VALUES(?,?,?,?,?)',(self.ident,'unverified@example.test','Cliente',0,m.stamp(m.now_utc())))
+  order=self.checkout()
+  with patch('notifications.mail_ready',return_value=True),patch('notifications.notify'),patch('notifications.deliver_to') as mail:
+   self.assertEqual(self.event(order).status_code,200);mail.assert_not_called()
+  with app.app.app_context(),m.database() as c:self.assertIsNone(c.execute('SELECT order_id FROM annual_access_emails WHERE order_id=?',(order['id'],)).fetchone())
+
+ def test_pending_annual_email_is_not_sent_after_payment_reversal(self):
+  with app.app.app_context(),m.database() as c:
+   c.execute('INSERT INTO member_profiles(member_id,email,nickname,email_verified,updated_at) VALUES(?,?,?,?,?)',(self.ident,'cancelled@example.test','Cliente',1,m.stamp(m.now_utc())))
+  order=self.checkout()
+  with patch('notifications.mail_ready',return_value=False):self.assertEqual(self.event(order).status_code,200)
+  with app.app.app_context(),m.database() as c:c.execute('UPDATE stripe_orders SET reversed_at=? WHERE id=?',(m.stamp(m.now_utc()),order['id']))
+  with app.app.app_context(),patch('notifications.mail_ready',return_value=True),patch('notifications.deliver_to') as mail:
+   self.assertEqual(p.send_annual_access_emails(),0);mail.assert_not_called()
+
+ def test_connect_oauth_binds_state_to_account_and_consumes_it_once(self):
+  from urllib.parse import urlsplit,parse_qs
+  with patch.dict('os.environ',{'VERCEL_ENV':'production','STRIPE_SECRET_KEY':' sk_live_local_fixture\n','STRIPE_CONNECT_CLIENT_ID':' ca_local_fixture\n'}):
+   result=self.post(self.admin,'/api/payments/connect',{})
+   self.assertEqual(result.status_code,200,result.json)
+   url=urlsplit(result.json['url']);query=parse_qs(url.query)
+   self.assertEqual(url.netloc,'connect.stripe.com');self.assertEqual(query['client_id'],['ca_local_fixture'])
+   callback='/api/payments/connect-return?state='+query['state'][0]+'&code=local_fixture'
+   with patch.object(p,'stripe',return_value={'stripe_user_id':'acct_verifiedfixture','livemode':True,'access_token':'never_store_this'}) as stripe:
+    self.assertEqual(self.client.get(callback).status_code,403)
+    stripe.assert_not_called()
+    response=self.admin.get(callback)
+    self.assertEqual(response.status_code,302);self.assertEqual(response.location,'/live?stripe=connected#creator-subscriptions')
+    self.assertEqual(self.admin.get(callback).status_code,403)
+    stripe.assert_called_once_with('POST','/oauth/token',{'grant_type':'authorization_code','code':'local_fixture'},oauth=True)
+   with app.app.app_context(),m.database() as c:
+    linked=c.execute('SELECT * FROM stripe_accounts').fetchone()
+    self.assertEqual(linked['account_id'],'acct_verifiedfixture');self.assertNotIn('never_store_this',str(dict(linked)))
+
+ def test_connect_oauth_rejects_test_account_and_expired_state(self):
+  from urllib.parse import urlsplit,parse_qs
+  with patch.dict('os.environ',{'VERCEL_ENV':'production','STRIPE_SECRET_KEY':'sk_live_local_fixture','STRIPE_CONNECT_CLIENT_ID':'ca_local_fixture'}):
+   result=self.post(self.admin,'/api/payments/connect',{})
+   token=parse_qs(urlsplit(result.json['url']).query)['state'][0]
+   with patch.object(p,'stripe',return_value={'stripe_user_id':'acct_testfixture','livemode':False}):
+    self.assertEqual(self.admin.get('/api/payments/connect-return?state='+token+'&code=local').status_code,409)
+   result=self.post(self.admin,'/api/payments/connect',{});token=parse_qs(urlsplit(result.json['url']).query)['state'][0]
+   with app.app.app_context(),m.database() as c:
+    c.execute('UPDATE stripe_connect_states SET expires_at=?',(m.stamp(m.now_utc()-timedelta(minutes=1)),))
+   with patch.object(p,'stripe') as stripe:
+    self.assertEqual(self.admin.get('/api/payments/connect-return?state='+token+'&code=local').status_code,403);stripe.assert_not_called()
+   with app.app.app_context(),m.database() as c:self.assertIsNone(c.execute('SELECT * FROM stripe_accounts').fetchone())
+
  def test_no_charge_before_configuration_and_browser_return_never_grants(self):
   self.assertFalse(self.client.get('/api/payments/status').json['enabled'])
   self.assertEqual(self.post(self.client,'/api/payments/checkout',{'annual_terms':True}).status_code,409)

@@ -31,7 +31,7 @@ class PostgresMembershipTests(unittest.TestCase):
         ready=patch('streamers.streamer_sales_ready',return_value=True);ready.start();self.addCleanup(ready.stop)
         self.app=application.app
         with self.app.app_context(),m.database() as connection:
-            for table in ['fan_aliases','stripe_reversals','stripe_events','stripe_orders','stripe_connect_states','stripe_accounts','ol_supervisors','ol_operations','moderator_permissions','two_factor_recovery','member_two_factor','community_audiences','creator_subscriptions','channel_subscription_settings','subscription_approvals','subscription_agreements','pricing_moderators','founder_slot_history','live_launch','creator_daily_activity','founder_activity','live_entitlements','human_challenges','promotion_metrics','online_presence','founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:
+            for table in ['annual_access_emails','fan_aliases','stripe_reversals','stripe_events','stripe_orders','stripe_connect_states','stripe_accounts','ol_supervisors','ol_operations','moderator_permissions','two_factor_recovery','member_two_factor','community_audiences','creator_subscriptions','channel_subscription_settings','subscription_approvals','subscription_agreements','pricing_moderators','founder_slot_history','live_launch','creator_daily_activity','founder_activity','live_entitlements','human_challenges','promotion_metrics','online_presence','founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:
                 connection.execute('DELETE FROM '+table)
         with self.app.app_context():
             m.create_admin('pg-admin','postgres-admin-password-123')
@@ -57,25 +57,31 @@ class PostgresMembershipTests(unittest.TestCase):
     def grant(self,client,plan,reference):
         return legacy_payment(self.app,client,self.member['id'],plan,reference)
 
-    def test_trial_slot_expiry_reallocation_and_private_history(self):
-        with patch('streamers.live_ready',return_value=True),patch('live_access.video_service_available',return_value=True):
-            trial=self.post(self.client,'/api/account/live-trial',{})
-            self.assertEqual(trial.status_code,200)
-            self.assertEqual(trial.json['founder_number'],1)
-            with self.app.app_context(),m.database() as conn:
-                conn.execute('UPDATE live_entitlements SET trial_until=? WHERE member_id=?',(m.stamp(m.now_utc()-m.timedelta(seconds=1)),self.member['id']))
-            second=self.app.test_client()
-            self.assertEqual(self.post(second,'/api/account/register',{'username':'pg-next-holder','password':'postgres-next-holder-password-123'}).status_code,201)
-            newtrial=self.post(second,'/api/account/live-trial',{})
-            self.assertEqual(newtrial.status_code,200)
-            self.assertEqual(newtrial.json['founder_number'],1)
-            self.assertIsNone(self.client.get('/api/account/me').json['user']['founder_number'])
-            history=self.admin.get('/api/admin/founders/history').json
-            self.assertEqual(history['total'],1)
-            self.assertEqual(history['history'][0]['username'],'pg-client')
-            retry=self.post(self.client,'/api/account/live-trial',{})
-            self.assertTrue(retry.json['already_started'])
-            self.assertIsNone(retry.json['founder_number'])
+    def annual_fixture(self,client):
+        ident=client.get('/api/account/me').json['user']['id']
+        with self.app.app_context(),m.database() as c:
+            c.execute('UPDATE members SET access_until=? WHERE id=?',(m.stamp(m.end_of_plan(m.now_utc(),'annual')),ident))
+            c.execute('INSERT INTO live_entitlements(member_id,paid_at) VALUES(?,?) ON CONFLICT(member_id) DO UPDATE SET paid_at=excluded.paid_at',(ident,m.stamp(m.now_utc())))
+        return ident
+
+    def test_retired_trial_rejected_and_paid_founder_expiry_reallocated(self):
+        self.assertEqual(self.post(self.client,'/api/account/live-trial',{}).status_code,410)
+        self.assertEqual(self.post(self.client,'/api/live/founders/claim',{}).status_code,409)
+        self.annual_fixture(self.client)
+        claim=self.post(self.client,'/api/live/founders/claim',{})
+        self.assertEqual(claim.status_code,200,claim.json)
+        with self.app.app_context(),m.database() as conn:
+            conn.execute('UPDATE members SET access_until=? WHERE id=?',(m.stamp(m.now_utc()-m.timedelta(seconds=1)),self.member['id']))
+        second=self.app.test_client()
+        self.assertEqual(self.post(second,'/api/account/register',{'username':'pg-next-holder','password':'postgres-next-holder-password-123'}).status_code,201)
+        self.annual_fixture(second)
+        next_claim=self.post(second,'/api/live/founders/claim',{})
+        self.assertEqual(next_claim.status_code,200,next_claim.json)
+        self.assertEqual(next_claim.json['number'],1)
+        self.assertIsNone(self.client.get('/api/account/me').json['user']['founder_number'])
+        history=self.admin.get('/api/admin/founders/history').json
+        self.assertEqual(history['total'],1)
+        self.assertEqual(history['history'][0]['reason'],'annual_expired')
 
     def test_managed_platform_payment_signed_receipt_survives_retries(self):
         import payments as gateway
@@ -83,7 +89,7 @@ class PostgresMembershipTests(unittest.TestCase):
         with self.app.app_context(),m.database() as conn:
             conn.execute('INSERT INTO live_entitlements(member_id,trial_started_at,trial_until) VALUES(?,?,?)',(self.member['id'],m.stamp(m.now_utc()-m.timedelta(days=100)),m.stamp(m.now_utc()-m.timedelta(days=1))))
         with patch.dict(os.environ,{'OL_PAYMENT_PROVIDER':'stripe','STRIPE_WEBHOOK_SECRET':'whsec_postgres_local_test'}),patch.object(gateway,'ready',return_value=True),patch.object(gateway,'stripe',return_value={'id':'cs_postgres_local_test','url':'https://checkout.stripe.com/c/pay/local-test'}):
-            result=self.post(self.client,'/api/payments/checkout',{})
+            result=self.post(self.client,'/api/payments/checkout',{'annual_terms':True})
             self.assertEqual(result.status_code,200)
             with self.app.app_context(),m.database() as conn:order=conn.execute('SELECT * FROM stripe_orders WHERE checkout_id=?',('cs_postgres_local_test',)).fetchone()
             event={'id':'evt_postgres_local_test','livemode':True,'type':'checkout.session.completed','data':{'object':{'id':order['checkout_id'],'payment_status':'paid','amount_total':2500,'currency':'eur','metadata':{'ol_order':order['id']},'payment_intent':'pi_postgres_local_test'}}}
@@ -93,24 +99,25 @@ class PostgresMembershipTests(unittest.TestCase):
             second=self.app.test_client().post('/api/payments/webhook/platform',data=raw,headers=headers)
             self.assertTrue(second.json['duplicate'])
             me=self.client.get('/api/account/me').json
-            self.assertTrue(me['user']['live_lifetime']);self.assertEqual(len(me['payments']),1)
+            self.assertTrue(me['user']['live_annual']);self.assertFalse(me['user']['live_lifetime']);self.assertEqual(len(me['payments']),1)
             with self.app.app_context(),m.database() as conn:self.assertEqual(conn.execute('SELECT COUNT(*) AS n FROM stripe_events').fetchone()['n'],1)
 
     def test_creator_agreement_receipt_and_private_benefits_persist(self):
         with self.app.app_context(),m.database() as conn:
             conn.execute('INSERT INTO live_entitlements(member_id,paid_at) VALUES(?,?)',(self.member['id'],m.stamp(m.now_utc())))
+        self.annual_fixture(self.client)
         gref=self.app.test_client();viewer=self.app.test_client()
         self.assertEqual(self.post(gref,'/api/account/register',{'username':'gref','password':'postgres-moderator-password-123'}).status_code,201)
         self.assertEqual(self.post(viewer,'/api/account/register',{'username':'pg-subscriber','password':'postgres-subscriber-password-123'}).status_code,201)
         self.assertEqual(self.post(self.admin,'/api/admin/subscription-moderator',{'username':'Gref'}).status_code,200)
         self.assertEqual(self.post(self.admin,'/api/admin/moderator-permissions',{'permissions':['review_agreements','approve_agreements']}).status_code,200)
         channel=self.post(self.client,'/api/streamers/me',{'title':'PG creator channel','paypal_url':'https://paypal.me/CreatorOnly','owns_paypal':True}).json['channel']['id']
-        agreement=self.post(self.client,'/api/channel-subscriptions/propose',{'price_cents':500,'period':'month','benefits':['badge','subscriber_chat']}).json['agreement_id']
+        agreement=self.post(self.client,'/api/channel-subscriptions/propose',{'price_cents':350,'period':'month','benefits':['badge','subscriber_chat']}).json['agreement_id']
         for client,party in [(self.client,'creator'),(self.admin,'admin'),(gref,'moderator')]:
             result=self.post(client,'/api/channel-subscriptions/approve',{'agreement_id':agreement,'party':party})
             self.assertEqual(result.status_code,200)
         self.assertTrue(result.json['agreement_activated'])
-        receipt={'username':'pg-subscriber','reference':'PG-CREATOR-RECEIPT-001','amount_cents':500,'verified_receipt':True}
+        receipt={'username':'pg-subscriber','reference':'PG-CREATOR-RECEIPT-001','amount_cents':350,'verified_receipt':True}
         self.assertEqual(self.post(self.client,'/api/channel-subscriptions/'+channel+'/confirm',receipt).status_code,200)
         self.assertEqual(self.post(self.client,'/api/channel-subscriptions/'+channel+'/confirm',receipt).status_code,409)
         public=viewer.get('/api/channel-subscriptions/'+channel).json
@@ -160,6 +167,7 @@ class PostgresMembershipTests(unittest.TestCase):
                 connection.execute('INSERT INTO live_founders(member_id,number,claimed_at) VALUES(?,?,?)',(ident,number,m.stamp(m.now_utc())))
         other=self.app.test_client()
         self.assertEqual(self.post(other,'/api/account/register',{'username':'pg-other-founder','password':'postgres-other-password-123'}).status_code,201)
+        self.annual_fixture(self.client);self.annual_fixture(other)
         with ThreadPoolExecutor(max_workers=2) as pool:
             futures=[pool.submit(self.post,client,'/api/live/founders/claim',{}) for client in [self.client,other]]
             results=[future.result() for future in futures]
@@ -195,18 +203,32 @@ class PostgresMembershipTests(unittest.TestCase):
             self.assertFalse(self.client.get('/api/account/me').json['user']['active'])
             self.assertEqual(self.client.get('/api/streamers').status_code,402)
 
-    def test_concurrent_lifetime_payment_after_trial_is_single_use(self):
-        with self.app.app_context(),m.database() as conn:
-            conn.execute('INSERT INTO live_entitlements(member_id,trial_started_at,trial_until) VALUES(?,?,?)',(self.member['id'],m.stamp(m.now_utc()-m.timedelta(days=100)),m.stamp(m.now_utc()-m.timedelta(days=1))))
-        devices=[self.admin_client(),self.admin_client()]
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            futures=[pool.submit(self.post,device,'/api/admin/confirm-payment',{'member_id':self.member['id'],'plan':'lifetime','reference':'PG-ONCE-'+str(index)}) for index,device in enumerate(devices)]
-            self.assertEqual(sorted(future.result().status_code for future in futures),[200,409])
+    def test_concurrent_signed_annual_webhooks_grant_only_one_year(self):
+        import payments as gateway
+        import hashlib,hmac,json,time
+        with patch.dict(os.environ,{'OL_PAYMENT_PROVIDER':'stripe','STRIPE_WEBHOOK_SECRET':'whsec_postgres_concurrent'}),patch.object(gateway,'ready',return_value=True),patch.object(gateway,'stripe',return_value={'id':'cs_postgres_concurrent','url':'https://checkout.stripe.com/c/pay/local-test'}):
+            result=self.post(self.client,'/api/payments/checkout',{'annual_terms':True})
+            self.assertEqual(result.status_code,200,result.json)
+            with self.app.app_context(),m.database() as conn:order=conn.execute('SELECT * FROM stripe_orders WHERE checkout_id=?',('cs_postgres_concurrent',)).fetchone()
+            def send(index):
+                event={'id':'evt_pg_concurrent_'+str(index),'livemode':True,'type':'checkout.session.completed','data':{'object':{'id':order['checkout_id'],'payment_status':'paid','amount_total':2500,'currency':'eur','metadata':{'ol_order':order['id']},'payment_intent':'pi_pg_concurrent'}}}
+                raw=json.dumps(event).encode();timestamp=str(int(time.time()));sig=hmac.new(b'whsec_postgres_concurrent',timestamp.encode()+b'.'+raw,hashlib.sha256).hexdigest()
+                return self.app.test_client().post('/api/payments/webhook/platform',data=raw,headers={'Content-Type':'application/json','Stripe-Signature':'t='+timestamp+',v1='+sig})
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                results=list(pool.map(send,range(32)))
+            self.assertEqual([r.status_code for r in results],[200]*32)
         data=self.client.get('/api/account/me').json
-        self.assertTrue(data['user']['live_lifetime'])
-        self.assertTrue(data['user']['streamer_active'])
-        self.assertEqual(len(data['payments']),1)
-        self.assertEqual(data['payments'][0]['amount_cents'],2500)
+        self.assertTrue(data['user']['live_annual']);self.assertTrue(data['user']['streamer_active'])
+        self.assertEqual(len(data['payments']),1);self.assertEqual(data['payments'][0]['amount_cents'],2500)
+
+    def test_six_simultaneous_registrations_cannot_duplicate_username(self):
+        devices=[self.app.test_client() for _ in range(6)]
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            results=list(pool.map(lambda client:self.post(client,'/api/account/register',{'username':'pg-shared-name','password':'postgres-concurrent-password-123'}),devices))
+        self.assertEqual(sorted(r.status_code for r in results),[201,400,400,400,400,400])
+        with self.app.app_context(),m.database() as c:
+            rows=c.execute('SELECT role FROM members WHERE username=?',('pg-shared-name',)).fetchall()
+            self.assertEqual(len(rows),1);self.assertEqual(rows[0]['role'],'member')
 
     def test_concurrent_invitation_is_single_use(self):
         invite=self.post(self.admin,'/api/admin/invite',{'username':'pg-friend'}).json
@@ -255,7 +277,7 @@ class PostgresMembershipTests(unittest.TestCase):
                 legacy_payment(source,admin,ident,'welcome','SQLITE-MIGRATE-001')
                 expected=client.get('/api/account/me').json['user']['access_until']
             with self.app.app_context(),m.database() as connection:
-                for table in ['fan_aliases','stripe_reversals','stripe_events','stripe_orders','stripe_connect_states','stripe_accounts','ol_supervisors','ol_operations','moderator_permissions','two_factor_recovery','member_two_factor','community_audiences','creator_subscriptions','channel_subscription_settings','subscription_approvals','subscription_agreements','pricing_moderators','founder_slot_history','live_launch','creator_daily_activity','founder_activity','live_entitlements','human_challenges','promotion_metrics','founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:connection.execute('DELETE FROM '+table)
+                for table in ['annual_access_emails','fan_aliases','stripe_reversals','stripe_events','stripe_orders','stripe_connect_states','stripe_accounts','ol_supervisors','ol_operations','moderator_permissions','two_factor_recovery','member_two_factor','community_audiences','creator_subscriptions','channel_subscription_settings','subscription_approvals','subscription_agreements','pricing_moderators','founder_slot_history','live_launch','creator_daily_activity','founder_activity','live_entitlements','human_challenges','promotion_metrics','founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:connection.execute('DELETE FROM '+table)
             counts=migrate(Path(folder)/'members.sqlite3',self.app)
             self.assertEqual(counts['members'],2);self.assertEqual(counts['payments'],1)
             migrated=self.app.test_client()

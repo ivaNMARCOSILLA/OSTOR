@@ -20,8 +20,9 @@ def run():
    assert 'paypal' not in page.locator('body').inner_text().lower()
    assert page.locator('a[href*="paypal"],a[href*="checkout.stripe.com"]').count()==0
   page.locator('body').evaluate("e=>e.style.zoom='2'");assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+2'),page.evaluate("[...document.querySelectorAll('body *')].filter(e=>e.getBoundingClientRect().right>innerWidth+2&&e.getClientRects().length).slice(0,12).map(e=>[e.tagName,e.id,e.className,e.getBoundingClientRect().right])");page.locator('body').evaluate("e=>e.style.zoom=''")
-  page.goto(BASE_URL+'/account');page.wait_for_function("document.querySelector('#trial-start').textContent.includes('Próximo estreno')")
-  assert page.locator('#trial-start').is_disabled()
+  page.goto(BASE_URL+'/account');page.wait_for_function("document.querySelector('#trial-start').textContent.includes('Crear cuenta o entrar')")
+  assert page.locator('#trial-start').is_enabled()
+  assert page.locator('#pricing').is_hidden()
   admin_context=browser.new_context();login_context(admin_context)
   admin=admin_context.new_page();admin.goto(BASE_URL+'/live')
   admin.locator('#video-setup').wait_for(state='visible')

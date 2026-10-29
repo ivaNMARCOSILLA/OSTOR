@@ -23,9 +23,9 @@ def run():
    page.goto(BASE_URL+'/account');page.wait_for_function('Boolean(window.OlNavigation)')
    # A known old link is repaired to the real registration form, never a guessed route.
    page.evaluate("()=>{const a=document.createElement('a');a.id='old-register-shortcut';a.href='#register';a.textContent='Crear cuenta';document.querySelector('header').append(a);window.OlNavigation.check();}")
-   assert page.locator('#old-register-shortcut').get_attribute('href')=='/account#register-form'
+   assert page.locator('#old-register-shortcut').get_attribute('href')=='/account#credentials'
    page.locator('#old-register-shortcut').click();assert page.locator('#register-form').is_visible()
-   assert page.evaluate("document.activeElement.id==='register-form'")
+   assert page.evaluate("document.activeElement.id==='credentials'")
    assert page.evaluate('window.OlNavigation.check().broken.length')==0
    assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+2'),width
   # Backward-compatible section aliases still open their actual working page.

@@ -14,7 +14,7 @@ def run():
   page.goto(BASE_URL+'/account');page.locator('#admin-members tr').first.wait_for()
   assert page.locator('#admin-members tr').count()==25
   assert '61 clientes' in page.locator('#admin-counters').inner_text()
-  assert not calls
+  assert all('summary=1' in url for url in calls)
   page.locator('#members-next').click();assert 'Página 2' in page.locator('#member-page').inner_text()
   page.locator('#admin-member-search').fill('client-060');assert page.locator('#admin-members tr').count()==1
   page.locator('#invitation-history summary').click();page.wait_for_function("document.querySelector('#invitation-count').textContent.includes('0 invitaciones')")

@@ -31,7 +31,7 @@ def run():
   page.evaluate('deviceMedia.handlers.play()');assert page.evaluate('testYouTube.getPlayerState()')==1
   page.evaluate('deviceMedia.handlers.nexttrack()');page.wait_for_function("document.querySelector('#player-title').textContent==='Second video'&&window.testYouTube.getPlayerState()===1")
   page.evaluate('deviceMedia.handlers.previoustrack()');page.wait_for_function("document.querySelector('#player-title').textContent==='Piano video'&&window.testYouTube.getPlayerState()===1")
-  assert 'Ol no envía una orden de pausa' in page.locator('#youtube-playback-trace').text_content()
+  assert 'electronicama no envía una orden de pausa' in page.locator('#youtube-playback-trace').text_content()
   page.evaluate("window.olHidden=false;document.dispatchEvent(new Event('visibilitychange'))")
   page.locator('.youtube-diagnostics summary').click()
   with page.expect_download() as report:page.locator('.youtube-diagnostics button').click()

@@ -13,6 +13,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def run():
+    selected=sys.argv[1:] or ['test_preview_browser.py','test_audio_browser.py','test_membership_browser.py','test_streamers_browser.py']
+    # Suites must not inherit other suites' accounts, invitations or rewards.
+    if len(selected)>1:
+        for name in selected:
+            subprocess.run([sys.executable,str(Path(__file__).resolve()),name],cwd=ROOT,check=True)
+        return
     with tempfile.TemporaryDirectory() as directory:
         os.environ.setdefault('OL_PAYMENT_PROVIDER','legacy_paypal')
         os.environ.setdefault('OL_LIVE_PREMIERE','0')
@@ -32,6 +38,19 @@ def run():
             with target.open('a') as stream:stream.write(json.dumps({'recipient':recipient,'title':title,'body':body})+'\n')
         delivery_patch=patch.object(email_security,'deliver_to',side_effect=capture_mail);delivery_patch.start()
         mail_ready_patch=patch.object(email_security,'mail_ready',return_value=True);mail_ready_patch.start()
+        stripe_fixture_patches=[]
+        if selected==['test_annual_checkout_browser.py']:
+            import payments,notifications
+            from urllib.parse import urlencode
+            def stripe_fixture(method,path,data=None,**kwargs):
+                if method=='POST' and path=='/checkout/sessions':
+                    assert data['mode']=='payment' and data['line_items[0][price_data][unit_amount]']=='2500'
+                    assert data['metadata[annual_terms_version]']=='2026-10-29-v1'
+                    checkout='cs_local_'+secrets.token_hex(8)
+                    return {'id':checkout,'url':'https://checkout.stripe.com/c/pay/local-fixture?'+urlencode({'order':data['metadata[ol_order]'],'checkout':checkout})}
+                raise AssertionError('Unexpected external Stripe operation: '+path)
+            stripe_fixture_patches=[patch.dict(os.environ,{'OL_PAYMENT_PROVIDER':'stripe','OL_LIVE_PREMIERE':'0','STRIPE_WEBHOOK_SECRET':'whsec_browser_local_fixture'}),patch.object(payments,'ready',return_value=True),patch.object(payments,'stripe',side_effect=stripe_fixture),patch.object(notifications,'mail_ready',return_value=True),patch.object(notifications,'deliver_to',side_effect=capture_mail)]
+            for fixture in stripe_fixture_patches:fixture.start()
         from membership import create_admin
         from werkzeug.serving import make_server, WSGIRequestHandler
         password=secrets.token_urlsafe(32)
@@ -42,11 +61,11 @@ def run():
         thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
         child_env=dict(os.environ,MAGGY_TEST_BASE_URL=f'http://127.0.0.1:{server.server_port}',MAGGY_TEST_USER='browser-admin',MAGGY_TEST_PASSWORD=password,OL_TEST_MAIL_CAPTURE_DIR=str(mail_directory))
         try:
-            selected=sys.argv[1:] or ['test_preview_browser.py','test_audio_browser.py','test_membership_browser.py','test_streamers_browser.py']
             for name in selected:
                 subprocess.run([sys.executable,str(ROOT/'tests'/name)],cwd=ROOT,env=child_env,check=True)
         finally:
             server.shutdown();server.server_close();delivery_patch.stop();mail_ready_patch.stop()
+            for fixture in reversed(stripe_fixture_patches):fixture.stop()
 
 
 if __name__=='__main__':run()

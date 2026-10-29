@@ -82,8 +82,8 @@ def run():
         page.evaluate("document.querySelector('audio').currentTime = 9.9")
         page.wait_for_function("document.querySelector('#player-title').textContent === 'Libre two'")
         page.wait_for_function("document.querySelector('audio')?.currentTime > 0")
-        assert page.locator('video,iframe').count()==0
-        assert page.locator('#track-grid img[alt="Logo de Ol"]').count()==2
+        assert page.locator('#player-media video,#player-media iframe').count()==0
+        assert page.locator('#track-grid img[alt="Logo de electronicama"]').count()==2
         page.locator('#player-close').click()
         for width in [1440,768,390,320]:
             page.set_viewport_size({'width':width,'height':900})

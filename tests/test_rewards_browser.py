@@ -35,7 +35,7 @@ def run():
    page.set_viewport_size({'width':width,'height':900});assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+2'),width
   page.goto(BASE_URL+'/streamers#ol-collection');page.locator('.collection-sticker').first.wait_for()
   assert page.locator('#comment-stickers button').count()==1
-  assert page.locator('#comment-stickers button').first.get_attribute('aria-label')=='Enviar sticker Creador de Ol'
+  assert page.locator('#comment-stickers button').first.get_attribute('aria-label')=='Enviar sticker Creador de electronicama'
   assert not errors,errors
   browser.close()
  print('OK: 1000-sticker album, pagination, numeric search, owned filter, manual sound, chat picker, 4 widths')
