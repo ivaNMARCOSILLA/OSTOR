@@ -72,6 +72,15 @@ def init_database():
           created_at TEXT NOT NULL, access_until TEXT,
           welcome_used INTEGER NOT NULL DEFAULT 0, session_version INTEGER NOT NULL DEFAULT 0
         );
+        CREATE TABLE IF NOT EXISTS guest_visits (
+          id TEXT PRIMARY KEY,started_at TEXT NOT NULL,last_seen TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS guest_navigation_events (
+          id TEXT PRIMARY KEY,visit_id TEXT NOT NULL REFERENCES guest_visits(id) ON DELETE CASCADE,
+          sequence INTEGER NOT NULL,kind TEXT NOT NULL,page TEXT NOT NULL,target TEXT NOT NULL,created_at TEXT NOT NULL,
+          UNIQUE(visit_id,sequence)
+        );
+        CREATE INDEX IF NOT EXISTS guest_navigation_visit ON guest_navigation_events(visit_id,sequence);
         CREATE TABLE IF NOT EXISTS live_stage_layouts (
           channel_id TEXT PRIMARY KEY,layout TEXT NOT NULL,updated_at TEXT NOT NULL
         );
@@ -281,7 +290,7 @@ def verify_csrf():
 def restrict_music():
     # Music is free. Account collections require login; Ol Livis requires premium.
     path=request.path
-    if not path.startswith('/api/') or path.startswith(('/api/account/','/api/admin/','/api/play/','/api/resolve/','/api/channel-subscriptions/','/api/payments/')) or path in {'/api/status','/api/search','/api/trending','/api/proxy','/api/promotion/event','/api/presence','/api/live/catalogue','/api/live/founders','/api/live/founders/claim'}:
+    if not path.startswith('/api/') or path.startswith(('/api/account/','/api/admin/','/api/play/','/api/resolve/','/api/channel-subscriptions/','/api/payments/')) or path in {'/api/navigation/events','/api/navigation/consent','/api/status','/api/search','/api/trending','/api/proxy','/api/promotion/event','/api/presence','/api/live/catalogue','/api/live/founders','/api/live/founders/claim'}:
         return None
     if path.startswith('/api/stickers/') and path.endswith('/phrase'):return None
     if path.endswith('/sound.wav') and path.startswith(('/api/stickers/','/api/live/founders/')):return None

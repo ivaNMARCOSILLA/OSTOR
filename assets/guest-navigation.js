@@ -1,0 +1,19 @@
+/* Optional first-party guest journeys. Never collect field values, queries, fragments or user identity. */
+(()=>{
+ const key='electronicama_navigation_consent_v1';let csrf='',guest=false,ready=false,allowed=false,busy=false,timer=null,queue=[];
+ const pages=new Set(['/','/live','/account','/legal/privacidad.html','/legal/cookies.html','/legal/aviso-legal.html']);
+ const page=()=>location.pathname==='/streamers'?'/live':location.pathname;
+ const preference=()=>{try{return localStorage.getItem(key)==='accepted'&&!navigator.globalPrivacyControl&&navigator.doNotTrack!=='1';}catch{return false;}};
+ async function identity(){try{const r=await fetch('/api/account/me',{cache:'no-store'});if(!r.ok)return false;const a=await r.json();csrf=a.csrf;guest=!a.user;ready=true;return guest;}catch{return false;}}
+ async function flush(){clearTimeout(timer);if(busy||!allowed||!ready||!guest||!queue.length)return;busy=true;const batch=queue.splice(0,20);try{const r=await fetch('/api/navigation/events',{method:'POST',keepalive:true,headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify({consent:true,events:batch})});if(r.ok){const d=await r.json();if(d.reason==='signed_in'){guest=false;queue=[];}}}catch{}finally{busy=false;if(queue.length)timer=setTimeout(flush,3000);}}
+ function record(kind,target=''){if(!allowed||!ready||!guest||!pages.has(page()))return;queue.push({kind,page:page(),target});if(queue.length>40)queue.shift();if(queue.length>=20)flush();else{clearTimeout(timer);timer=setTimeout(flush,1500);}}
+ async function consent(value){allowed=Boolean(value)&&preference();if(allowed){if(await identity())record('page');}else{queue=[];clearTimeout(timer);if(!csrf)await identity();if(csrf)fetch('/api/navigation/consent',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify({allowed:false})}).catch(()=>{});}}
+ const ids={'toggle-play':'reproducir-pausar','next-track':'siguiente-cancion','previous-track':'anterior-cancion','player-expand':'ampliar-reproductor','player-close':'cerrar-reproductor'};
+ document.addEventListener('click',event=>{const el=event.target.closest('button,a,summary');if(!el||el.closest('#admin-panel'))return;let target=ids[el.id];if(!target&&el.dataset.view&&['discover','favorites','history'].includes(el.dataset.view))target=({discover:'explorar',favorites:'favoritos',history:'historial'})[el.dataset.view];if(!target&&el.dataset.source)target=({AUDIUS:'fuente-audius',ARCHIVE:'fuente-archive',YOUTUBE:'fuente-youtube',MIX:'fuente-mix',RADIO:'fuente-radio'})[el.dataset.source];if(!target&&el.closest('.track-card'))target=el.matches('.save-button')?'guardar-favorito':'reproducir-musica';if(!target&&el.tagName==='SUMMARY'&&el.closest('#hologramas'))target='ver-hologramas';if(!target&&el.tagName==='SUMMARY'&&el.closest('#quick-style-picker'))target='abrir-estilos';if(!target&&el.tagName==='A'){try{const url=new URL(el.href,location.href);if(url.origin===location.origin)target=url.pathname.startsWith('/legal/')?'abrir-legal':url.pathname==='/account'?'abrir-cuenta':['/live','/streamers'].includes(url.pathname)?'abrir-ol-livis':url.pathname==='/'?'abrir-musica':null;}catch{}}if(target)record('click',target);},true);
+ document.addEventListener('submit',event=>{const target=({'search-form':'buscar-musica','register-form':'crear-cuenta','login-form':'iniciar-sesion'})[event.target.id];if(target)record('click',target);},true);
+ window.addEventListener('electronicama:navigation-consent',event=>consent(event.detail?.allowed));
+ window.addEventListener('storage',event=>{if(event.key===key)consent(preference());});
+ window.addEventListener('pagehide',flush);document.addEventListener('visibilitychange',()=>{if(document.hidden)flush();});
+ window.addEventListener('ol:account-refreshed',async()=>{if(await identity())return;queue=[];});
+ allowed=preference();if(allowed)identity().then(ok=>{if(ok)record('page');});
+})();

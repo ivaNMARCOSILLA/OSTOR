@@ -2,7 +2,7 @@
 import secrets
 from datetime import timedelta
 from flask import Blueprint, current_app, jsonify, request
-from itsdangerous import URLSafeSerializer, BadSignature
+from itsdangerous import URLSafeSerializer, URLSafeTimedSerializer, BadSignature
 from membership import database, get_user, now_utc, stamp, require_admin
 
 bp = Blueprint('analytics', __name__)
@@ -68,6 +68,79 @@ def statistics():
     return jsonify(online=presence, accounts=dict(counts), payments=dict(payments), founders=founders,
                    friends=friends, channels=channels, live=live, pending_notifications=pending,
                    days=days,promotion={row['event']:row['n'] for row in promotion}, updated_at=stamp(instant), timezone='UTC')
+
+
+JOURNEY_COOKIE='electronicama_navigation'
+JOURNEY_PAGES={'/','/live','/account','/legal/privacidad.html','/legal/cookies.html','/legal/aviso-legal.html'}
+JOURNEY_TARGETS={'explorar','favoritos','historial','buscar-musica','reproducir-musica','guardar-favorito','reproducir-pausar','siguiente-cancion','anterior-cancion','ampliar-reproductor','cerrar-reproductor','crear-cuenta','iniciar-sesion','abrir-musica','abrir-ol-livis','abrir-cuenta','abrir-legal','abrir-fuente','fuente-audius','fuente-archive','fuente-youtube','fuente-mix','fuente-radio','ver-hologramas','abrir-estilos'}
+
+def journey_identity():
+    import hashlib
+    signer=URLSafeTimedSerializer(current_app.secret_key,salt='guest-navigation-v1')
+    try:raw=signer.loads(request.cookies.get(JOURNEY_COOKIE,''),max_age=1800)
+    except BadSignature:raw=secrets.token_hex(16)
+    if not isinstance(raw,str) or len(raw)!=32:raw=secrets.token_hex(16)
+    return signer,raw,hashlib.sha256(raw.encode()).hexdigest()
+
+@bp.post('/api/navigation/events')
+def navigation_events():
+    from membership import payload,allow_attempt
+    import re
+    data=payload()
+    if get_user():
+        response=jsonify(recorded=False,reason='signed_in');response.delete_cookie(JOURNEY_COOKIE);return response
+    if data.get('consent') is not True or request.headers.get('Sec-GPC')=='1':return jsonify(recorded=False,reason='consent_required'),200
+    events=data.get('events')
+    if not isinstance(events,list) or not 1<=len(events)<=20:return jsonify(error='Lote de navegación no válido.'),400
+    validated=[]
+    for event in events:
+        if not isinstance(event,dict) or event.get('page') not in JOURNEY_PAGES or event.get('kind') not in {'page','click'}:return jsonify(error='Evento no válido.'),400
+        target=event.get('target','')
+        if not isinstance(target,str) or (event['kind']=='click' and target not in JOURNEY_TARGETS) or (event['kind']=='page' and target):return jsonify(error='Destino no válido.'),400
+        validated.append((event['kind'],event['page'],target))
+    if not allow_attempt('guest-navigation',limit=120):return jsonify(error='Espera antes de enviar más eventos.'),429
+    signer,raw,ident=journey_identity();instant=stamp(now_utc())
+    with database() as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        conn.execute('DELETE FROM guest_visits WHERE last_seen<?',(stamp(now_utc()-timedelta(days=7)),))
+        previous=conn.execute('SELECT last_seen FROM guest_visits WHERE id=?',(ident,)).fetchone()
+        if previous and previous['last_seen']<stamp(now_utc()-timedelta(minutes=30)):
+            import hashlib
+            raw=secrets.token_hex(16);ident=hashlib.sha256(raw.encode()).hexdigest()
+        conn.execute('INSERT INTO guest_visits VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET last_seen=excluded.last_seen',(ident,instant,instant))
+        seq=conn.execute('SELECT COALESCE(MAX(sequence),0) AS n FROM guest_navigation_events WHERE visit_id=?',(ident,)).fetchone()['n']
+        for kind,page,target in validated:
+            if seq>=500:break
+            seq+=1;conn.execute('INSERT INTO guest_navigation_events VALUES(?,?,?,?,?,?,?)',(secrets.token_hex(16),ident,seq,kind,page,target,instant))
+    response=jsonify(recorded=True)
+    response.set_cookie(JOURNEY_COOKIE,signer.dumps(raw),max_age=1800,httponly=True,secure=current_app.config['SESSION_COOKIE_SECURE'],samesite='Lax')
+    response.headers['Cache-Control']='no-store';return response
+
+@bp.post('/api/navigation/consent')
+def navigation_consent():
+    from membership import payload
+    if payload().get('allowed') is not False:return jsonify(error='Elección no válida.'),400
+    _,_,ident=journey_identity()
+    with database() as conn:conn.execute('DELETE FROM guest_visits WHERE id=?',(ident,))
+    response=jsonify(ok=True);response.delete_cookie(JOURNEY_COOKIE);response.headers['Cache-Control']='no-store';return response
+
+@bp.get('/api/admin/guest-journeys')
+@require_admin
+def guest_journeys():
+    import re
+    try:page=max(1,int(request.args.get('page',1)));event_page=max(1,int(request.args.get('event_page',1)))
+    except ValueError:return jsonify(error='Página no válida.'),400
+    ident=request.args.get('visit')
+    if ident and not re.fullmatch('[a-f0-9]{64}',ident):return jsonify(error='Sesión no válida.'),400
+    with database() as conn:
+        conn.execute('DELETE FROM guest_visits WHERE last_seen<?',(stamp(now_utc()-timedelta(days=7)),))
+        if ident:
+            total=conn.execute('SELECT COUNT(*) AS n FROM guest_navigation_events WHERE visit_id=?',(ident,)).fetchone()['n']
+            rows=conn.execute('SELECT sequence,kind,page,target,created_at FROM guest_navigation_events WHERE visit_id=? ORDER BY sequence LIMIT 50 OFFSET ?',(ident,(event_page-1)*50)).fetchall()
+            return jsonify(visit=ident,events=[dict(row) for row in rows],page=event_page,pages=max(1,(total+49)//50),total=total)
+        total=conn.execute('SELECT COUNT(*) AS n FROM guest_visits').fetchone()['n']
+        rows=conn.execute('SELECT v.id,v.started_at,v.last_seen,COUNT(e.id) AS events FROM guest_visits v LEFT JOIN guest_navigation_events e ON e.visit_id=v.id GROUP BY v.id,v.started_at,v.last_seen ORDER BY v.last_seen DESC,v.id LIMIT 25 OFFSET ?',(25*(page-1),)).fetchall()
+    return jsonify(visits=[dict(row) for row in rows],page=page,pages=max(1,(total+24)//25),total=total,retention_days=7,consented_only=True)
 
 
 def install(app):
