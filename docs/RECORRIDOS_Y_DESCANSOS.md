@@ -12,6 +12,6 @@ La cookie caduca tras 30 minutos de inactividad y los recorridos tras siete día
 
 ## Recordatorios locales de descanso
 
-Tras 30 minutos conectado a una sala se muestra un aviso adecuado para emisor o espectador. Se puede posponer diez minutos o cerrar hasta el siguiente intervalo de 30 minutos. No se pausa el vídeo, no se finaliza una emisión, no se enfoca ni se abre cámara o micrófono. El aviso está dentro del reproductor y también puede verse en pantalla completa. Terminar la conexión cancela su temporizador y una nueva sesión inicia su propio intervalo.
+Tras dos horas conectado a una sala se muestra un aviso adecuado para emisor o espectador. Tanto posponer como cerrar el aviso programa el siguiente recordatorio cuatro horas después. No se pausa el vídeo, no se finaliza una emisión, no se enfoca ni se abre cámara o micrófono. El aviso está dentro del reproductor y también puede verse en pantalla completa. Terminar la conexión cancela su temporizador y una nueva sesión inicia su propio intervalo.
 
 No se envían eventos de salud ni descansos a administración. Las pruebas de navegador usan reloj acelerado; no se crean visitas ni emisiones ficticias en producción.
