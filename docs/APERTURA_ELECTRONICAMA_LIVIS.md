@@ -27,3 +27,16 @@ Roles de comunidad: Activo por defecto. Las colaboraciones como Voluntario o Doc
 ## Límites de la comprobación actual
 
 El entorno de trabajo no tiene acceso de red a electronicama.com, Stripe ni Vercel; no se han leído ni modificado sus ajustes reales en esta revisión. El despliegue Git no demuestra que Stripe esté activo ni que el despliegue publicado haya terminado. La prueba en dos dispositivos y la verificación real de Stripe siguen pendientes hasta disponer de esos resultados.
+
+## 9.13.6 · Contratar antes de solicitar fundador
+
+El administrador y las cuentas gratuitas no ven una compra que no les corresponde.
+Los usuarios sin acceso anual pasan desde el botón de fundador a `/account#pricing`.
+Tras el webhook firmado de un pago anual real confirmado, se guarda un aviso por pedido
+para el correo verificado de la cuenta, con el enlace `/live#founders`. No se envía a un
+correo sin verificar, ni se reserva automáticamente un número. La solicitud posterior
+conserva la comprobación humana y las condiciones de actividad. Agotar las 100 insignias
+no impide contratar el acceso anual ordinario.
+Los fallos de entrega quedan pendientes y se reintentan desde el botón administrativo
+existente de reintento de notificaciones. El correo no concede acceso: lo confirma el
+pedido pagado. La entrega real depende de la configuración de Resend/SMTP.

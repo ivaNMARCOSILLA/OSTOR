@@ -49,6 +49,20 @@ class ManagedPaymentTests(unittest.TestCase):
   if scope=='connect':data['account']=account or order['account_id']
   raw=json.dumps(data).encode();timestamp=str(int(time.time()));secret='whsec_local_test_'+('connect' if scope=='connect' else 'platform');signature=hmac.new(secret.encode(),timestamp.encode()+b'.'+raw,hashlib.sha256).hexdigest()
   return app.app.test_client().post('/api/payments/webhook/'+scope,data=raw,headers={'Content-Type':'application/json','Stripe-Signature':'t='+timestamp+',v1='+signature})
+ def test_annual_payment_emails_verified_member_once_after_confirmation(self):
+  with app.app.app_context(),m.database() as c:
+   c.execute('INSERT INTO member_profiles(member_id,email,nickname,email_verified,updated_at) VALUES(?,?,?,?,?)',(self.ident,'verified@example.test','Cliente',1,m.stamp(m.now_utc())))
+  order=self.checkout()
+  with patch('notifications.mail_ready',return_value=True),patch('notifications.deliver_to') as deliver:
+   self.assertEqual(self.event(order).status_code,200)
+   customer_calls=[call for call in deliver.call_args_list if call.args[0]=='verified@example.test']
+   self.assertEqual(len(customer_calls),1)
+   args=customer_calls[0].args
+   self.assertEqual(args[0],'verified@example.test');self.assertIn('solicita tu plaza',args[1]);self.assertIn('/live#founders',args[2])
+   self.assertEqual(self.event(order).status_code,200)
+   with app.app.app_context():p.send_annual_access_emails()
+   self.assertEqual(len([call for call in deliver.call_args_list if call.args[0]=='verified@example.test']),1)
+
  def test_no_charge_before_configuration_and_browser_return_never_grants(self):
   self.assertFalse(self.client.get('/api/payments/status').json['enabled'])
   self.assertEqual(self.post(self.client,'/api/payments/checkout',{'annual_terms':True}).status_code,409)

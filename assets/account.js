@@ -45,7 +45,7 @@ async function refresh() {
   $('enter-streamers').textContent=current.streamer_active?'Entrar a mi estudio ↗':'Explorar Ol Livis ↗';
   $('enter-streamers').href=current.streamer_active?'/live#stream-studio':'/live#live-catalogue';
   $('pricing').classList.toggle('hidden',Boolean(current.complimentary||current.role==='admin'));
-  $('next-payment').textContent=current.full_service?'Acceso completo gratuito, sin pagos ni renovación. Administración puede retirarlo.':current.complimentary?'Acceso gratuito de administración, sin pagos.':current.live_annual?'Vencimiento del acceso anual: '+date(current.access_until)+'. Renovación manual, sin cargos automáticos.':current.live_lifetime?'Acceso histórico sin vencimiento.':'Ol Livis: 25 € al año. Se cobra al contratar; no hay prueba gratuita.';
+  $('next-payment').textContent=current.full_service?'Acceso completo gratuito, sin pagos ni renovación. Administración puede retirarlo.':current.complimentary?'Acceso gratuito de administración, sin pagos.':current.live_annual?'Vencimiento del acceso anual: '+date(current.access_until)+'. Renovación manual, sin cargos automáticos.':current.live_lifetime?'Acceso histórico sin vencimiento.':'Primero contrata Ol Livis por 25 € al año; después solicita una insignia de fundador si quedan disponibles. Confirma tu correo para recibir el enlace tras el pago. No hay prueba gratuita.';
 
   $('my-payments').replaceChildren();
   for (const payment of data.payments) {

@@ -90,6 +90,8 @@ def _retry_notifications():
     with database() as conn:
         conn.execute("UPDATE admin_notifications SET status='failed' WHERE status='sending' AND last_attempt<?",(stamp(now_utc()-timedelta(minutes=5)),))
         rows=conn.execute("SELECT id FROM admin_notifications WHERE status IN ('pending','failed') ORDER BY created_at LIMIT 3").fetchall()
+    from payments import send_annual_access_emails
+    send_annual_access_emails()
     sent=sum(send_one(row['id']) for row in rows)
     return jsonify(sent=sent,attempted=len(rows))
 

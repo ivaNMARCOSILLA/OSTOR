@@ -36,7 +36,9 @@ def ready():
  return not premiere() and not session.get('ol_play_distribution',False) and configured() and streamer_sales_ready() and state()['scope'] not in {'all','payments','live'}
 
 def init_database():
- with database() as c:c.executescript('''CREATE TABLE IF NOT EXISTS stripe_accounts (
+ with database() as c:c.executescript('''CREATE TABLE IF NOT EXISTS annual_access_emails (
+ order_id TEXT PRIMARY KEY,member_id TEXT NOT NULL,recipient TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending'
+ );CREATE TABLE IF NOT EXISTS stripe_accounts (
  member_id TEXT PRIMARY KEY REFERENCES members(id),account_id TEXT NOT NULL UNIQUE,linked_at TEXT NOT NULL
  );CREATE TABLE IF NOT EXISTS stripe_connect_states (
  token_hash TEXT PRIMARY KEY,member_id TEXT NOT NULL REFERENCES members(id),expires_at TEXT NOT NULL
@@ -258,6 +260,10 @@ def fulfill(c,order,obj):
   c.execute('UPDATE members SET access_until=?,welcome_used=1 WHERE id=?',(end,order['member_id']))
   c.execute('INSERT INTO live_entitlements(member_id,paid_at) VALUES(?,?) ON CONFLICT(member_id) DO UPDATE SET paid_at=excluded.paid_at,revoked_at=NULL',(order['member_id'],now))
   c.execute('INSERT INTO streamer_access(member_id,until_at) VALUES(?,?) ON CONFLICT(member_id) DO UPDATE SET until_at=excluded.until_at',(order['member_id'],end))
+  if plan=='annual':
+   profile=c.execute('SELECT email,email_verified FROM member_profiles WHERE member_id=?',(order['member_id'],)).fetchone()
+   if profile and profile['email'] and profile['email_verified']:
+    c.execute('INSERT INTO annual_access_emails(order_id,member_id,recipient) VALUES(?,?,?) ON CONFLICT(order_id) DO NOTHING',(order['id'],order['member_id'],profile['email']))
  else:
   agreement=c.execute('SELECT * FROM subscription_agreements WHERE id=?',(order['agreement_id'],)).fetchone()
   from subscriptions import month_end
@@ -302,9 +308,29 @@ def webhook(scope):
    c.execute('INSERT INTO stripe_events VALUES(?,?,?)',(event_id,str(kind),stamp(now_utc())))
  except (ValueError,TypeError):return jsonify(error='El evento no coincide con el pedido registrado.'),400
  if changed:
+  send_annual_access_emails()
   from notifications import notify
   notify('payment' if order['kind'] in {'platform','platform_annual'} else 'creator_payment','Pago confirmado por Stripe','Stripe ha confirmado un pago de '+format(order['amount_cents']/100,'.2f')+' €. Consulta el detalle privado en electronicama y en el gestor.',event_key='stripe-order:'+order['id'])
  return jsonify(ok=True)
+
+def send_annual_access_emails():
+ from notifications import deliver_to,mail_ready
+ if not mail_ready():return 0
+ with database() as c:rows=c.execute("SELECT e.* FROM annual_access_emails e JOIN stripe_orders o ON o.id=e.order_id JOIN member_profiles p ON p.member_id=e.member_id WHERE e.status='pending' AND o.paid_at IS NOT NULL AND o.reversed_at IS NULL AND p.email=e.recipient AND p.email_verified=1 LIMIT 3").fetchall()
+ sent=0
+ for row in rows:
+  with database() as c:
+   c.execute('BEGIN IMMEDIATE')
+   claimed=c.execute("UPDATE annual_access_emails SET status='sending' WHERE order_id=? AND status='pending'",(row['order_id'],)).rowcount
+  if not claimed:continue
+  try:
+   deliver_to(row['recipient'],'Ol Livis · solicita tu plaza','Tu pago de 25 € está confirmado y tu acceso anual a Ol Livis está activo.\n\nSolicita tu plaza de fundador, si quedan insignias disponibles:\n'+ORIGIN+'/live#founders\n\nEntra con la misma cuenta del pago. La solicitud no requiere otro cobro. Hay 100 insignias numeradas, sujetas a disponibilidad y condiciones de actividad; pagar no reserva un número. Si se han agotado, conservas tu acceso anual ordinario.\n\nGestiona tu acceso en '+ORIGIN+'/account#pricing')
+  except Exception:
+   with database() as c:c.execute("UPDATE annual_access_emails SET status='pending' WHERE order_id=?",(row['order_id'],))
+  else:
+   with database() as c:c.execute("UPDATE annual_access_emails SET status='sent' WHERE order_id=?",(row['order_id'],))
+   sent+=1
+ return sent
 
 def install(app):
  with app.app_context():init_database()
