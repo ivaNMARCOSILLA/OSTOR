@@ -12,6 +12,7 @@ def run():
   for path in ['/','/account','/live','/legal/aviso-legal.html','/legal/privacidad.html','/legal/cookies.html']:
    page.goto(BASE_URL+path)
    assert page.locator('body').evaluate("e=>e.classList.contains('electronicama-theme')")
+   assert page.locator('body').evaluate('e=>getComputedStyle(e).backgroundColor')=='rgb(0, 0, 0)'
    assert 'jungle' not in page.locator('body').evaluate('e=>getComputedStyle(e).backgroundImage')
    assert page.locator('#fondos-ol,a[href*=fondos-ol]').count()==0
    for width in [1440,390,320]:
@@ -20,6 +21,14 @@ def run():
   fg=list(map(int,re.findall(r'\d+',styles['fg'])[:3]));stops=re.findall(r'rgb\((\d+), (\d+), (\d+)\)',styles['bg']);assert stops
   for stop in stops:
    values=sorted([luminance(fg),luminance([int(x) for x in stop])]);assert (values[1]+.05)/(values[0]+.05)>=4.5,styles
+  # Check actual computed foreground/background pairs for visible controls.
+  for path in ['/','/account','/live']:
+   page.goto(BASE_URL+path)
+   pairs=page.locator('button,input,select,textarea').evaluate_all("els=>els.filter(e=>e.getClientRects().length).map(e=>{let s=getComputedStyle(e);return {fg:s.color,bg:s.backgroundColor,label:e.id||e.tagName}}).filter(s=>s.bg.startsWith('rgb('))")
+   for pair in pairs:
+    fg=[int(x) for x in re.findall(r'\d+',pair['fg'])[:3]];bg=[int(x) for x in re.findall(r'\d+',pair['bg'])[:3]]
+    values=sorted([luminance(fg),luminance(bg)]);assert (values[1]+.05)/(values[0]+.05)>=4.5,(path,pair)
+  page.goto(BASE_URL+'/')
   page.screenshot(path='/tmp/electronicama-shared-theme-mobile.png',full_page=True);b.close()
  print('OK: shared style on six pages, no foliage or wallpaper UI, three widths, hero contrast above 4.5 across gradient stops')
 if __name__=='__main__':run()
