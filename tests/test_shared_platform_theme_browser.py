@@ -39,7 +39,7 @@ def run():
      if(![...e.childNodes].some(n=>n.nodeType===3&&n.textContent.trim())||!e.getClientRects().length||e.closest('[hidden],.hidden'))continue;
      let s=getComputedStyle(e);if(s.visibility==='hidden'||s.opacity==='0')continue;
      let bg=[0,0,0],n=e,gradient=false;while(n){let st=getComputedStyle(n),c=rgb(st.backgroundColor);if(st.backgroundImage!=='none'){gradient=true;break}if(c.length===3||c[3]===1){bg=c;break}n=n.parentElement}if(gradient)continue;
-     let fg=rgb(s.color);if(fg[3]===0)continue;let a=lum(fg),b=lum(bg),ratio=(Math.max(a,b)+.05)/(Math.min(a,b)+.05),large=parseFloat(s.fontSize)>=24||(parseFloat(s.fontSize)>=18.66&&parseInt(s.fontWeight)>=700);
+     let fg=rgb(s.webkitTextFillColor||s.color);if(fg[3]===0)continue;let a=lum(fg),b=lum(bg),ratio=(Math.max(a,b)+.05)/(Math.min(a,b)+.05),large=parseFloat(s.fontSize)>=24||(parseFloat(s.fontSize)>=18.66&&parseInt(s.fontWeight)>=700);
      if(ratio<(large?3:4.5))out.push({tag:e.tagName,id:e.id,cls:e.className,text:e.textContent.trim().slice(0,65),fg:s.color,bg,ratio});
     }return out;
    }""")

@@ -272,6 +272,7 @@ def require_admin(fn):
         if not user or user['role'] != 'admin':
             return jsonify(error='Se requiere una cuenta de administrador.'), 403
         return fn(*args, **kwargs)
+    wrapped.requires_admin=True
     return wrapped
 
 
@@ -292,7 +293,7 @@ def verify_csrf():
 def restrict_music():
     # Music is free. Account collections require login; Ol Livis requires premium.
     path=request.path
-    if not path.startswith('/api/') or path.startswith(('/api/account/','/api/admin/','/api/play/','/api/resolve/','/api/channel-subscriptions/','/api/payments/')) or path in {'/api/navigation/events','/api/navigation/consent','/api/status','/api/sync','/api/search','/api/trending','/api/proxy','/api/promotion/event','/api/presence','/api/live/catalogue','/api/live/founders','/api/live/founders/claim'}:
+    if not path.startswith('/api/') or path.startswith(('/api/account/','/api/admin/','/api/streamers/admin/','/api/play/','/api/resolve/','/api/channel-subscriptions/','/api/payments/')) or path in {'/api/navigation/events','/api/navigation/consent','/api/status','/api/sync','/api/search','/api/trending','/api/proxy','/api/promotion/event','/api/presence','/api/live/catalogue','/api/live/founders','/api/live/founders/claim'}:
         return None
     if path.startswith('/api/stickers/') and path.endswith('/phrase'):return None
     if path.endswith('/sound.wav') and path.startswith(('/api/stickers/','/api/live/founders/')):return None
@@ -301,8 +302,8 @@ def restrict_music():
         if not user:return jsonify(error='Inicia sesión con una cuenta gratuita para guardar tu colección.',code='login_required'),401
         return None
     # Registered viewers can watch public streams without the annual creator plan.
-    viewer_route=path=='/api/streamers' and request.method=='GET' or bool(re.fullmatch(r'/api/streamers/[a-f0-9]{32}/(?:access|comments)',path) and request.method=='GET') or bool(re.fullmatch(r'/api/streamers/[a-f0-9]{32}/token',path) and request.method=='POST' and payload().get('publish') is not True)
-    viewer_route=viewer_route or bool(re.fullmatch(r'/api/streamers/[a-f0-9]{32}/(?:comments|view)',path) and request.method=='POST')
+    viewer_route=path=='/api/streamers' and request.method=='GET' or bool(re.fullmatch(r'/api/streamers/[a-f0-9]{32}/(?:access|comments|age-policy)',path) and request.method=='GET') or bool(re.fullmatch(r'/api/streamers/[a-f0-9]{32}/token',path) and request.method=='POST' and payload().get('publish') is not True)
+    viewer_route=viewer_route or bool(re.fullmatch(r'/api/streamers/[a-f0-9]{32}/(?:comments|view|age-confirm)',path) and request.method=='POST')
     if viewer_route:
         if not user:return jsonify(error='Inicia sesión con una cuenta gratuita para ver los directos.',code='login_required'),401
         return None

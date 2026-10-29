@@ -198,6 +198,9 @@ def checkout():
  channel_id=payload().get('channel_id')
  if channel_id is not None and not isinstance(channel_id,str):return jsonify(error='Canal no válido.'),400
  if channel_id:
+  from age_policy import gate
+  with database() as check:restricted=gate(check,channel_id,user)
+  if restricted:return restricted
   from human_check import verify
   with database() as check:
    check.execute('BEGIN IMMEDIATE');human_ok=verify(check)

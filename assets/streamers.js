@@ -1,9 +1,10 @@
 import {openSubscription} from '/assets/subscriptions.js?v=9.13.0';
 import {founderBadge} from '/assets/badges.js?v=9.15.0';
 'use strict';
-import {StreamCommunity} from '/assets/community.js?v=9.22.0';
-import {StudioTools} from '/assets/studio-tools.js?v=9.13.0';
+import {StreamCommunity} from '/assets/community.js?v=9.24.0';
+import {StudioTools} from '/assets/studio-tools.js?v=9.24.0';
 const $=id=>document.getElementById(id);
+$('live-player').append($('community-panel'));
 let premiereOnly=false;
 let publicInfo=null,liveCategory='all';
 const categoryNames={videojuegos:'Videojuegos',musica:'Música',entretenimiento:'Entretenimiento',actualidad:'Actualidad'};
@@ -35,14 +36,14 @@ async function refresh(){
  info=await api('/api/streamers');
  if(selected){const updated=info.channels.find(channel=>channel.id===selected.id)||(info.mine?.id===selected.id?info.mine:null);if(updated){selected={...selected,...updated};$('stage-title').textContent=selected.title;}}
  $('stream-unavailable').classList.toggle('hidden',info.video_ready);
- $('video-setup').classList.toggle('hidden',!info.setup_checks);
- if(info.setup_checks){$('open-video-preview').classList.toggle('hidden',info.setup_environment!=='production');$('setup-environment').textContent=info.setup_environment==='production'?'Estás en electronicama.com. El vídeo de esta web necesita sus variables en Production. Las claves guardadas solo en Preview no lo activan. Comprueba aquí la conexión después del despliegue.':info.setup_environment==='preview'?'Estás en la vista previa de pruebas. Los cobros siguen bloqueados durante la comprobación.':'Estudio local de pruebas.';const list=$('video-checks');list.replaceChildren();for(const [name,ok] of Object.entries(info.setup_checks))list.append(node('li',`${name}: ${ok?'correcto':'pendiente de corregir'}`));}
+ const adminDiagnostics=previewUser?.role==='admin'&&Boolean(info.setup_checks);$('video-setup').hidden=!adminDiagnostics;$('video-setup').classList.toggle('hidden',!adminDiagnostics);
+ if(adminDiagnostics){$('open-video-preview').classList.toggle('hidden',info.setup_environment!=='production');$('setup-environment').textContent=info.setup_environment==='production'?'Estás en electronicama.com. El vídeo de esta web necesita sus variables en Production. Las claves guardadas solo en Preview no lo activan. Comprueba aquí la conexión después del despliegue.':info.setup_environment==='preview'?'Estás en la vista previa de pruebas. Los cobros siguen bloqueados durante la comprobación.':'Estudio local de pruebas.';const list=$('video-checks');list.replaceChildren();for(const [name,ok] of Object.entries(info.setup_checks))list.append(node('li',`${name}: ${ok?'correcto':'pendiente de corregir'}`));}
  $('creator-panel').classList.toggle('hidden',!info.streamer_active);$('studio-flow').classList.toggle('hidden',!info.streamer_active);
  renderCatalogue();
  renderStudio();
  if(room&&!publishing&&selected){const current=room,generation=connectionGeneration;try{const access=await api(`/api/streamers/${encodeURIComponent(selected.id)}/access`);if(room===current&&generation===connectionGeneration&&access.layout)$('live-media').dataset.layout=access.layout;if(room===current&&generation===connectionGeneration&&access.ended){await disconnect();status('El creador ha finalizado el directo.');}}catch(error){if(room===current&&generation===connectionGeneration){if([401,402,403,404].includes(error.status)||error.code==='ol_maintenance'){await disconnect();status(error.message);}else status('El vídeo sigue conectado. Estamos reintentando la comprobación de acceso.');}}}
  if(info.mine&&!$('creator-form').contains(document.activeElement)){
-  $('creator-category').value=info.mine.category||'entretenimiento';$('channel-title').value=info.mine.title;$('channel-bio').value=info.mine.bio;
+  $('creator-category').value=info.mine.category||'entretenimiento';$('channel-title').value=info.mine.title;$('channel-bio').value=info.mine.bio;$('creator-adult-content').checked=Boolean(info.mine.adult_content);
  }
  }finally{refreshing=false;}
 }
@@ -73,7 +74,8 @@ function renderCatalogue(){
   const visual=node('div');visual.className='channel-video-cover';const image=node('img');image.src='/assets/ol-infinity.svg';image.alt='';image.loading='lazy';image.decoding='async';const badge=node('span','EN DIRECTO · VÍDEO');badge.className='channel-live-badge';visual.append(image,badge);
   const button=node('button','Ver vídeo en directo');button.type='button';button.setAttribute('aria-label',`Ver vídeo en directo de ${channel.title}`);button.addEventListener('click',()=>{rememberChannel(channel.id);if(!window.MaggySession.authenticated){navigateSection('#stream-access');return;}connect(channel,false);});
   const tags=node('div');tags.className='channel-tags';tags.append(node('span',categoryNames[channel.category]||'Entretenimiento'));if(channel.featured){const badge=node('span','Destacado');badge.className='featured-tag';tags.append(badge);}if(channel.founder_number){tags.append(founderBadge(channel.founder_number,channel.founder_signature||{}));}
-  const subscribe=node('button','Suscripción y beneficios');subscribe.type='button';subscribe.className='secondary';subscribe.addEventListener('click',()=>openSubscription(channel.id));
+  const subscribe=node('button','Suscripción y beneficios');subscribe.type='button';subscribe.className='secondary';subscribe.addEventListener('click',async()=>{try{if(channel.adult_content&&window.MaggySession.authenticated&&!await confirmAdultAccess(channel))return;await openSubscription(channel.id);}catch(error){status(error.message);}});
+  if(channel.adult_content)tags.append(node('span','Contenido adulto · edad requerida'));
   if(channel.subscribers_only)tags.append(node('span','Directo para suscriptores'));
   card.append(visual,tags,node('h3',channel.title),node('p',channel.username),node('p',channel.bio),node('p',(channel.subscriber_count||0)+' suscriptores activos · '+(channel.view_count||0)+' visitas verificadas'),button,subscribe);list.append(card);
  }
@@ -155,10 +157,24 @@ async function disconnect(){
 }
 function attach(track,local=false){const key=track.sid||track;if(attachedTracks.has(key))return;const element=track.attach();attachedTracks.set(key,element);element.dataset.source=track.source||track.kind;if(track.source==='screen_share')element.classList.add('screen-track');element.autoplay=true;element.playbackRate=1;if(track.kind==='video'){element.playsInline=true;element.controls=false;element.removeAttribute('controls');element.setAttribute('playsinline','');element.setAttribute('webkit-playsinline','');element.setAttribute('controlslist','nodownload noplaybackrate noremoteplayback');element.disablePictureInPicture=true;element.disableRemotePlayback=true;}if(local)element.muted=true;if(track.kind==='audio'){element.controls=false;if(!local&&track.setPlayoutDelay)try{track.setPlayoutDelay(.1);}catch{}}$('live-media').append(element);}
 
+let ageDialogResolve=null;
+async function confirmAdultAccess(channel){
+ if(!channel.adult_content)return true;
+ const policy=await api(`/api/streamers/${channel.id}/age-policy`);if(policy.accepted)return true;
+ const dialog=$('adult-age-dialog');if(ageDialogResolve)ageDialogResolve(false);
+ $('adult-age-form').reset();$('adult-age-error').textContent='';
+ $('adult-age-explanation').textContent=`Debes tener al menos ${policy.minimum_age} años. `+(policy.location_uncertain?'Ubicación o VPN sin verificar: se aplica un mínimo interno conservador.':'Criterio de edad según la evaluación regional del servidor.');
+ dialog.dataset.channel=channel.id;dialog.dataset.context=policy.context;dialog.showModal();
+ return new Promise(resolve=>{ageDialogResolve=resolve;});
+}
+$('adult-age-form').addEventListener('submit',async event=>{event.preventDefault();try{await api(`/api/streamers/${$('adult-age-dialog').dataset.channel}/age-confirm`,{birth_date:$('adult-birth-date').value,context:$('adult-age-dialog').dataset.context,accept_rules:$('adult-accept-rules').checked});const resolve=ageDialogResolve;ageDialogResolve=null;$('adult-age-dialog').close();$('adult-birth-date').value='';resolve?.(true);}catch(error){$('adult-age-error').textContent=error.message;}});
+function cancelAdultDialog(){const resolve=ageDialogResolve;ageDialogResolve=null;$('adult-age-dialog').close();$('adult-birth-date').value='';resolve?.(false);}
+$('adult-age-cancel').addEventListener('click',cancelAdultDialog);$('adult-age-dialog').addEventListener('cancel',event=>{event.preventDefault();cancelAdultDialog();});
 async function connect(channel,publish){
  if(!publish)rememberChannel(channel.id);
  if(connecting)return;connecting=true;renderStudio();let generation;
  try{
+  if(!await confirmAdultAccess(channel))return;
   if(!info?.video_ready)throw new Error('Las emisiones todavía no están disponibles.');
   stopPreview('',true);await disconnect();generation=connectionGeneration;if(!(publish?window.MaggySession.premium:window.MaggySession.authenticated))return;status('Conectando al directo…');$('studio-status').textContent='Conectando al directo…';$('start-camera').textContent='Conectando…';
   const data=await api(`/api/streamers/${encodeURIComponent(channel.id)}/token`,{publish});
@@ -172,7 +188,7 @@ async function connect(channel,publish){
   if(publish){room.on(LK.RoomEvent.LocalTrackPublished,pub=>{if(pub.track&&room===current){attach(pub.track,true);if(pub.source===LK.Track.Source.Camera&&pub.track.mediaStreamTrack)tools.nativeQuality(new MediaStream([pub.track.mediaStreamTrack]));if(pub.source===LK.Track.Source.Microphone&&pub.track.mediaStreamTrack)tools.monitor(new MediaStream([pub.track.mediaStreamTrack]));if(pub.source===LK.Track.Source.ScreenShare)tools.screenState(true);}});room.on(LK.RoomEvent.LocalTrackUnpublished,pub=>{pub.track?.detach().forEach(element=>element.remove());if(pub.source===LK.Track.Source.ScreenShare)tools.screenState(false);});}
   await current.connect(data.url,data.token);if(generation!==connectionGeneration||!(publish?window.MaggySession.premium:window.MaggySession.authenticated)){await current.disconnect();return;}selected=channel;publishing=publish;
   if(publish){await current.localParticipant.enableCameraAndMicrophone();if(generation!==connectionGeneration||!(publish?window.MaggySession.premium:window.MaggySession.authenticated)){for(const pub of current.localParticipant.trackPublications.values())pub.track?.stop();await current.disconnect();return;}heartbeatVerified=false;await sendPresence(current,generation);if(generation!==connectionGeneration||room!==current)return;heartbeat=setInterval(()=>sendPresence(current,generation),25000);}
-  $('live-stage').dataset.publisher=String(publish);$('live-stage').classList.remove('mobile-controls-open','mobile-chat-hidden');$('mobile-live-controls').setAttribute('aria-expanded','false');$('mobile-live-chat').setAttribute('aria-pressed',String(!publish));$('live-catalogue').before($('live-stage'));const stamp=$('live-founder-stamp');stamp.replaceChildren();if(channel.founder_number)stamp.append(founderBadge(channel.founder_number,channel.founder_signature||{}));tools.liveConnected(current);community.start(channel,publish);if(!publish)setTimeout(()=>{if(room===current&&!publishing)api(`/api/streamers/${encodeURIComponent(channel.id)}/view`,{}).catch(()=>{});},2000);$('leave-room').textContent=publish?'Finalizar directo':'Salir del directo';$('stage-title').textContent=channel.title;$('live-stage').classList.remove('hidden');
+  $('live-stage').dataset.publisher=String(publish);$('live-stage').classList.remove('mobile-controls-open','mobile-chat-hidden');$('mobile-live-controls').setAttribute('aria-expanded','false');$('live-catalogue').before($('live-stage'));const stamp=$('live-founder-stamp');stamp.replaceChildren();if(channel.founder_number)stamp.append(founderBadge(channel.founder_number,channel.founder_signature||{}));tools.liveConnected(current);community.start(channel,publish);if(!publish)setTimeout(()=>{if(room===current&&!publishing)api(`/api/streamers/${encodeURIComponent(channel.id)}/view`,{}).catch(()=>{});},2000);$('leave-room').textContent=publish?'Finalizar directo':'Salir del directo';$('stage-title').textContent=channel.title;$('live-stage').classList.remove('hidden');
   $('toggle-camera').classList.toggle('hidden',!publish);$('toggle-mic').classList.toggle('hidden',!publish);
   $('toggle-camera').textContent='Apagar cámara';$('toggle-mic').textContent='Silenciar micrófono';
   renderStudio();status(publish?(heartbeatVerified?'Estás en directo.':'Vídeo conectado. La verificación del listado se reintentará sin cortar la emisión.'):'Conectado al directo. Pulsa «Activar sonido» si no lo escuchas.');$('live-stage').scrollIntoView({behavior:'smooth'});
@@ -184,7 +200,7 @@ $('creator-form').addEventListener('invalid',event=>{creatorStatus(event.target.
 $('creator-form').addEventListener('submit',async event=>{
  event.preventDefault();
  const button=$('save-channel');button.disabled=true;button.textContent='Guardando…';creatorStatus('Guardando tu canal…');
- try{const saved=await api('/api/streamers/me',{title:$('channel-title').value,category:$('creator-category').value,bio:$('channel-bio').value});
+ try{const saved=await api('/api/streamers/me',{title:$('channel-title').value,category:$('creator-category').value,bio:$('channel-bio').value,adult_content:$('creator-adult-content').checked,adult_rules_accepted:$('creator-adult-rules').checked});
  info.mine=saved.channel;window.dispatchEvent(new Event('ol:channel-saved'));creatorStatus('Canal guardado. Ya puedes entrar al estudio.');status('Canal guardado.');showStudio();
  refresh().catch(()=>{$('studio-service-status').textContent='Tu canal se ha guardado, pero no se pudo actualizar la conexión. Puedes usar la vista privada de cámara y reintentar después.';});
  }catch(error){creatorStatus(error.message+' Tus datos siguen en el formulario.',true);status(error.message);}
@@ -208,7 +224,6 @@ renderCatalogue();
 setInterval(()=>{if(!document.hidden||publishing)refresh().catch(error=>status(error.message));},30000);
 
 $('mobile-live-controls').addEventListener('click',()=>{const open=$('live-stage').classList.toggle('mobile-controls-open');$('mobile-live-controls').setAttribute('aria-expanded',String(open));});
-$('mobile-live-chat').addEventListener('click',()=>{const stage=$('live-stage'),visible=stage.dataset.publisher==='true'?stage.classList.toggle('mobile-chat-shown'):!stage.classList.toggle('mobile-chat-hidden');$('mobile-live-chat').setAttribute('aria-pressed',String(visible));});
 
 window.addEventListener('ol:interface-update',async event=>{if(document.hidden)return;try{if(event.detail.account)await window.MaggySession.refresh?.();await refresh();}catch{}});
 window.addEventListener('focus',()=>refresh().catch(()=>{}));

@@ -14,7 +14,8 @@ def run():
   page.route('**/api/play/*',lambda r:r.fulfill(body=wav.getvalue(),content_type='audio/wav'))
   page.add_init_script("""window.holoStreams=[];const native=navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);navigator.mediaDevices.getUserMedia=async options=>{window.holoRequest=options;const stream=await native(options);window.holoStreams.push(stream);return stream;};""")
   page.goto(BASE_URL+'/');page.locator('#consent-decline').click()
-  assert page.locator('#holograms-title').inner_text()=='Hologramas'
+  assert page.locator('#holograms-title').inner_text().startswith('Hologramas')
+  assert page.locator('#holograms-title .holograms-label').inner_text()=='Geometría viva'
   assert page.locator('.hologram-message').inner_text()==MESSAGE
   assert 'memory' not in page.locator('#hologramas').inner_text().lower()
   assert not any('/vendor/three/' in url or '/vendor/hands/' in url for url in requests)

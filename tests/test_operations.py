@@ -57,6 +57,11 @@ class OperationsTests(unittest.TestCase):
   rows={row['name']:row for row in report['checks']}
   self.assertEqual(rows['Base de datos']['status'],'ok')
   self.assertEqual(rows['Archivos esenciales']['status'],'ok')
+  self.assertEqual(rows['Comprobaciones exclusivas de administración']['status'],'ok')
+  self.assertEqual(rows['Sincronización entre dispositivos']['status'],'ok')
+  self.assertEqual(rows['Clasificación de contenido adulto']['status'],'ok')
+  self.assertEqual(rows['Ubicación y VPN para contenido adulto']['status'],'pending')
+  self.assertEqual(rows['Verificación de edad']['status'],'pending')
   self.assertEqual(rows['Correos']['status'],'pending')
   self.assertEqual(rows['Ol Livis']['status'],'pending')
   self.assertNotIn('SECRET',response.get_data(as_text=True))

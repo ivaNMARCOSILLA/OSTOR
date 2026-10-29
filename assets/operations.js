@@ -48,7 +48,7 @@ $('fan-alias-form')?.addEventListener('submit',async e=>{e.preventDefault();try{
 $('stripe-test-checkout')?.addEventListener('click',async e=>{e.target.disabled=true;try{const d=await api('/api/admin/payments/test-checkout',{});location.assign(d.url);}catch(error){$('stripe-test-status').textContent=error.message;e.target.disabled=false;}});
 
 // Read-only administrative diagnostics. No background work for public visitors.
-let maintenanceBusy=false,maintenanceLast=null,maintenanceTimer=null;
+let maintenanceBusy=false,maintenanceLast=null,maintenanceTimer=null,maintenanceConfigured=false,maintenancePreferencesKey=null;
 const maintenanceHistory=[];
 const maintenanceLabels={ok:'Correcto',pending:'Pendiente',error:'Error'};
 const maintenanceTrace=[];
@@ -81,8 +81,16 @@ async function reviewMaintenance(source='manual'){
   const report=await api('/api/admin/maintenance-report');
   traceMaintenance('SERVIDOR · Respuesta recibida · electronicama '+report.version);
   for(const row of report.checks)traceMaintenance(maintenanceLabels[row.status].toUpperCase()+' · '+row.name+' · '+row.detail);
-  const navigation=window.OlNavigation?.check();
+  const navigation=$('maintenance-check-links')?.checked===false?null:window.OlNavigation?.check();
   if(navigation)report.checks.push({name:'Enlaces de esta página',status:navigation.broken.length?'error':'ok',detail:navigation.broken.length+' destinos pendientes; '+navigation.repaired+' ajustes de enlaces conocidos.'});
+  const rgb=value=>(value.match(/[\d.]+/g)||[]).slice(0,3).map(Number);
+  const luminance=values=>values.map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4}).reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0);
+  const goldButtons=($('maintenance-check-colors')?.checked===false?[]:[...document.querySelectorAll('button,a.button')]).filter(e=>e.getClientRects().length).map(e=>({e,s:getComputedStyle(e)})).filter(({s})=>{const c=rgb(s.backgroundColor);return c.length===3&&c[0]>=180&&c[1]>=140&&c[2]>=60&&c[2]<210&&c[0]>c[2]*1.1;});
+  const badGold=goldButtons.filter(({s})=>{const foreground=luminance(rgb(s.webkitTextFillColor||s.color)),background=luminance(rgb(s.backgroundColor));return (Math.max(foreground,background)+.05)/(Math.min(foreground,background)+.05)<4.5||s.animationName!=='none'||Number(s.opacity)<1;});
+  report.checks.push({name:'Letras sobre botones dorados',status:badGold.length?'error':goldButtons.length?'ok':'pending',detail:goldButtons.length+' botones visibles comprobados; '+badGold.length+' con contraste o animación pendientes. No revisa imágenes ni pantallas ocultas.'});
+  const sync=window.OlInterfaceSync;report.checks.push({name:'Actualización automática de esta página',status:sync?.lastCheck&&Date.now()-sync.lastCheck<45000?'ok':'pending',detail:sync?.lastCheck?'Última comprobación: '+new Date(sync.lastCheck).toLocaleTimeString('es-ES')+'. Fallos consecutivos: '+sync.failures+'.':'Aún no hay una comprobación de sincronización reciente.'});
+  const activeVideo=[...document.querySelectorAll('#live-media video,#studio-screen video')].filter(e=>e.getClientRects().length&&e.srcObject);
+  report.checks.push({name:'Controles nativos del vídeo',status:activeVideo.some(e=>e.controls)?'error':activeVideo.length?'ok':'pending',detail:activeVideo.length?'Vídeos activos revisados; el directo no debe mostrar pausa/reproducción nativos.':'No hay vídeo activo en esta página. Comprueba un directo en web y móvil.'});
   report.ok=!report.checks.some(row=>row.status==='error');
   maintenanceLast=report;
   const date=new Date(report.at).toLocaleString('es-ES');
@@ -102,7 +110,10 @@ $('maintenance-check-now')?.addEventListener('click',()=>reviewMaintenance('manu
 $('maintenance-download')?.addEventListener('click',()=>{if(!maintenanceLast)return;const url=URL.createObjectURL(new Blob([JSON.stringify(maintenanceLast,null,2)],{type:'application/json'}));const link=document.createElement('a');link.href=url;link.download='ol-mantenimiento.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
 async function startMaintenanceReviews(){
  if(!$('maintenance-check-now'))return;
- try{await(window.OlAccountReady||Promise.resolve());const account=await api('/api/account/me');if(account.user?.role!=='admin'){clearInterval(maintenanceTimer);maintenanceTimer=null;return;}if(maintenanceTimer)return;traceMaintenance('PROGRAMACIÓN · Diagnóstico cada 30 minutos con el panel visible.');await reviewMaintenance('inicial');maintenanceTimer=setInterval(()=>{if(!document.hidden)reviewMaintenance('automática');},1800000);}catch{}
+ try{await(window.OlAccountReady||Promise.resolve());const account=await api('/api/account/me');if(account.user?.role!=='admin'){clearInterval(maintenanceTimer);maintenanceTimer=null;maintenanceConfigured=false;return;}if(maintenanceConfigured)return;maintenanceConfigured=true;
+ const key='ol_admin_maintenance_v1_'+account.user.id;
+ if(maintenancePreferencesKey!==key){maintenancePreferencesKey=key;try{const saved=JSON.parse(localStorage.getItem(key)||'null');if(saved){if([0,15,30,60].includes(saved.minutes))$('maintenance-frequency').value=String(saved.minutes);$('maintenance-check-colors').checked=saved.colors!==false;$('maintenance-check-links').checked=saved.links!==false;}}catch{}}
+ const minutes=Number($('maintenance-frequency').value);traceMaintenance(minutes?'PROGRAMACIÓN · Diagnóstico cada '+minutes+' minutos con el panel visible.':'PROGRAMACIÓN · Solo revisión manual.');await reviewMaintenance('inicial');if(minutes)maintenanceTimer=setInterval(()=>{if(!document.hidden)reviewMaintenance('automática');},minutes*60000);}catch{}
 }
 window.addEventListener('ol:account-refreshed',startMaintenanceReviews);
 startMaintenanceReviews();
@@ -118,3 +129,5 @@ $('youtube-check-now')?.addEventListener('click',async event=>{
 $('stripe-account-health')?.addEventListener('click',async()=>{const button=$('stripe-account-health'),status=$('stripe-account-health-status');button.disabled=true;status.textContent='Consultando el estado real de Stripe…';try{const d=await api('/api/admin/payments/account-health');status.textContent=`Conexión: correcta. Cobros en Stripe: ${d.charges_enabled?'habilitados':'pendientes'}. Transferencias al banco: ${d.payouts_enabled?'habilitadas':'pendientes'}. Requisitos pendientes: ${d.requirements_pending}; vencidos: ${d.requirements_overdue}. Cobros en electronicama: ${d.payments_enabled?'habilitados':'desactivados'}. Esta consulta no ha realizado ningún pago.`;}catch(error){status.textContent=error.message;}finally{button.disabled=false;}});
 
 window.addEventListener('ol:interface-update',event=>{if(event.detail.public&&!document.hidden)inspect();});
+
+for(const id of ['maintenance-frequency','maintenance-check-colors','maintenance-check-links'])$(id)?.addEventListener('change',()=>{if(maintenancePreferencesKey)try{localStorage.setItem(maintenancePreferencesKey,JSON.stringify({minutes:Number($('maintenance-frequency').value),colors:$('maintenance-check-colors').checked,links:$('maintenance-check-links').checked}));}catch{}clearInterval(maintenanceTimer);maintenanceTimer=null;maintenanceConfigured=false;startMaintenanceReviews();});

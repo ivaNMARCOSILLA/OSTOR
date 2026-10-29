@@ -13,7 +13,7 @@ import requests
 from datetime import timedelta
 from urllib.parse import urlparse
 from flask import Blueprint, current_app, jsonify, request
-from membership import database, get_user, now_utc, stamp, user_public,allow_attempt
+from membership import database, get_user, now_utc, stamp, user_public,allow_attempt,require_admin
 
 bp=Blueprint('streamers',__name__)
 LIVE_PRICE_CENTS=2500
@@ -53,6 +53,8 @@ def init_database():
             channel_id TEXT PRIMARY KEY REFERENCES streamer_channels(id) ON DELETE CASCADE,
             category TEXT NOT NULL DEFAULT 'entretenimiento',featured INTEGER NOT NULL DEFAULT 0
         ); CREATE TABLE IF NOT EXISTS live_channel_views (channel_id TEXT NOT NULL REFERENCES streamer_channels(id) ON DELETE CASCADE,member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,day TEXT NOT NULL,PRIMARY KEY(channel_id,member_id,day)); CREATE INDEX IF NOT EXISTS live_views_channel ON live_channel_views(channel_id)''')
+    from age_policy import init_database as init_age_policy
+    init_age_policy()
     from community import init_database as init_community_database
     init_community_database()
     from rewards import init_database as init_rewards_database
@@ -70,12 +72,12 @@ def paypal_link(value):
 
 def channel_public(row):
     from founders import signature_from_row
-    return {key:row[key] for key in ['id','title','bio','username']} | {'paypal_url':'' if os.getenv('VERCEL_ENV') in {'production','preview'} or os.getenv('OL_PAYMENT_PROVIDER','stripe')=='stripe' else row['paypal_url']} | {'live':bool(row['live_until'] and row['live_until']>stamp(now_utc())),'view_count':row['view_count'] if 'view_count' in row.keys() else 0,'category':row['category'] if 'category' in row.keys() and row['category'] else 'entretenimiento','featured':bool(row['featured']) if 'featured' in row.keys() else False,'founder_number':row['founder_number'] if 'founder_number' in row.keys() else None,'founder_signature':signature_from_row(row) if 'founder_number' in row.keys() and row['founder_number'] else None}
+    return {key:row[key] for key in ['id','title','bio','username']} | {'paypal_url':'' if os.getenv('VERCEL_ENV') in {'production','preview'} or os.getenv('OL_PAYMENT_PROVIDER','stripe')=='stripe' else row['paypal_url']} | {'live':bool(row['live_until'] and row['live_until']>stamp(now_utc())),'adult_content':bool(row['adult_content']) if 'adult_content' in row.keys() else False,'view_count':row['view_count'] if 'view_count' in row.keys() else 0,'category':row['category'] if 'category' in row.keys() and row['category'] else 'entretenimiento','featured':bool(row['featured']) if 'featured' in row.keys() else False,'founder_number':row['founder_number'] if 'founder_number' in row.keys() else None,'founder_signature':signature_from_row(row) if 'founder_number' in row.keys() and row['founder_number'] else None}
 
 
 def own_channel():
     with database() as conn:
-        row=conn.execute('SELECT c.*,(SELECT COUNT(*) FROM live_channel_views v WHERE v.channel_id=c.id) AS view_count,m.username,o.category,o.featured,f.number AS founder_number,sg.mode AS badge_mode,sg.letter AS badge_letter,sg.caption AS badge_caption,sg.audio_json AS badge_audio FROM streamer_channels c JOIN members m ON m.id=c.member_id LEFT JOIN live_channel_settings o ON o.channel_id=c.id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN founder_signatures sg ON sg.member_id=m.id WHERE c.member_id=?',(get_user()['id'],)).fetchone()
+        row=conn.execute('SELECT c.*,ar.adult_content,ar.version AS adult_version,(SELECT COUNT(*) FROM live_channel_views v WHERE v.channel_id=c.id) AS view_count,m.username,o.category,o.featured,f.number AS founder_number,sg.mode AS badge_mode,sg.letter AS badge_letter,sg.caption AS badge_caption,sg.audio_json AS badge_audio FROM streamer_channels c JOIN members m ON m.id=c.member_id LEFT JOIN adult_channel_rules ar ON ar.channel_id=c.id LEFT JOIN live_channel_settings o ON o.channel_id=c.id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN founder_signatures sg ON sg.member_id=m.id WHERE c.member_id=?',(get_user()['id'],)).fetchone()
     return row
 
 
@@ -105,6 +107,7 @@ def sign_token(claims):
 
 
 @bp.post('/api/streamers/admin/check-video')
+@require_admin
 def check_video():
     if get_user()['role']!='admin': return jsonify(error='Se requiere administración.'),403
     checks=video_configuration_checks()
@@ -154,7 +157,7 @@ def public_directory():
     from operations import premiere
     if premiere() and not private_preview_allowed():return jsonify(video_ready=False,channels=[],categories=LIVE_CATEGORIES,premiere=True)
     with database() as conn:
-        rows=conn.execute('SELECT c.*,(SELECT COUNT(*) FROM live_channel_views v WHERE v.channel_id=c.id) AS view_count,m.username,o.category,o.featured,f.number AS founder_number,sg.mode AS badge_mode,sg.letter AS badge_letter,sg.caption AS badge_caption,sg.audio_json AS badge_audio FROM streamer_channels c JOIN members m ON m.id=c.member_id LEFT JOIN live_channel_settings o ON o.channel_id=c.id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN founder_signatures sg ON sg.member_id=m.id WHERE c.live_until>? ORDER BY view_count DESC,COALESCE(o.featured,0) DESC,c.updated_at DESC LIMIT 100',(stamp(now_utc()),)).fetchall()
+        rows=conn.execute('SELECT c.*,ar.adult_content,ar.version AS adult_version,(SELECT COUNT(*) FROM live_channel_views v WHERE v.channel_id=c.id) AS view_count,m.username,o.category,o.featured,f.number AS founder_number,sg.mode AS badge_mode,sg.letter AS badge_letter,sg.caption AS badge_caption,sg.audio_json AS badge_audio FROM streamer_channels c JOIN members m ON m.id=c.member_id LEFT JOIN adult_channel_rules ar ON ar.channel_id=c.id LEFT JOIN live_channel_settings o ON o.channel_id=c.id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN founder_signatures sg ON sg.member_id=m.id WHERE c.live_until>? ORDER BY view_count DESC,COALESCE(o.featured,0) DESC,c.updated_at DESC LIMIT 100',(stamp(now_utc()),)).fetchall()
     from subscriptions import decorate
     return jsonify(video_ready=live_ready(),channels=decorate([channel_public(row) for row in rows if not is_abusive(row['title']+' '+row['bio']+' '+row['username'])]),categories=LIVE_CATEGORIES)
 
@@ -170,7 +173,7 @@ def _admin_live_channels():
     except ValueError:page=1
     with database() as conn:
         total=conn.execute('SELECT COUNT(*) AS n FROM streamer_channels').fetchone()['n'];pages=max(1,(total+24)//25);page=min(page,pages)
-        rows=conn.execute('SELECT c.*,(SELECT COUNT(*) FROM live_channel_views v WHERE v.channel_id=c.id) AS view_count,m.username,o.category,o.featured,f.number AS founder_number,sg.mode AS badge_mode,sg.letter AS badge_letter,sg.caption AS badge_caption,sg.audio_json AS badge_audio FROM streamer_channels c JOIN members m ON m.id=c.member_id LEFT JOIN live_channel_settings o ON o.channel_id=c.id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN founder_signatures sg ON sg.member_id=m.id ORDER BY c.updated_at DESC LIMIT 25 OFFSET ?',((page-1)*25,)).fetchall()
+        rows=conn.execute('SELECT c.*,ar.adult_content,ar.version AS adult_version,(SELECT COUNT(*) FROM live_channel_views v WHERE v.channel_id=c.id) AS view_count,m.username,o.category,o.featured,f.number AS founder_number,sg.mode AS badge_mode,sg.letter AS badge_letter,sg.caption AS badge_caption,sg.audio_json AS badge_audio FROM streamer_channels c JOIN members m ON m.id=c.member_id LEFT JOIN adult_channel_rules ar ON ar.channel_id=c.id LEFT JOIN live_channel_settings o ON o.channel_id=c.id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN founder_signatures sg ON sg.member_id=m.id ORDER BY c.updated_at DESC LIMIT 25 OFFSET ?',((page-1)*25,)).fetchall()
     return jsonify(channels=[channel_public(row) for row in rows],page=page,pages=pages,total=total,categories=LIVE_CATEGORIES)
 
 
@@ -194,7 +197,7 @@ def _feature_channel():
 def channels():
     user=get_user()
     with database() as conn:
-        rows=conn.execute('SELECT c.*,(SELECT COUNT(*) FROM live_channel_views v WHERE v.channel_id=c.id) AS view_count,m.username,o.category,o.featured,f.number AS founder_number,sg.mode AS badge_mode,sg.letter AS badge_letter,sg.caption AS badge_caption,sg.audio_json AS badge_audio FROM streamer_channels c JOIN members m ON m.id=c.member_id LEFT JOIN live_channel_settings o ON o.channel_id=c.id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN founder_signatures sg ON sg.member_id=m.id WHERE c.live_until>? ORDER BY view_count DESC,COALESCE(o.featured,0) DESC,c.updated_at DESC LIMIT 60',(stamp(now_utc()),)).fetchall()
+        rows=conn.execute('SELECT c.*,ar.adult_content,ar.version AS adult_version,(SELECT COUNT(*) FROM live_channel_views v WHERE v.channel_id=c.id) AS view_count,m.username,o.category,o.featured,f.number AS founder_number,sg.mode AS badge_mode,sg.letter AS badge_letter,sg.caption AS badge_caption,sg.audio_json AS badge_audio FROM streamer_channels c JOIN members m ON m.id=c.member_id LEFT JOIN adult_channel_rules ar ON ar.channel_id=c.id LEFT JOIN live_channel_settings o ON o.channel_id=c.id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN founder_signatures sg ON sg.member_id=m.id WHERE c.live_until>? ORDER BY view_count DESC,COALESCE(o.featured,0) DESC,c.updated_at DESC LIMIT 60',(stamp(now_utc()),)).fetchall()
     own=own_channel()
     from subscriptions import decorate
     return jsonify(video_ready=live_ready(),streamer_active=publisher_allowed(),live_price_cents=2500,live_trial_months=0,live_trial_days=0,private_preview=private_preview_allowed(),gift_commission_bps=0,
@@ -209,6 +212,8 @@ def channels():
 def save_channel():
     if not publisher_allowed(): return jsonify(error='Revisa tu acceso anual o tu concesión gratuita de Ol Livis desde tu cuenta.'),403
     data=request.get_json(silent=True) or {}
+    if 'adult_content' in data and not isinstance(data['adult_content'],bool):return jsonify(error='Clasificación de edad no válida.'),400
+    if data.get('adult_content') is True and data.get('adult_rules_accepted') is not True:return jsonify(error='Acepta las condiciones del contenido adulto antes de guardarlo.'),400
     title=str(data.get('title','')).strip();bio=str(data.get('bio','')).strip();category=data.get('category','entretenimiento')
     if category not in LIVE_CATEGORIES:return jsonify(error='Elige una categoría válida para Ol Livis.'),400
     if not 3<=len(title)<=80 or len(bio)>400: return jsonify(error='Indica un título de 3 a 80 caracteres y una presentación de hasta 400.'),400
@@ -229,6 +234,8 @@ def save_channel():
                          (ident,user['id'],title,bio,paypal,'maggy-'+ident,stamp(now_utc())))
         own=conn.execute('SELECT id FROM streamer_channels WHERE member_id=?',(user['id'],)).fetchone()
         conn.execute('INSERT INTO live_channel_settings(channel_id,category) VALUES(?,?) ON CONFLICT(channel_id) DO UPDATE SET category=excluded.category',(own['id'],category))
+        from age_policy import save_rules
+        save_rules(conn,own['id'],data)
     return jsonify(ok=True,channel=channel_public(own_channel()))
 
 
@@ -250,6 +257,9 @@ def room_access(channel_id):
     with database() as conn:
         channel=conn.execute('SELECT * FROM streamer_channels WHERE id=?',(channel_id,)).fetchone()
         if not channel:return jsonify(error='El canal ya no existe.',code='channel_removed'),404
+        from age_policy import gate
+        restricted=gate(conn,channel_id,user)
+        if restricted:return restricted
         from subscriptions import watch_allowed
         if not watch_allowed(conn,channel,user):return jsonify(error='Ya no tienes acceso a este directo.',code='creator_subscription_required'),403
         layout=conn.execute('SELECT layout FROM live_stage_layouts WHERE channel_id=?',(channel_id,)).fetchone()
@@ -272,6 +282,9 @@ def count_view(channel_id):
     with database() as conn:
         channel=conn.execute('SELECT * FROM streamer_channels WHERE id=?',(channel_id,)).fetchone()
         if not channel or not channel['live_until'] or channel['live_until']<=stamp(now_utc()):return jsonify(error='Este canal no está en directo.'),404
+        from age_policy import gate
+        restricted=gate(conn,channel_id,user)
+        if restricted:return restricted
         from subscriptions import watch_allowed
         if not watch_allowed(conn,channel,user):return jsonify(error='Este canal es exclusivo.'),403
         if channel['member_id']==user['id'] or conn.execute('SELECT 1 FROM live_channel_views WHERE channel_id=? AND member_id=? AND day=?',(channel_id,user['id'],day)).fetchone():return jsonify(recorded=False)
@@ -291,6 +304,9 @@ def token(channel_id):
     if not channel: return jsonify(error='Este canal no existe.'),404
     publish=(request.get_json(silent=True) or {}).get('publish') is True
     user=get_user()
+    from age_policy import gate
+    with database() as conn:restricted=gate(conn,channel_id,user)
+    if restricted:return restricted
     if publish and (channel['member_id']!=user['id'] or not publisher_allowed()): return jsonify(error='Solo el creador con plan Ol Livis Creador activo puede emitir en este canal.'),403
     if not publish and not (channel['live_until'] and channel['live_until']>stamp(now_utc())): return jsonify(error='Este canal no está en directo.'),404
     if not publish:
@@ -306,6 +322,10 @@ def presence():
     live=(request.get_json(silent=True) or {}).get('live') is True
     if live and not live_ready(): return jsonify(error='Las emisiones no están activadas.'),503
     channel=own_channel()
+    if live and channel:
+        from age_policy import gate
+        with database() as conn:restricted=gate(conn,channel['id'],get_user())
+        if restricted:return restricted
     if live:
         from live_access import verified_broadcast
         if not channel or not verified_broadcast(channel,get_user()):return jsonify(error='No hemos podido verificar una emisión de vídeo en LiveKit. Tu tiempo aún no se acredita.',code='broadcast_unverified'),409
@@ -326,7 +346,7 @@ def gift_link(channel_id):
     amount=(request.get_json(silent=True) or {}).get('amount_cents')
     if isinstance(amount,bool) or not isinstance(amount,int) or not 100<=amount<=100000: return jsonify(error='Introduce entre 1 y 1.000 €, con un máximo de dos decimales.'),400
     with database() as conn:
-        row=conn.execute('SELECT c.*,m.username,m.role,m.access_until,s.until_at AS streamer_until,f.number AS founder_number,f.revoked_at AS founder_revoked_at,e.trial_until AS live_trial_until,e.paid_at AS live_paid_at,e.revoked_at AS live_revoked_at FROM streamer_channels c JOIN members m ON m.id=c.member_id LEFT JOIN streamer_access s ON s.member_id=m.id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN live_entitlements e ON e.member_id=m.id WHERE c.id=?',(channel_id,)).fetchone()
+        row=conn.execute('SELECT c.*,ar.adult_content,ar.version AS adult_version,m.username,m.role,m.access_until,s.until_at AS streamer_until,f.number AS founder_number,f.revoked_at AS founder_revoked_at,e.trial_until AS live_trial_until,e.paid_at AS live_paid_at,e.revoked_at AS live_revoked_at FROM streamer_channels c JOIN members m ON m.id=c.member_id LEFT JOIN adult_channel_rules ar ON ar.channel_id=c.id LEFT JOIN streamer_access s ON s.member_id=m.id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN live_entitlements e ON e.member_id=m.id WHERE c.id=?',(channel_id,)).fetchone()
     if not row or not row['paypal_url']: return jsonify(error='Este creador no tiene enlace para recibir regalos.'),404
     founder_ok=False
     if row['founder_number'] and not row['founder_revoked_at']:

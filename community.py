@@ -43,6 +43,9 @@ def comments(channel_id):
     with database() as conn:
         channel=live_channel(conn,channel_id)
         if not channel:return jsonify(error='Este canal no está en directo.'),404
+        from age_policy import gate
+        restricted=gate(conn,channel_id,get_user())
+        if restricted:return restricted
         from subscriptions import chat_allowed,settings,watch_allowed
         user=get_user()
         if not watch_allowed(conn,channel,user):return jsonify(error='Este directo está reservado a suscriptores del creador.'),403
@@ -73,6 +76,9 @@ def post_text(channel_id):
     with database() as conn:
         conn.execute('BEGIN IMMEDIATE');channel=live_channel(conn,channel_id)
         if not channel:return jsonify(error='Este canal no está en directo.'),404
+        from age_policy import gate
+        restricted=gate(conn,channel_id,get_user())
+        if restricted:return restricted
         from subscriptions import chat_allowed,settings,watch_allowed
         if not watch_allowed(conn,channel,user):return jsonify(error='Este directo está reservado a suscriptores del creador.'),403
         subscriber_only=bool(settings(conn,channel_id)['subscriber_chat'])

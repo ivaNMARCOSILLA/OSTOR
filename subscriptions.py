@@ -281,6 +281,9 @@ def confirm_subscription(channel_id):
    if not row or not approvals_valid(conn,row) or row['paypal_url']!=channel['paypal_url']:return jsonify(error='No hay un acuerdo vigente aprobado por las tres partes.'),409
    member=conn.execute("SELECT id FROM members WHERE LOWER(username)=LOWER(?) AND password_hash IS NOT NULL",(str(data.get('username','')).strip(),)).fetchone()
    if not member or member['id']==user['id']:return jsonify(error='Indica la cuenta activada del suscriptor, distinta del creador.'),400
+   from age_policy import gate
+   restricted=gate(conn,channel_id,member)
+   if restricted:return restricted
    expected_price=channel_price(conn,channel_id,row['price_cents'],member['id'])
    if type(data.get('amount_cents')) is not int or data['amount_cents']!=expected_price:return jsonify(error='El importe debe coincidir con el precio conservado por este suscriptor.'),400
    old=conn.execute('SELECT ends_at FROM creator_subscriptions WHERE channel_id=? AND member_id=? AND revoked_at IS NULL ORDER BY CASE WHEN ends_at IS NULL THEN 0 ELSE 1 END,ends_at DESC LIMIT 1',(channel_id,member['id'])).fetchone()

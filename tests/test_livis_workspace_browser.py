@@ -13,6 +13,7 @@ def run():
   page.route('**/assets/community.js*',lambda r:r.fulfill(content_type='text/javascript',body='export class StreamCommunity {start(){} stop(){} syncMicrophone(){}}'))
   page.goto(BASE_URL+'/live');page.locator('.live-channel').wait_for()
   assert page.locator('#livis-channel-rail .rail-channel').count()==1
+  assert page.locator('#mobile-live-chat').count()==0
   assert page.locator('#live-catalogue').evaluate("e=>e.compareDocumentPosition(document.querySelector('#founders'))&Node.DOCUMENT_POSITION_FOLLOWING")
   page.get_by_role('button',name='Ver vídeo en directo de Canal del fundador',exact=True).click();page.locator('#live-stage').wait_for(state='visible')
   stamp=page.locator('#live-founder-stamp .founder-postage-stamp')
@@ -25,9 +26,16 @@ def run():
    assert stamp.is_visible()
    assert page.locator('#fullscreen-live').is_visible()
    assert page.locator('#community-panel').is_visible()
+   page.locator('#live-stage').evaluate("e=>e.dataset.publisher='true'")
+   assert page.locator('#community-panel').is_visible()
+   page.locator('#live-stage').evaluate("e=>e.dataset.publisher='false'")
    assert page.evaluate("()=>{const s=document.querySelector('#live-founder-stamp').getBoundingClientRect(),p=document.querySelector('#live-player').getBoundingClientRect();return s.left>=p.left&&s.right<=p.right+1&&s.top>=p.top;}"),width
    assert page.evaluate("document.querySelector('#live-founder-stamp').getBoundingClientRect().bottom<=document.querySelector('#fullscreen-live').getBoundingClientRect().top"),width
-   if width>=1100:assert page.evaluate("document.querySelector('#community-panel').getBoundingClientRect().left>=document.querySelector('#live-player').getBoundingClientRect().right")
+   assert page.evaluate("()=>{const c=document.querySelector('#community-panel').getBoundingClientRect(),p=document.querySelector('#live-player').getBoundingClientRect();return c.left>=p.left&&c.right<=p.right+1&&c.height<=p.height*.75+1}")
+  page.set_viewport_size({'width':1440,'height':1000})
+  page.evaluate("()=>{const m=document.querySelector('#live-media');m.dataset.layout='screen';const v=document.createElement('video');v.dataset.source='camera';v.dataset.layoutTest='1';m.append(v)}")
+  assert page.evaluate("()=>{const m=document.querySelector('#live-media').getBoundingClientRect(),v=document.querySelector('[data-layout-test]').getBoundingClientRect();return v.width>=m.width*.95&&v.height>=m.height*.95}"),'camera must fill the player when no shared screen exists'
+  page.evaluate("document.querySelectorAll('[data-layout-test]').forEach(e=>e.remove());document.querySelector('#live-media').dataset.layout='auto'")
   page.set_viewport_size({'width':390,'height':844})
   page.evaluate("()=>{const m=document.querySelector('#live-media');for(const source of ['camera','screen_share']){const v=document.createElement('video');v.dataset.source=source;v.dataset.layoutTest='1';m.append(v)}}")
   geometry=page.evaluate("()=>{const m=document.querySelector('#live-media'),screen=m.querySelector('[data-source=screen_share]').getBoundingClientRect(),camera=m.querySelector('[data-source=camera]').getBoundingClientRect();return {screen:screen.width,camera:camera.width,position:getComputedStyle(document.querySelector('#live-stage')).position}}")

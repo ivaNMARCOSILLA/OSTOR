@@ -115,9 +115,21 @@ def maintenance_report():
  except Exception:
   add('Base de datos','error','No se pudo completar la lectura. Revisa la conexión en Vercel.')
  root=Path(__file__).resolve().parent
- required=['index.html','assets/account.html','assets/streamers.html','assets/account.js','assets/navigation.js','assets/operations.js','assets/ol-theme.css','assets/holograms-launcher.js','assets/holograms.js','assets/vendor/three/build/three.module.js','assets/vendor/hands/hands.js','assets/ol-live-jungle-leaves.webp','manifest.webmanifest','sw.js']
+ required=['index.html','assets/account.html','assets/streamers.html','assets/account.js','assets/navigation.js','assets/operations.js','assets/ol-theme.css','assets/holograms-launcher.js','assets/holograms.js','assets/vendor/three/build/three.module.js','assets/vendor/hands/hands.js','assets/platform-theme.css','assets/interface-sync.js','assets/studio-tools.js','age_policy.py','manifest.webmanifest','sw.js']
  missing=[name for name in required if not (root/name).is_file()]
  add('Archivos esenciales','error' if missing else 'ok','Faltan: '+', '.join(missing) if missing else 'Páginas, acceso, decoración y recursos de la aplicación presentes.')
+ # Read-only checks for features added after the original maintenance panel.
+ for table,columns,label in [('interface_revisions','topic,version','Sincronización entre dispositivos'),('adult_channel_rules','channel_id,adult_content,version,locked','Clasificación de contenido adulto'),('adult_age_declarations','member_id,context,minimum_age,expires_at','Declaraciones de edad'),('community_messages','id,channel_id,created_at,blocked','Comentarios incrementales'),('live_channel_views','channel_id,member_id,day','Visitas verificadas de canales')]:
+  try:
+   with database() as c:c.execute('SELECT '+columns+' FROM '+table+' LIMIT 0').fetchall()
+   add(label,'ok','Estructura de datos presente; no verifica contenidos ni realiza conexiones externas.')
+  except Exception:add(label,'error','No se pudo comprobar la estructura de este módulo.')
+ protected=['streamers.check_video','operations.maintenance_report','operations.launch_readiness','age_policy.moderate_classification']
+ secured=all(getattr(current_app.view_functions.get(endpoint),'requires_admin',False) for endpoint in protected)
+ add('Comprobaciones exclusivas de administración','ok' if secured else 'error','Protección de rol presente en diagnósticos de vídeo, mantenimiento y moderación.' if secured else 'Hay una ruta de diagnóstico sin la marca de protección administrativa.')
+ add('Ubicación y VPN para contenido adulto','pending' if not current_app.extensions.get('adult_region_assessor') else 'ok','Sin proveedor de evaluación fiable: se aplica mínimo interno de 21 años; la IP no demuestra edad ni ausencia de VPN.' if not current_app.extensions.get('adult_region_assessor') else 'Evaluador regional instalado; comprueba su precisión y privacidad antes de confiar en sus resultados.')
+ add('Verificación de edad','pending','Se solicita declaración de edad. No hay verificación documental ni detección visual automática de consumo.')
+ add('Vídeo y comentarios superpuestos','pending','Diseño preparado. Comprueba vídeo a tamaño completo, pantalla compartida y chat desplazable en dispositivos reales.')
  add('Correos','ok' if mail_ready() else 'pending','Servicio configurado; esta revisión no envía correos ni confirma su llegada.' if mail_ready() else 'Configura el remitente y Resend o SMTP antes de probar confirmación y recuperación.')
  add('YouTube','ok' if os.getenv('YOUTUBE_API_KEY','').strip() else 'pending','Clave de búsqueda presente; usa el filtro YouTube para comprobar cuota y permisos. Los vídeos utilizan el reproductor oficial.' if os.getenv('YOUTUBE_API_KEY','').strip() else 'Falta YOUTUBE_API_KEY en este entorno. Las demás fuentes siguen disponibles.')
  add('Ol Livis','pending' if premiere() or not live_ready() else 'ok','Próximo estreno; la prueba pública sigue detenida.' if premiere() else 'Configuración de vídeo presente; comprueba una emisión entre dos dispositivos.' if live_ready() else 'Falta completar la configuración de vídeo.')
