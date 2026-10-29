@@ -44,6 +44,8 @@ def run():
   page.goto(BASE_URL+'/')
   hero=page.locator('#hero');assert hero.evaluate("e=>getComputedStyle(e).backgroundColor")=='rgb(0, 0, 0)'
   annual=page.locator('#planes a[href="/account#pricing"]')
+  assert annual.inner_text()=='Acceso'
+  assert annual.evaluate("e=>getComputedStyle(e).webkitTextFillColor")=='rgb(16, 16, 16)'
   fixed=annual.evaluate("e=>{let s=getComputedStyle(e);return [s.color,s.backgroundColor,s.opacity,s.animationName,s.backgroundImage]}")
   page.wait_for_timeout(500);assert fixed==annual.evaluate("e=>{let s=getComputedStyle(e);return [s.color,s.backgroundColor,s.opacity,s.animationName,s.backgroundImage]}")
   assert fixed[2:] == ['1','none','none'],fixed
