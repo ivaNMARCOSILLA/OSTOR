@@ -147,3 +147,25 @@ body.electronicama-theme #live-media[data-layout=camera] video[data-source=scree
 }
 body.electronicama-theme [data-led-visible=false],html.ol-page-hidden body.electronicama-theme *{animation-play-state:paused!important}
 @media(max-width:600px){.electronicama-theme #community-panel :is(#comment-status,#moderation-warning):not(:empty){display:block;max-height:70px;overflow:auto;background:#080808f5;color:#fff!important;font-size:11px;padding:5px;border-radius:6px}}
+/* Consistent dark form surfaces, including Safari's text fill and disabled states. */
+html:has(body.electronicama-theme),body.electronicama-theme{color-scheme:dark}
+body.electronicama-theme :is(input,select,textarea){color:#fafafa;-webkit-text-fill-color:currentColor;opacity:1;background-color:#080808}
+body.electronicama-theme :is(input,textarea)::placeholder{color:#bfbfbf;-webkit-text-fill-color:#bfbfbf;opacity:1}
+body.electronicama-theme select option{color:#fafafa;background:#080808}
+body.electronicama-theme :is(input,select,textarea):disabled{color:#bfbfbf;-webkit-text-fill-color:#bfbfbf;opacity:1}
+body.electronicama-theme .gold-text{color:#f5d397!important;-webkit-text-fill-color:#f5d397!important;background:none!important;text-shadow:none}
+/* A live stream has no native pause/play surface; app controls remain interactive. */
+.electronicama-theme :is(#live-media,#studio-screen) video{pointer-events:none}
+.electronicama-theme :is(#live-media,#studio-screen) video::-webkit-media-controls{display:none!important}
+.electronicama-theme :is(#live-media,#studio-screen) video::-webkit-media-controls-start-playback-button{display:none!important;-webkit-appearance:none}
+html.ol-inline-fullscreen-open{overflow:hidden}
+body.electronicama-theme .ol-inline-fullscreen{position:fixed!important;inset:0!important;z-index:2000!important;width:100vw!important;height:100dvh!important;max-height:none!important;margin:0!important;padding:10px!important;box-sizing:border-box;background:#000!important;border-radius:0!important;overflow:auto}
+.electronicama-theme .ol-inline-fullscreen .live-video-surface{height:calc(100dvh - 100px)}
+.electronicama-theme .ol-inline-fullscreen .live-media,.electronicama-theme .ol-inline-fullscreen .live-media video{height:100%;max-height:none}
+/* Buttons never inherit the decorative LED shimmer or transparent text fill. */
+body.electronicama-theme :is(button,a.button,.annual-access-link){animation:none!important;transition:none!important;background-image:none!important;text-shadow:none!important;-webkit-text-fill-color:currentColor;opacity:1}
+body.electronicama-theme :is(button,a.button,.annual-access-link) :is(span,strong,small,b,em){color:inherit!important;-webkit-text-fill-color:currentColor!important;text-shadow:none!important;animation:none!important;opacity:1!important}
+body.electronicama-theme :is(button,a.button,.annual-access-link)::before,body.electronicama-theme :is(button,a.button,.annual-access-link)::after{animation:none!important;pointer-events:none}
+body.electronicama-theme :is(button,a.button):not(:disabled):active{opacity:1;filter:none}
+
+body.electronicama-theme .moment-grid button{background:#f5d397!important;color:#101010!important;-webkit-text-fill-color:#101010!important;border-color:#ffe4b6!important}

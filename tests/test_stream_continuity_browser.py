@@ -29,6 +29,13 @@ def run():
   assert page.locator('#live-player #enable-sound').is_visible();assert page.locator('#live-player #fullscreen-live').is_visible();assert page.locator('#live-player #share-screen-live').is_visible()
   page.evaluate("document.querySelector('#live-player').requestFullscreen=async()=>{window.fullscreenTarget='live-player'}")
   page.locator('#fullscreen-live').click();assert page.evaluate('fullscreenTarget')=='live-player'
+  page.evaluate("()=>{fakeRooms.at(-1).events.track({sid:'video-controls-test',kind:'video',source:'camera',attach:()=>{const v=document.createElement('video');v.controls=true;v.id='direct-video-test';return v}})}")
+  video=page.locator('#direct-video-test');assert video.evaluate('e=>!e.controls&&e.playsInline&&e.disablePictureInPicture')
+  assert video.get_attribute('controls') is None
+  assert video.evaluate("e=>getComputedStyle(e).pointerEvents")=='none'
+  page.evaluate("()=>{document.querySelector('#live-player').requestFullscreen=undefined;document.querySelector('#direct-video-test').webkitEnterFullscreen=()=>{throw Error('Native player must not be used')}}")
+  page.locator('#fullscreen-live').click();assert page.locator('#live-player').evaluate("e=>e.classList.contains('ol-inline-fullscreen')")
+  page.locator('#fullscreen-live').click();assert not page.locator('#live-player').evaluate("e=>e.classList.contains('ol-inline-fullscreen')")
   page.locator('#share-screen-live').evaluate('(button)=>button.disabled=false');page.locator('#share-screen-live').click()
   page.wait_for_function("fakeRooms.at(-1).screenOptions?.displaySurface==='monitor'")
   page.locator('#live-layout').select_option('screen');page.wait_for_function("document.querySelector('#live-media').dataset.layout==='screen'")

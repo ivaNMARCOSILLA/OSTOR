@@ -1,7 +1,7 @@
 import {openSubscription} from '/assets/subscriptions.js?v=9.13.0';
 import {founderBadge} from '/assets/badges.js?v=9.15.0';
 'use strict';
-import {StreamCommunity} from '/assets/community.js?v=9.20.0';
+import {StreamCommunity} from '/assets/community.js?v=9.20.2';
 import {StudioTools} from '/assets/studio-tools.js?v=9.13.0';
 const $=id=>document.getElementById(id);
 let premiereOnly=false;
@@ -145,7 +145,7 @@ async function disconnect(){
  attachedTracks.clear();clearFounderStamp();$('live-media').replaceChildren();$('live-stage').classList.add('hidden');
  if(wasPublisher&&window.MaggySession.premium)try{await api('/api/streamers/me/live',{live:false});}catch{}
 }
-function attach(track,local=false){const key=track.sid||track;if(attachedTracks.has(key))return;const element=track.attach();attachedTracks.set(key,element);element.dataset.source=track.source||track.kind;if(track.source==='screen_share')element.classList.add('screen-track');element.autoplay=true;element.playbackRate=1;if(track.kind==='video'){element.playsInline=true;element.controls=false;}if(local)element.muted=true;if(track.kind==='audio'){element.controls=false;if(!local&&track.setPlayoutDelay)try{track.setPlayoutDelay(.1);}catch{}}$('live-media').append(element);}
+function attach(track,local=false){const key=track.sid||track;if(attachedTracks.has(key))return;const element=track.attach();attachedTracks.set(key,element);element.dataset.source=track.source||track.kind;if(track.source==='screen_share')element.classList.add('screen-track');element.autoplay=true;element.playbackRate=1;if(track.kind==='video'){element.playsInline=true;element.controls=false;element.removeAttribute('controls');element.setAttribute('playsinline','');element.setAttribute('webkit-playsinline','');element.setAttribute('controlslist','nodownload noplaybackrate noremoteplayback');element.disablePictureInPicture=true;element.disableRemotePlayback=true;}if(local)element.muted=true;if(track.kind==='audio'){element.controls=false;if(!local&&track.setPlayoutDelay)try{track.setPlayoutDelay(.1);}catch{}}$('live-media').append(element);}
 
 async function connect(channel,publish){
  if(connecting)return;connecting=true;renderStudio();let generation;

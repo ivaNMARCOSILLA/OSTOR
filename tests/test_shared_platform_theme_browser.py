@@ -12,7 +12,10 @@ def run():
   for path in ['/','/account','/live','/legal/aviso-legal.html','/legal/privacidad.html','/legal/cookies.html']:
    page.goto(BASE_URL+path)
    assert page.locator('body').evaluate("e=>e.classList.contains('electronicama-theme')")
-   assert page.locator('body').evaluate('e=>getComputedStyle(e).backgroundColor')=='rgb(0, 0, 0)'
+   for scheme in ['light','dark']:
+    page.emulate_media(color_scheme=scheme)
+    assert page.locator('body').evaluate('e=>getComputedStyle(e).backgroundColor')=='rgb(0, 0, 0)'
+    assert page.locator('body').evaluate('e=>getComputedStyle(e).colorScheme')=='dark'
    assert 'jungle' not in page.locator('body').evaluate('e=>getComputedStyle(e).backgroundImage')
    assert page.locator('#fondos-ol,a[href*=fondos-ol]').count()==0
    for width in [1440,390,320]:
