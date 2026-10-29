@@ -116,3 +116,5 @@ $('youtube-check-now')?.addEventListener('click',async event=>{
 });
 
 $('stripe-account-health')?.addEventListener('click',async()=>{const button=$('stripe-account-health'),status=$('stripe-account-health-status');button.disabled=true;status.textContent='Consultando el estado real de Stripe…';try{const d=await api('/api/admin/payments/account-health');status.textContent=`Conexión: correcta. Cobros en Stripe: ${d.charges_enabled?'habilitados':'pendientes'}. Transferencias al banco: ${d.payouts_enabled?'habilitadas':'pendientes'}. Requisitos pendientes: ${d.requirements_pending}; vencidos: ${d.requirements_overdue}. Cobros en electronicama: ${d.payments_enabled?'habilitados':'desactivados'}. Esta consulta no ha realizado ningún pago.`;}catch(error){status.textContent=error.message;}finally{button.disabled=false;}});
+
+window.addEventListener('ol:interface-update',event=>{if(event.detail.public&&!document.hidden)inspect();});

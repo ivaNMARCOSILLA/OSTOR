@@ -1,5 +1,5 @@
 """Shared maintenance state and least-privilege supervisor designation."""
-import os
+import os,secrets
 from flask import Blueprint,jsonify,request,current_app,make_response,session
 from membership import database,get_user,payload,require_admin,stamp,now_utc
 bp=Blueprint('operations',__name__)
@@ -11,7 +11,32 @@ def init_database():
  member_id TEXT PRIMARY KEY REFERENCES members(id) ON DELETE CASCADE,alias TEXT NOT NULL
  );CREATE TABLE IF NOT EXISTS ol_supervisors (
  member_id TEXT PRIMARY KEY REFERENCES members(id) ON DELETE CASCADE,assigned_by TEXT NOT NULL REFERENCES members(id),assigned_at TEXT NOT NULL,can_review INTEGER NOT NULL DEFAULT 0,revoked_at TEXT
- );''')
+ );CREATE TABLE IF NOT EXISTS interface_revisions (topic TEXT PRIMARY KEY,version TEXT NOT NULL);''')
+
+@bp.get('/api/sync')
+def interface_state():
+ with database() as conn:versions={row['topic']:row['version'] for row in conn.execute('SELECT topic,version FROM interface_revisions').fetchall()}
+ result={'public':versions.get('public','initial')}
+ if get_user():result['account']=versions.get('account','initial')
+ response=jsonify(result);response.headers['Cache-Control']='no-store';return response
+
+def mark_interface_change(response):
+ if request.method not in {'POST','PUT','PATCH','DELETE'} or not 200<=response.status_code<300:return response
+ path=request.path;public=False;account=False
+ if path in {'/api/streamers/me','/api/streamers/me/live','/api/streamers/me/layout'}:public=True
+ if path.startswith('/api/streamers/') and path.endswith('/view'):
+  data=response.get_json(silent=True) or {};public=bool(data.get('recorded'))
+ if path.startswith('/api/live/founders/') and path.endswith(('/claim','/signature')):public=True;account=True
+ if path.startswith(('/api/admin/','/api/channel-subscriptions/','/api/payments/')):public=True;account=True
+ if path.startswith('/api/account/') and not path.endswith(('/human-check','/login','/logout')):account=True
+ if not public and not account:return response
+ try:
+  with database() as conn:
+   for topic,changed in [('public',public),('account',account)]:
+    if changed:conn.execute('INSERT INTO interface_revisions(topic,version) VALUES(?,?) ON CONFLICT(topic) DO UPDATE SET version=excluded.version',(topic,secrets.token_hex(16)))
+ except Exception:
+  current_app.logger.warning('Interface refresh notification could not be stored')
+ return response
 
 def premiere():return os.getenv('OL_LIVE_PREMIERE','1')=='1'
 
@@ -117,7 +142,7 @@ def assign_supervisor():return jsonify(error='Este apartado ha sido retirado.'),
 def guard():
  path=request.path
  if request.method=='GET' and request.args.get('distribution')=='googleplay':session['ol_play_distribution']=True
- if path.startswith(('/assets/','/api/admin/','/api/account/','/api/payments/webhook/')) or path in {'/health','/api/status','/api/payments/status','/account','/sw.js','/manifest.webmanifest','/api/payments/connect-return','/.well-known/assetlinks.json'}:return
+ if path.startswith(('/assets/','/api/admin/','/api/account/','/api/payments/webhook/')) or path in {'/health','/api/status','/api/sync','/api/payments/status','/account','/sw.js','/manifest.webmanifest','/api/payments/connect-return','/.well-known/assetlinks.json'}:return
  d=state();scope=d['scope']
  affected=scope=='all' or scope=='live' and (path in {'/live','/streamers'} or path.startswith(('/api/streamers','/api/channel-subscriptions','/api/live/'))) or scope=='payments' and path.startswith('/api/payments/')
  if not affected:return
@@ -134,4 +159,5 @@ def guard():
 
 def install(app):
  app.register_blueprint(bp)
+ app.after_request(mark_interface_change)
  app.before_request_funcs.setdefault(None,[]).insert(0,guard)

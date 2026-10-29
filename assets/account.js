@@ -278,3 +278,8 @@ setTimeout(reconcileAnnualPayment,0);
 
 let annualRefreshBusy=false,returnChecks=0;
 setInterval(async()=>{if(document.hidden||!current||annualRefreshBusy)return;const processing=new URLSearchParams(location.search).get('payment')==='processing'&&!current.live_annual;if(!processing||returnChecks>=6)return;returnChecks++;annualRefreshBusy=true;try{await refresh();}catch{}finally{annualRefreshBusy=false;}},5000);
+
+let interfaceRefreshPending=false,interfaceRefreshBusy=false;
+async function refreshInterfaceAccount(){if(document.hidden||interfaceRefreshBusy)return;if(document.activeElement?.closest('form')){interfaceRefreshPending=true;return;}interfaceRefreshPending=false;interfaceRefreshBusy=true;try{await refresh();}catch{}finally{interfaceRefreshBusy=false;}}
+window.addEventListener('ol:interface-update',event=>{if(event.detail.account)refreshInterfaceAccount();});
+document.addEventListener('focusout',()=>{if(interfaceRefreshPending)setTimeout(refreshInterfaceAccount,0);});

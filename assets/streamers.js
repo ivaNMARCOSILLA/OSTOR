@@ -1,7 +1,7 @@
 import {openSubscription} from '/assets/subscriptions.js?v=9.13.0';
 import {founderBadge} from '/assets/badges.js?v=9.15.0';
 'use strict';
-import {StreamCommunity} from '/assets/community.js?v=9.21.0';
+import {StreamCommunity} from '/assets/community.js?v=9.22.0';
 import {StudioTools} from '/assets/studio-tools.js?v=9.13.0';
 const $=id=>document.getElementById(id);
 let premiereOnly=false;
@@ -33,6 +33,7 @@ async function refresh(){
  document.body.classList.remove('ol-live-premiere-only');
  if(!window.MaggySession.authenticated){publicInfo=await api('/api/live/catalogue');renderCatalogue();return;}
  info=await api('/api/streamers');
+ if(selected){const updated=info.channels.find(channel=>channel.id===selected.id)||(info.mine?.id===selected.id?info.mine:null);if(updated){selected={...selected,...updated};$('stage-title').textContent=selected.title;}}
  $('stream-unavailable').classList.toggle('hidden',info.video_ready);
  $('video-setup').classList.toggle('hidden',!info.setup_checks);
  if(info.setup_checks){$('open-video-preview').classList.toggle('hidden',info.setup_environment!=='production');$('setup-environment').textContent=info.setup_environment==='production'?'Estás en electronicama.com. El vídeo de esta web necesita sus variables en Production. Las claves guardadas solo en Preview no lo activan. Comprueba aquí la conexión después del despliegue.':info.setup_environment==='preview'?'Estás en la vista previa de pruebas. Los cobros siguen bloqueados durante la comprobación.':'Estudio local de pruebas.';const list=$('video-checks');list.replaceChildren();for(const [name,ok] of Object.entries(info.setup_checks))list.append(node('li',`${name}: ${ok?'correcto':'pendiente de corregir'}`));}
@@ -208,3 +209,7 @@ setInterval(()=>{if(!document.hidden||publishing)refresh().catch(error=>status(e
 
 $('mobile-live-controls').addEventListener('click',()=>{const open=$('live-stage').classList.toggle('mobile-controls-open');$('mobile-live-controls').setAttribute('aria-expanded',String(open));});
 $('mobile-live-chat').addEventListener('click',()=>{const stage=$('live-stage'),visible=stage.dataset.publisher==='true'?stage.classList.toggle('mobile-chat-shown'):!stage.classList.toggle('mobile-chat-hidden');$('mobile-live-chat').setAttribute('aria-pressed',String(visible));});
+
+window.addEventListener('ol:interface-update',async event=>{if(document.hidden)return;try{if(event.detail.account)await window.MaggySession.refresh?.();await refresh();}catch{}});
+window.addEventListener('focus',()=>refresh().catch(()=>{}));
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh().catch(()=>{});});
