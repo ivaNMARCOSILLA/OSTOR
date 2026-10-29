@@ -102,3 +102,48 @@ body.electronicama-theme :is(#hero,#hologramas,.account-shell>.intro)::before{co
 body.electronicama-theme,body.electronicama-theme:has(>.back){background-color:#000;background-image:url('/assets/gold-geometry.svg'),url('/assets/gold-orbits.svg'),url('/assets/gold-prism.svg');background-position:left 180px,right 520px,left 900px;background-size:90px 1100px,100px 1400px,80px 1700px;background-repeat:repeat-y}
 /* The tall SVG viewports reserve empty space between the sparse line figures. */
 @media(max-width:600px){body.electronicama-theme,body.electronicama-theme:has(>.back){background-size:42px 1100px,46px 1400px,38px 1700px}}
+.mobile-live-only{display:none}
+@media(max-width:600px){
+ body.electronicama-theme #live-stage:not(.hidden){position:fixed;inset:0;z-index:1000;width:100%;height:100dvh;max-height:100dvh;box-sizing:border-box;margin:0!important;padding:0!important;border:0!important;border-radius:0;background:#000!important;animation:none;overflow:hidden}
+ body.electronicama-theme #live-stage::after{display:none!important}
+ .electronicama-theme #live-stage>.heading{position:absolute;inset:0 0 auto;z-index:8;display:flex;align-items:center;gap:5px;padding:calc(8px + env(safe-area-inset-top)) 8px 12px;margin:0;background:linear-gradient(#000d,transparent)}
+ .electronicama-theme #stage-title{font-size:14px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ .electronicama-theme .mobile-live-only{display:inline-flex}
+ .electronicama-theme #live-stage>.heading button{font-size:11px;padding:7px;min-height:44px;background:#111e;color:#fff;border-color:#aaa}
+ .electronicama-theme #live-stage .livis-watch-workspace,.electronicama-theme #live-stage .livis-player-column,.electronicama-theme #live-player,.electronicama-theme #live-stage .live-video-surface,.electronicama-theme #live-media{position:absolute;inset:0;display:block;width:100%;height:100%;margin:0!important;border:0;border-radius:0;min-height:0;background:#000}
+ .electronicama-theme #live-media video,.electronicama-theme #live-media .screen-track{width:100%;height:100%;max-height:none;object-fit:contain}
+ .electronicama-theme #live-media audio{position:absolute;width:1px;height:1px;min-height:0;opacity:0;pointer-events:none}
+ .electronicama-theme #live-stage .live-stats,.electronicama-theme #live-stage .livis-player-column>p,.electronicama-theme #live-meter-label{display:none!important}
+ .electronicama-theme #live-player>.live-actions{position:absolute;right:8px;bottom:calc(105px + env(safe-area-inset-bottom));z-index:7;display:flex;flex-direction:column;gap:6px;margin:0;background:transparent}
+ .electronicama-theme #live-player>.live-actions button{flex:none;font-size:11px;min-height:44px;max-width:120px;padding:8px;background:#111e;color:#fff;border-color:#aaa}
+ .electronicama-theme #live-stage:not(.mobile-controls-open) :is(#toggle-camera,#share-screen-live,#copy-channel-live,#publisher-screen-controls){display:none!important}
+ .electronicama-theme #publisher-screen-controls{position:absolute;right:138px;bottom:110px;z-index:8;width:min(230px,52vw);max-height:55dvh;overflow:auto;background:#080808f5;padding:10px;font-size:12px}
+ .electronicama-theme #community-panel{position:absolute;inset:auto 0 0;z-index:6;margin:0!important;padding:8px 135px calc(8px + env(safe-area-inset-bottom)) 10px!important;border:0!important;border-radius:0;background:linear-gradient(transparent,#000d 35%)!important;max-height:44dvh;pointer-events:none;box-sizing:border-box}
+ .electronicama-theme #community-panel>*{pointer-events:auto}
+ .electronicama-theme #community-panel>h3,.electronicama-theme #community-panel>p,.electronicama-theme #community-panel>.sticker-picker,.electronicama-theme #report-stream{display:none}
+ .electronicama-theme #live-stage.mobile-controls-open :is(#report-stream,#community-panel>.sticker-picker){display:block;background:#080808;color:#fff}
+ .electronicama-theme #live-comments{max-height:24dvh;min-height:0;overflow:auto;background:transparent!important;border:0!important;padding:0;font-size:12px;color:#fff;text-shadow:0 1px 3px #000}
+ .electronicama-theme #live-comments p{margin:6px 0;color:#fff!important;background:#0009;border-radius:8px;padding:5px;overflow-wrap:anywhere}
+ .electronicama-theme #live-comments strong{color:#f5d397}
+ .electronicama-theme #comment-form{display:block;margin:8px 0 0}.electronicama-theme #comment-form label{font-size:11px;color:#fff}.electronicama-theme #comment-text{min-height:40px;padding:8px;background:#111e;color:#fff}.electronicama-theme #comment-form button{min-height:36px;font-size:11px;padding:5px 10px}
+ .electronicama-theme #live-stage.mobile-chat-hidden #community-panel,.electronicama-theme #live-stage[data-publisher=true]:not(.mobile-chat-shown) #community-panel{display:none!important}
+ .electronicama-theme #live-founder-stamp{top:80px;bottom:auto;right:8px;left:auto;z-index:4;max-width:110px}.electronicama-theme #live-founder-stamp .founder-postage-stamp{max-width:100%;font-size:10px;padding:7px}
+ .electronicama-theme #live-break-reminder{z-index:12;position:absolute;top:80px;left:8px;right:8px}
+ .electronicama-theme #report-form{position:fixed;inset:90px 10px auto;padding:15px;max-height:70dvh;overflow:auto;background:#080808;z-index:12}
+}
+/* Shared screen is the main canvas; camera remains a small inset. */
+body.electronicama-theme #live-media:has(video[data-source=screen_share]){position:relative;display:block;aspect-ratio:16/9;min-height:220px}
+body.electronicama-theme #live-media:has(video[data-source=screen_share]) video[data-source=screen_share]{display:block;width:100%;height:100%;max-height:75dvh;object-fit:contain}
+body.electronicama-theme #live-media:has(video[data-source=screen_share]) video[data-source=camera]{position:absolute;right:12px;top:12px;width:24%;height:26%;max-width:240px;min-height:0;object-fit:cover;z-index:3;border:1px solid #f5d397;border-radius:10px;box-shadow:0 3px 16px #0009}
+body.electronicama-theme #live-media[data-layout=camera]:has(video[data-source=screen_share]) video[data-source=camera]{inset:0;width:100%;height:100%;max-width:none;object-fit:contain}
+body.electronicama-theme #live-media[data-layout=camera] video[data-source=screen_share]{visibility:hidden}
+@media(max-width:600px){body.electronicama-theme #live-stage #live-media:has(video[data-source=screen_share]){position:absolute;aspect-ratio:auto;height:100%;min-height:0}body.electronicama-theme #live-stage #live-media:has(video[data-source=screen_share]) video[data-source=screen_share]{height:100%;max-height:none}body.electronicama-theme #live-stage #live-media:has(video[data-source=screen_share]) video[data-source=camera]{top:85px;right:10px;width:27%;height:18%;max-width:140px}}
+@media(max-width:600px){body.electronicama-theme #live-stage #live-media:has(video[data-source=screen_share]) video[data-source=camera]{left:10px;right:auto}}
+/* Mobile live mode isolates the active stage instead of scrolling the page beneath. */
+@media(max-width:600px){
+ body.electronicama-theme:has(#live-stage:not(.hidden)){overflow:hidden;overscroll-behavior:none}
+ body.electronicama-theme:has(#live-stage:not(.hidden)) .platform-content>:not(#live-stage),body.electronicama-theme:has(#live-stage:not(.hidden)) :is(.platform-header,.platform-sidebar){display:none!important}
+ .electronicama-theme #live-comments{overscroll-behavior:contain;overflow-anchor:none}
+}
+body.electronicama-theme [data-led-visible=false],html.ol-page-hidden body.electronicama-theme *{animation-play-state:paused!important}
+@media(max-width:600px){.electronicama-theme #community-panel :is(#comment-status,#moderation-warning):not(:empty){display:block;max-height:70px;overflow:auto;background:#080808f5;color:#fff!important;font-size:11px;padding:5px;border-radius:6px}}

@@ -78,7 +78,7 @@ class CreatorSubscriptionTests(unittest.TestCase):
   self.assertEqual(self.post(self.other,comments,{'text':'No estoy suscrito'}).status_code,403)
   self.assertEqual(self.post(self.viewer,comments,{'text':'Hola, comunidad'}).status_code,200)
   self.assertTrue(self.viewer.get(comments).json['comments'][0]['subscriber_badge'])
-  self.assertEqual(self.other.get(comments).json['comments'],[])
+  self.assertEqual(self.other.get(comments).status_code,403)
   self.post(self.creator,mode,{'subscriber_chat':False,'exclusive_live':False})
   self.assertEqual(self.other.get(comments).json['comments'],[])
   self.post(self.creator,mode,{'subscriber_chat':True,'exclusive_live':True})

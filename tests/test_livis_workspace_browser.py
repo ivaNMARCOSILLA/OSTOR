@@ -28,6 +28,12 @@ def run():
    assert page.evaluate("()=>{const s=document.querySelector('#live-founder-stamp').getBoundingClientRect(),p=document.querySelector('#live-player').getBoundingClientRect();return s.left>=p.left&&s.right<=p.right+1&&s.top>=p.top;}"),width
    assert page.evaluate("document.querySelector('#live-founder-stamp').getBoundingClientRect().bottom<=document.querySelector('#fullscreen-live').getBoundingClientRect().top"),width
    if width>=1100:assert page.evaluate("document.querySelector('#community-panel').getBoundingClientRect().left>=document.querySelector('#live-player').getBoundingClientRect().right")
+  page.set_viewport_size({'width':390,'height':844})
+  page.evaluate("()=>{const m=document.querySelector('#live-media');for(const source of ['camera','screen_share']){const v=document.createElement('video');v.dataset.source=source;v.dataset.layoutTest='1';m.append(v)}}")
+  geometry=page.evaluate("()=>{const m=document.querySelector('#live-media'),screen=m.querySelector('[data-source=screen_share]').getBoundingClientRect(),camera=m.querySelector('[data-source=camera]').getBoundingClientRect();return {screen:screen.width,camera:camera.width,position:getComputedStyle(document.querySelector('#live-stage')).position}}")
+  assert geometry['screen']>geometry['camera']*3 and geometry['position']=='fixed',geometry
+  page.locator('#mobile-live-controls').click();assert page.locator('#mobile-live-controls').get_attribute('aria-expanded')=='true'
+  page.locator('#mobile-live-controls').click();page.evaluate("document.querySelectorAll('[data-layout-test]').forEach(e=>e.remove())")
   page.screenshot(path='/tmp/electronicama-livis-workspace-mobile.png',full_page=True)
   page.set_viewport_size({'width':1440,'height':1000});page.screenshot(path='/tmp/electronicama-livis-workspace-desktop.png',full_page=True)
   page.get_by_role('button',name='Salir del directo',exact=True).click();page.locator('#live-stage').wait_for(state='hidden')
