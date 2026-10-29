@@ -304,6 +304,7 @@ def restrict_music():
     # Registered viewers can watch public streams without the annual creator plan.
     viewer_route=path=='/api/streamers' and request.method=='GET' or bool(re.fullmatch(r'/api/streamers/[a-f0-9]{32}/(?:access|comments|age-policy)',path) and request.method=='GET') or bool(re.fullmatch(r'/api/streamers/[a-f0-9]{32}/token',path) and request.method=='POST' and payload().get('publish') is not True)
     viewer_route=viewer_route or bool(re.fullmatch(r'/api/streamers/[a-f0-9]{32}/(?:comments|view|age-confirm)',path) and request.method=='POST')
+    viewer_route=viewer_route or (path=='/api/streamers/me/live' and request.method=='POST' and payload().get('live') is False)
     if viewer_route:
         if not user:return jsonify(error='Inicia sesión con una cuenta gratuita para ver los directos.',code='login_required'),401
         return None

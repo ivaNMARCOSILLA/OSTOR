@@ -1,5 +1,5 @@
 """Member-only live comments, text moderation and private transcript review."""
-import secrets,re
+import secrets,re,json
 from datetime import timedelta
 from flask import Blueprint, jsonify, request
 from membership import database, get_user, now_utc, stamp, require_admin
@@ -17,7 +17,7 @@ def init_database():
           member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
           kind TEXT NOT NULL,body TEXT NOT NULL,category TEXT NOT NULL DEFAULT '',blocked INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL
         ); CREATE INDEX IF NOT EXISTS community_channel ON community_messages(channel_id,created_at);
-        CREATE INDEX IF NOT EXISTS community_retention ON community_messages(created_at); CREATE INDEX IF NOT EXISTS community_live_feed ON community_messages(channel_id,blocked,created_at,id); CREATE INDEX IF NOT EXISTS community_member_time ON community_messages(member_id,created_at); CREATE TABLE IF NOT EXISTS community_retention_clock (id INTEGER PRIMARY KEY,last_run TEXT NOT NULL)''')
+        CREATE TABLE IF NOT EXISTS community_report_details(message_id TEXT PRIMARY KEY REFERENCES community_messages(id) ON DELETE CASCADE,snapshot_json TEXT NOT NULL); CREATE INDEX IF NOT EXISTS community_retention ON community_messages(created_at); CREATE INDEX IF NOT EXISTS community_live_feed ON community_messages(channel_id,blocked,created_at,id); CREATE INDEX IF NOT EXISTS community_member_time ON community_messages(member_id,created_at); CREATE TABLE IF NOT EXISTS community_retention_clock (id INTEGER PRIMARY KEY,last_run TEXT NOT NULL)''')
     from subscriptions import init_database as init_subscriptions
     init_subscriptions()
 
@@ -73,14 +73,18 @@ def post_text(channel_id):
     if kind not in {'comment','transcript','report','sticker'} or not isinstance(body,str) or not 1<=len(body.strip())<=1000:
         return jsonify(error='Escribe un comentario o fragmento de hasta 1000 caracteres.'),400
     body=body.strip();user=get_user()
+    if kind=='report':
+        from membership import allow_attempt
+        if not allow_attempt('community-report',limit=6):return jsonify(error='Has enviado varias denuncias. Espera antes de enviar otra.'),429
+    report_snapshot=None
     with database() as conn:
-        conn.execute('BEGIN IMMEDIATE');channel=live_channel(conn,channel_id)
+        conn.execute('BEGIN IMMEDIATE');channel=conn.execute('SELECT * FROM streamer_channels WHERE id=?',(channel_id,)).fetchone() if kind=='report' else live_channel(conn,channel_id)
         if not channel:return jsonify(error='Este canal no está en directo.'),404
         from age_policy import gate
         restricted=gate(conn,channel_id,get_user())
-        if restricted:return restricted
+        if restricted and kind!='report':return restricted
         from subscriptions import chat_allowed,settings,watch_allowed
-        if not watch_allowed(conn,channel,user):return jsonify(error='Este directo está reservado a suscriptores del creador.'),403
+        if kind!='report' and not watch_allowed(conn,channel,user):return jsonify(error='Este directo está reservado a suscriptores del creador.'),403
         subscriber_only=bool(settings(conn,channel_id)['subscriber_chat'])
         if kind in {'comment','sticker'} and subscriber_only and not chat_allowed(conn,channel,user):return jsonify(error='Este chat está reservado a suscriptores del creador.'),403
         if kind=='transcript':
@@ -96,11 +100,28 @@ def post_text(channel_id):
         category='report' if kind=='report' else classify(body);blocked=bool(category and kind!='report')
         ident=secrets.token_hex(16)
         conn.execute('INSERT INTO community_messages(id,channel_id,member_id,kind,body,category,blocked,created_at) VALUES(?,?,?,?,?,?,?,?)',(ident,channel_id,user['id'],kind,body,category,int(blocked),stamp(now_utc())))
+        if kind=='report':
+            sent=conn.execute("SELECT COUNT(*) AS n FROM community_messages WHERE member_id=? AND kind='report' AND created_at>?",(user['id'],stamp(now_utc()-timedelta(minutes=15)))).fetchone()['n']
+            if sent>=6:return jsonify(error='Espera antes de enviar más denuncias.'),429
+            target=None;target_id=data.get('target_message_id')
+            if target_id:
+                target=conn.execute('SELECT id,member_id,body,kind,created_at FROM community_messages WHERE id=? AND channel_id=? AND kind IN (?,?)',(str(target_id),channel_id,'comment','sticker')).fetchone()
+                if not target:return jsonify(error='El comentario señalado no existe en este canal.'),400
+            def person(member_id):
+                row=conn.execute("SELECT m.id,m.username,COALESCE(p.nickname,m.username) AS nickname,CASE WHEN p.email_verified=1 THEN p.email ELSE NULL END AS verified_email FROM members m LEFT JOIN member_profiles p ON p.member_id=m.id WHERE m.id=?",(member_id,)).fetchone()
+                return dict(row) if row else {'id':member_id}
+            report_snapshot={'reporter':person(user['id']),'reported':person(target['member_id'] if target else channel['member_id']),'channel_id':channel_id,'channel_title':channel['title'],'reason':body,'at':stamp(now_utc()),'message':dict(target) if target else None}
+            report_snapshot['recordings']=[dict(r) for r in conn.execute("SELECT id,state,started_at,expires_at FROM live_recordings WHERE channel_id=? AND expires_at>? ORDER BY started_at DESC LIMIT 5",(channel_id,stamp(now_utc()))).fetchall()]
         if subscriber_only and kind in {'comment','sticker'}:conn.execute('INSERT INTO community_audiences(message_id,audience) VALUES(?,?)',(ident,'subscribers'))
+        if report_snapshot:conn.execute('INSERT INTO community_report_details(message_id,snapshot_json) VALUES(?,?)',(ident,json.dumps(report_snapshot,ensure_ascii=False)))
         strikes=conn.execute("SELECT COUNT(*) AS n FROM community_messages WHERE channel_id=? AND member_id=? AND blocked=1 AND created_at>?",(channel_id,user['id'],stamp(now_utc()-timedelta(hours=24)))).fetchone()['n']
-    if blocked or kind=='report':notify('moderation','Aviso de moderación' if blocked else 'Nueva denuncia','Hay un nuevo aviso o denuncia en un directo. Revisa el contexto en administración; los correos no incluyen conversaciones completas.')
+    mail_sent=False
+    if report_snapshot:
+        detail='Denuncia '+ident+'\n'+json.dumps(report_snapshot,ensure_ascii=False,indent=2)+'\n\nConsulta privada: https://electronicama.com/account#moderation-history\nGrabaciones: https://electronicama.com/account#live-recordings-admin\nNo se ha confirmado una infracción: requiere revisión administrativa.'
+        mail_sent=bool(notify('moderation','Nueva denuncia · '+ident[:8],detail,event_key='community-report:'+ident))
+    elif blocked:notify('moderation','Aviso de moderación','Hay un nuevo aviso en un directo. Revisa el contexto en administración.')
     warning=('Aviso de moderación: se ha detectado una expresión no permitida. La reiteración puede dar lugar a suspensión tras revisión de administración.' if strikes<3 else 'Avisos reiterados: el caso queda señalado para revisión de una posible suspensión por administración.') if blocked else ''
-    return jsonify(accepted=not blocked,blocked=blocked,warning=warning,warnings_24h=strikes,review_required=bool(blocked and (strikes>=3 or category in {'sexual_minors','threat','illicit_trade'})),reported=kind=='report')
+    return jsonify(report_id=ident if report_snapshot else None,mail_sent=mail_sent,accepted=not blocked,blocked=blocked,warning=warning,warnings_24h=strikes,review_required=bool(blocked and (strikes>=3 or category in {'sexual_minors','threat','illicit_trade'})),reported=kind=='report')
 
 
 @bp.get('/api/admin/moderation')
@@ -112,8 +133,12 @@ def moderation_log():
     where="WHERE c.category!=''" if flagged else ''
     with database() as conn:
         purge(conn);total=conn.execute('SELECT COUNT(*) AS n FROM community_messages c '+where).fetchone()['n'];pages=max(1,(total+24)//25);page=min(page,pages)
-        rows=conn.execute('SELECT c.id,c.kind,c.body,c.category,c.blocked,c.created_at,m.username,s.title AS channel FROM community_messages c JOIN members m ON m.id=c.member_id JOIN streamer_channels s ON s.id=c.channel_id '+where+' ORDER BY c.created_at DESC,c.id DESC LIMIT 25 OFFSET ?',((page-1)*25,)).fetchall()
-    return jsonify(records=[dict(row) for row in rows],total=total,page=page,pages=pages,retention_days=RETENTION_DAYS)
+        rows=conn.execute('SELECT c.id,c.kind,c.body,c.category,c.blocked,c.created_at,m.username,s.title AS channel,d.snapshot_json FROM community_messages c JOIN members m ON m.id=c.member_id JOIN streamer_channels s ON s.id=c.channel_id LEFT JOIN community_report_details d ON d.message_id=c.id '+where+' ORDER BY c.created_at DESC,c.id DESC LIMIT 25 OFFSET ?',((page-1)*25,)).fetchall()
+    records=[]
+    for row in rows:
+        record=dict(row);snapshot=record.pop('snapshot_json',None)
+        record['report']=json.loads(snapshot) if snapshot else None;records.append(record)
+    return jsonify(records=records,total=total,page=page,pages=pages,retention_days=RETENTION_DAYS)
 
 
 @bp.post('/api/admin/community-role')

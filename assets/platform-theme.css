@@ -214,3 +214,10 @@ body.electronicama-theme a.button:not(.secondary) :is(span,strong,small,b,em){co
 body.electronicama-theme a.button.secondary :is(span,strong,small,b,em){color:#f5d397!important;-webkit-text-fill-color:#f5d397!important}
 
 body.electronicama-theme #live-stage #live-player #community-panel{display:flex!important}
+body.electronicama-theme #live-player #report-stream:not(.hidden){display:inline-flex!important;align-self:flex-start;font-size:11px;padding:5px 9px;min-height:32px;background:#111;color:#f5d397}
+body.electronicama-theme #live-comments .comment-report-button{display:inline;margin-left:8px;min-height:24px;padding:2px 5px;font-size:10px;background:#111;color:#f5d397;border-color:#8a7857}
+body.electronicama-theme #report-form:not(.hidden){position:absolute;left:0;bottom:0;width:min(440px,85vw);max-height:65dvh;overflow:auto;z-index:20;background:#080808;border:1px solid #f5d397;border-radius:12px;padding:12px;box-sizing:border-box}
+
+.electronicama-theme #recording-live-note{position:absolute;top:12px;left:12px;z-index:5;padding:5px 8px;background:#080808e8;color:#f5d397;font-size:11px;border-radius:6px;pointer-events:none}@media(max-width:600px){.electronicama-theme #recording-live-note{top:68px}}
+
+.moderation-report-context{white-space:pre-wrap;overflow-wrap:anywhere;max-width:min(65ch,75vw);font-size:12px}

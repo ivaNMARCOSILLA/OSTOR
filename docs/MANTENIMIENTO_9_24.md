@@ -48,4 +48,18 @@ El seguimiento prolongado usa vídeo generado por canvas y LiveKit simulado,
 con cuentas aisladas. Comprueba cada minuto vídeo en avance, rechazos de permisos,
 botón Acceso estable, anchos 320/390/768/1440 y edición desde otro contexto.
 No mide una emisión real, facturación real, identidad de personas ni carga distribuida.
+
+La grabación de vídeos no está activa. Se ha propuesto almacenamiento privado
+en Cloudflare R2 conectado a LiveKit Egress, con acceso administrativo temporal
+y borrado a los 30 días. Falta elegir/configurar el almacenamiento y la grabación;
+el panel de mantenimiento lo señala como pendiente. No existe aún una carpeta
+real de grabaciones que se pueda enlazar.
 El resultado y la duración reales se incorporan tras terminar el seguimiento.
+
+## Resultado del seguimiento
+
+Completado: 1.800 segundos reales, 31 rondas, sin interrupción observada del vídeo
+de canvas. Todas las rondas comprobaron permisos administrativos rechazados para
+visitante y cuenta gratuita, texto de Acceso sobre dorado y recepción de cambios
+remotos en anchos de 320, 390, 768 y 1440. La prueba específica de enlaces visitados
+y las peticiones posteriores de grabación/denuncias se validaron por separado.

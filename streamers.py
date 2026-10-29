@@ -53,6 +53,8 @@ def init_database():
             channel_id TEXT PRIMARY KEY REFERENCES streamer_channels(id) ON DELETE CASCADE,
             category TEXT NOT NULL DEFAULT 'entretenimiento',featured INTEGER NOT NULL DEFAULT 0
         ); CREATE TABLE IF NOT EXISTS live_channel_views (channel_id TEXT NOT NULL REFERENCES streamer_channels(id) ON DELETE CASCADE,member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,day TEXT NOT NULL,PRIMARY KEY(channel_id,member_id,day)); CREATE INDEX IF NOT EXISTS live_views_channel ON live_channel_views(channel_id)''')
+    from recordings import init_database as init_recordings
+    init_recordings()
     from age_policy import init_database as init_age_policy
     init_age_policy()
     from community import init_database as init_community_database
@@ -200,7 +202,8 @@ def channels():
         rows=conn.execute('SELECT c.*,ar.adult_content,ar.version AS adult_version,(SELECT COUNT(*) FROM live_channel_views v WHERE v.channel_id=c.id) AS view_count,m.username,o.category,o.featured,f.number AS founder_number,sg.mode AS badge_mode,sg.letter AS badge_letter,sg.caption AS badge_caption,sg.audio_json AS badge_audio FROM streamer_channels c JOIN members m ON m.id=c.member_id LEFT JOIN adult_channel_rules ar ON ar.channel_id=c.id LEFT JOIN live_channel_settings o ON o.channel_id=c.id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN founder_signatures sg ON sg.member_id=m.id WHERE c.live_until>? ORDER BY view_count DESC,COALESCE(o.featured,0) DESC,c.updated_at DESC LIMIT 60',(stamp(now_utc()),)).fetchall()
     own=own_channel()
     from subscriptions import decorate
-    return jsonify(video_ready=live_ready(),streamer_active=publisher_allowed(),live_price_cents=2500,live_trial_months=0,live_trial_days=0,private_preview=private_preview_allowed(),gift_commission_bps=0,
+    from recordings import configuration as recording_configuration
+    return jsonify(recording_enabled=recording_configuration()['enabled'],video_ready=live_ready(),streamer_active=publisher_allowed(),live_price_cents=2500,live_trial_months=0,live_trial_days=0,private_preview=private_preview_allowed(),gift_commission_bps=0,
                    channels=decorate([channel_public(row) for row in rows if not is_abusive(row['title']+' '+row['bio']+' '+row['username'])]),mine=channel_public(own) if own else None,
                    user={'id':user['id'],'username':user['username']},
                    setup_checks=video_configuration_checks() if user['role']=='admin' else None,
@@ -318,8 +321,8 @@ def token(channel_id):
 
 @bp.post('/api/streamers/me/live')
 def presence():
-    if not publisher_allowed(): return jsonify(error='Tu plan Ol Livis Creador no está activo.'),403
     live=(request.get_json(silent=True) or {}).get('live') is True
+    if live and not publisher_allowed(): return jsonify(error='Tu plan Ol Livis Creador no está activo.'),403
     if live and not live_ready(): return jsonify(error='Las emisiones no están activadas.'),503
     channel=own_channel()
     if live and channel:
@@ -329,6 +332,14 @@ def presence():
     if live:
         from live_access import verified_broadcast
         if not channel or not verified_broadcast(channel,get_user()):return jsonify(error='No hemos podido verificar una emisión de vídeo en LiveKit. Tu tiempo aún no se acredita.',code='broadcast_unverified'),409
+    if live:
+        from recordings import ensure_started
+        from recordings import configuration as recording_configuration
+        if recording_configuration()['enabled'] and (request.get_json(silent=True) or {}).get('recording_notice_accepted') is not True:return jsonify(error='Acepta el aviso de grabación antes de emitir.',code='recording_notice_required'),403
+        try:ensure_started(channel,get_user())
+        except RuntimeError as exc:
+            if str(exc)=='recording_start_pending':return jsonify(error='La grabación se está iniciando. El directo aún no se publica.',code='recording_pending'),409
+            return jsonify(error='La grabación obligatoria no está preparada o necesita revisión de administración. No se publicará el directo.',code='recording_required'),409
     with database() as conn:
         conn.execute('UPDATE streamer_channels SET live_until=?,updated_at=? WHERE member_id=?',
                      (stamp(now_utc()+timedelta(seconds=75)) if live else None,stamp(now_utc()),get_user()['id']))
@@ -336,6 +347,9 @@ def presence():
             from live_access import credit_activity
             credit_activity(conn,get_user()['id'])
         else:conn.execute('UPDATE founder_activity SET last_verified_at=NULL,session_seconds=0 WHERE member_id=?',(get_user()['id'],))
+    if not live and channel:
+        from recordings import stop_recording
+        stop_recording(channel['id'])
     return jsonify(ok=True)
 
 

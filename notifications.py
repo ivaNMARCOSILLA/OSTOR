@@ -57,7 +57,7 @@ def notify(kind,title,detail,event_key=None):
     ident=secrets.token_hex(16)
     with database() as conn:
         conn.execute('INSERT INTO admin_notifications(id,kind,title,detail,event_key,created_at,status,attempts) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(event_key) DO NOTHING',(ident,kind,title,detail,event_key,stamp(now_utc()),'pending',0))
-    send_one(ident)
+    return send_one(ident)
 
 
 @bp.get('/api/admin/notifications')

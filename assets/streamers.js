@@ -1,8 +1,8 @@
 import {openSubscription} from '/assets/subscriptions.js?v=9.13.0';
 import {founderBadge} from '/assets/badges.js?v=9.15.0';
 'use strict';
-import {StreamCommunity} from '/assets/community.js?v=9.24.0';
-import {StudioTools} from '/assets/studio-tools.js?v=9.24.0';
+import {StreamCommunity} from '/assets/community.js?v=9.25.0';
+import {StudioTools} from '/assets/studio-tools.js?v=9.25.0';
 const $=id=>document.getElementById(id);
 $('live-player').append($('community-panel'));
 let premiereOnly=false;
@@ -38,6 +38,7 @@ async function refresh(){
  $('stream-unavailable').classList.toggle('hidden',info.video_ready);
  const adminDiagnostics=previewUser?.role==='admin'&&Boolean(info.setup_checks);$('video-setup').hidden=!adminDiagnostics;$('video-setup').classList.toggle('hidden',!adminDiagnostics);
  if(adminDiagnostics){$('open-video-preview').classList.toggle('hidden',info.setup_environment!=='production');$('setup-environment').textContent=info.setup_environment==='production'?'Estás en electronicama.com. El vídeo de esta web necesita sus variables en Production. Las claves guardadas solo en Preview no lo activan. Comprueba aquí la conexión después del despliegue.':info.setup_environment==='preview'?'Estás en la vista previa de pruebas. Los cobros siguen bloqueados durante la comprobación.':'Estudio local de pruebas.';const list=$('video-checks');list.replaceChildren();for(const [name,ok] of Object.entries(info.setup_checks))list.append(node('li',`${name}: ${ok?'correcto':'pendiente de corregir'}`));}
+ $('recording-accept-label').classList.toggle('hidden',!info.recording_enabled);$('recording-live-note').classList.toggle('hidden',!info.recording_enabled);$('live-recording-policy-copy').textContent=info.recording_enabled?'Este directo se graba para revisión privada de administración durante 30 días. El creador debe informar a quienes participen.':'La cámara y el micrófono se activan solo al emitir con permiso. La grabación está desactivada hasta conectar el almacenamiento privado.';
  $('creator-panel').classList.toggle('hidden',!info.streamer_active);$('studio-flow').classList.toggle('hidden',!info.streamer_active);
  renderCatalogue();
  renderStudio();
@@ -144,8 +145,8 @@ async function privatePreview(){
 async function sendPresence(current,generation){
  if(heartbeatBusy||room!==current||generation!==connectionGeneration||!publishing)return;
  heartbeatBusy=true;
- try{await api('/api/streamers/me/live',{live:true});if(room===current&&generation===connectionGeneration){if(!heartbeatVerified)status('Estás en directo. Conexión y listado comprobados.');heartbeatVerified=true;}}
- catch(error){if(room!==current||generation!==connectionGeneration)return;heartbeatVerified=false;if([401,402,403].includes(error.status)||error.code==='ol_maintenance'||error.code==='live_premiere'){await disconnect();status(error.message);}else status('El vídeo sigue conectado. Reintentando la verificación del directo; el tiempo aún no se acredita.');}
+ try{await api('/api/streamers/me/live',{live:true,recording_notice_accepted:$('recording-accept').checked});if(room===current&&generation===connectionGeneration){if(!heartbeatVerified)status('Estás en directo. Conexión y listado comprobados.');heartbeatVerified=true;}}
+ catch(error){if(room!==current||generation!==connectionGeneration)return;heartbeatVerified=false;if([401,402,403].includes(error.status)||error.code==='ol_maintenance'||error.code==='live_premiere'||error.code==='recording_required'){await disconnect();status(error.message);}else status('El vídeo sigue conectado. Reintentando la verificación del directo; el tiempo aún no se acredita.');}
  finally{if(generation===connectionGeneration)heartbeatBusy=false;}
 }
 async function disconnect(){
@@ -174,6 +175,7 @@ async function connect(channel,publish){
  if(!publish)rememberChannel(channel.id);
  if(connecting)return;connecting=true;renderStudio();let generation;
  try{
+  if(publish&&info?.recording_enabled&&!$('recording-accept').checked)throw new Error('Acepta el aviso de grabación antes de emitir.');
   if(!await confirmAdultAccess(channel))return;
   if(!info?.video_ready)throw new Error('Las emisiones todavía no están disponibles.');
   stopPreview('',true);await disconnect();generation=connectionGeneration;if(!(publish?window.MaggySession.premium:window.MaggySession.authenticated))return;status('Conectando al directo…');$('studio-status').textContent='Conectando al directo…';$('start-camera').textContent='Conectando…';

@@ -128,6 +128,8 @@ def maintenance_report():
  secured=all(getattr(current_app.view_functions.get(endpoint),'requires_admin',False) for endpoint in protected)
  add('Comprobaciones exclusivas de administración','ok' if secured else 'error','Protección de rol presente en diagnósticos de vídeo, mantenimiento y moderación.' if secured else 'Hay una ruta de diagnóstico sin la marca de protección administrativa.')
  add('Ubicación y VPN para contenido adulto','pending' if not current_app.extensions.get('adult_region_assessor') else 'ok','Sin proveedor de evaluación fiable: se aplica mínimo interno de 21 años; la IP no demuestra edad ni ausencia de VPN.' if not current_app.extensions.get('adult_region_assessor') else 'Evaluador regional instalado; comprueba su precisión y privacidad antes de confiar en sus resultados.')
+ from recordings import ready as recordings_ready
+ add('Grabación de directos · 30 días','ok' if recordings_ready() else 'pending','Grabación y retención declaradas en la configuración; comprueba un archivo real en Grabaciones privadas.' if recordings_ready() else 'Los vídeos no se están archivando. Falta conectar almacenamiento privado y grabación de LiveKit; los textos conservados no sustituyen al vídeo.')
  add('Verificación de edad','pending','Se solicita declaración de edad. No hay verificación documental ni detección visual automática de consumo.')
  add('Vídeo y comentarios superpuestos','pending','Diseño preparado. Comprueba vídeo a tamaño completo, pantalla compartida y chat desplazable en dispositivos reales.')
  add('Correos','ok' if mail_ready() else 'pending','Servicio configurado; esta revisión no envía correos ni confirma su llegada.' if mail_ready() else 'Configura el remitente y Resend o SMTP antes de probar confirmación y recuperación.')
