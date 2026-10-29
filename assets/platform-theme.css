@@ -97,3 +97,8 @@ body.electronicama-theme :is(#hero,#hologramas,.account-shell>.intro)::before{co
 body.electronicama-theme #hologramas{border-width:2px}
 body.electronicama-theme #holograms-title{color:#f5d397;text-shadow:none}
 @media(max-width:600px){body.electronicama-theme :is(#hero,#hologramas,.account-shell>.intro)::before{width:95px;height:80px;opacity:.12}.electronicama-theme .platform-header nav{flex-wrap:wrap}}
+/* Gold wireframes sit on the black canvas around opaque content panels. */
+body.electronicama-theme :is(#hero,#hologramas,.account-shell>.intro)::before{content:none!important;display:none!important}
+body.electronicama-theme,body.electronicama-theme:has(>.back){background-color:#000;background-image:url('/assets/gold-geometry.svg'),url('/assets/gold-orbits.svg'),url('/assets/gold-prism.svg');background-position:left 180px,right 520px,left 900px;background-size:90px 1100px,100px 1400px,80px 1700px;background-repeat:repeat-y}
+/* The tall SVG viewports reserve empty space between the sparse line figures. */
+@media(max-width:600px){body.electronicama-theme,body.electronicama-theme:has(>.back){background-size:42px 1100px,46px 1400px,38px 1700px}}
