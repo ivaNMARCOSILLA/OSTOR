@@ -300,6 +300,11 @@ def restrict_music():
     if path.startswith(('/api/rewards','/api/stickers/')):
         if not user:return jsonify(error='Inicia sesión con una cuenta gratuita para guardar tu colección.',code='login_required'),401
         return None
+    # Registered viewers can watch public streams without the annual creator plan.
+    viewer_route=path=='/api/streamers' and request.method=='GET' or bool(re.fullmatch(r'/api/streamers/[a-f0-9]{32}/access',path) and request.method=='GET') or bool(re.fullmatch(r'/api/streamers/[a-f0-9]{32}/token',path) and request.method=='POST' and payload().get('publish') is not True)
+    if viewer_route:
+        if not user:return jsonify(error='Inicia sesión con una cuenta gratuita para ver los directos.',code='login_required'),401
+        return None
     if not user or not user_public(user)['active']:
         return jsonify(error='Ver y participar en Ol Livis requiere acceso premium. La música sigue siendo gratuita.',code='premium_required'),402 if user else 401
 

@@ -41,7 +41,7 @@ class MembershipTests(unittest.TestCase):
     def test_music_is_free_but_ol_live_cannot_be_self_granted(self):
         self.assertEqual(self.member['role'],'member');self.assertFalse(self.member['active'])
         self.assertEqual(self.client.get('/api/resolve/audius_test').status_code,200)
-        self.assertEqual(self.client.get('/api/streamers').status_code,402)
+        self.assertEqual(self.post(self.client,'/api/streamers/me',{'title':'No autorizado'}).status_code,402)
         self.assertEqual(self.post(self.client,'/api/admin/confirm-payment',{}).status_code,403)
 
     def test_legacy_welcome_period_and_history_are_preserved(self):
@@ -69,7 +69,7 @@ class MembershipTests(unittest.TestCase):
         with patch.object(m,'now_utc',return_value=instant): self.grant('welcome')
         with patch.object(m,'now_utc',return_value=instant+timedelta(days=14)):
             self.assertFalse(self.client.get('/api/account/me').json['user']['active'])
-            self.assertEqual(self.client.get('/api/streamers').status_code,402)
+            self.assertEqual(self.post(self.client,'/api/streamers/me',{'title':'No autorizado'}).status_code,402)
 
     def test_revoke_invalidates_another_device_session(self):
         self.grant('monthly')

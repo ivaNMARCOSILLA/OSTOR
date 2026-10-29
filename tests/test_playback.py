@@ -19,7 +19,7 @@ class PlaybackTests(unittest.TestCase):
         csrf=guest.get('/api/account/me').json['csrf']
         guest.post('/api/account/register',json=__import__('registration_support').registration_data(guest,{'username':'audio-free','password':'password-test-123'}),headers={'X-CSRF-Token':csrf})
         self.assertEqual(guest.get('/api/play/audius_test').status_code,200)
-        self.assertEqual(guest.get('/api/streamers').status_code,402)
+        self.assertEqual(guest.post('/api/streamers/me',json={'title':'No autorizado'},headers={'X-CSRF-Token':guest.get('/api/account/me').json['csrf']}).status_code,402)
 
     @patch.object(app, '_safe_upstream')
     def test_audius_relay_preserves_range_and_checks_fixed_origins(self, fetch):

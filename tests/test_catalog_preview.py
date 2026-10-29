@@ -21,7 +21,7 @@ class PreviewTests(unittest.TestCase):
   self.guest.post('/api/account/register',json=__import__('registration_support').registration_data(self.guest,{'username':'free-user','password':'preview-password-123'}),headers={'X-CSRF-Token':csrf})
   self.assertFalse(self.guest.get('/api/search?q=test').json[0]['locked'])
   self.assertEqual(self.guest.get('/api/resolve/audius_test').status_code,200)
-  self.assertEqual(self.guest.get('/api/streamers').status_code,402)
+  self.assertEqual(self.guest.post('/api/streamers/me',json={'title':'No autorizado'},headers={'X-CSRF-Token':self.guest.get('/api/account/me').json['csrf']}).status_code,402)
  @patch.object(app,'multi_search')
  def test_admin_and_guest_use_the_same_music_catalogue(self,search):
   search.return_value=[self.sample]

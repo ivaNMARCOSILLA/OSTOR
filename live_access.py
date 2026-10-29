@@ -31,8 +31,10 @@ def founder_activity(member_id,conn):
  grace=not deadline or deadline>stamp(now_utc())
  from founder_slots import reservation
  slot=reservation(conn,member_id)
+ founder=conn.execute('SELECT number,revoked_at FROM live_founders WHERE member_id=?',(member_id,)).fetchone()
+ exempt=bool(founder and founder['number']==1 and not founder['revoked_at'])
  payment_current=not slot or slot['confirmed'] or not slot['trial_until'] or slot['trial_until']>stamp(now_utc())
- return dict(payment_current=payment_current,initial_minutes=INITIAL_MINUTES,monthly_minutes=MONTHLY_MINUTES,verified_seconds=row.get('total_seconds',0),recent_seconds=recent,qualification_until=deadline,first_completed_at=row.get('first_completed_at'),qualified=qualified,eligible=payment_current and (grace or (qualified and recent>=MONTHLY_MINUTES*60)),provisional=not qualified)
+ return dict(payment_current=payment_current,activity_exempt=exempt,initial_minutes=0 if exempt else INITIAL_MINUTES,monthly_minutes=0 if exempt else MONTHLY_MINUTES,verified_seconds=row.get('total_seconds',0),recent_seconds=recent,qualification_until=deadline,first_completed_at=row.get('first_completed_at'),qualified=qualified,eligible=payment_current and (exempt or grace or (qualified and recent>=MONTHLY_MINUTES*60)),provisional=not qualified and not exempt)
 
 @bp.post('/api/account/live-trial')
 def trial():

@@ -50,7 +50,7 @@ class LiveAccessTests(unittest.TestCase):
  def test_private_camera_and_unverified_heartbeats_cannot_earn_founder_time(self):
   self.grant_paid_fixture()
   with app.app.app_context(),m.database() as conn:
-   conn.execute('INSERT INTO live_founders(member_id,number,claimed_at) VALUES(?,1,?)',(self.ident,m.stamp(m.now_utc())))
+   conn.execute('INSERT INTO live_founders(member_id,number,claimed_at) VALUES(?,2,?)',(self.ident,m.stamp(m.now_utc())))
   self.post(self.user,'/api/streamers/me',{'title':'Mi directo'})
   with patch.object(st,'live_ready',return_value=True),patch.object(access,'verified_broadcast',return_value=False):
    self.assertEqual(self.post(self.user,'/api/streamers/me/live',{'live':True}).status_code,409)
@@ -88,3 +88,31 @@ class LiveAccessTests(unittest.TestCase):
   self.assertEqual(self.post(guest,'/api/promotion/event',{'event':'skip'}).status_code,200)
   self.assertEqual(self.post(guest,'/api/promotion/event',{'event':'made-up'}).status_code,400)
   self.assertEqual(self.admin.get('/api/admin/statistics').json['promotion']['skip'],1)
+
+ def test_free_viewer_can_watch_but_not_publish(self):
+  self.post(self.admin,'/api/streamers/me',{'title':'Directo público'})
+  channel=self.admin.get('/api/streamers').json['mine']['id']
+  with app.app.app_context(),m.database() as conn:
+   conn.execute('UPDATE streamer_channels SET live_until=? WHERE id=?',(m.stamp(m.now_utc()+timedelta(minutes=5)),channel))
+  self.assertEqual(self.user.get('/api/streamers').status_code,200)
+  self.assertFalse(self.user.get('/api/streamers').json['streamer_active'])
+  with patch.dict('os.environ',{'LIVEKIT_URL':'wss://local-test.invalid'}),patch.object(st,'live_ready',return_value=True),patch.object(st,'mint_token',return_value='viewer-token') as mint:
+   result=self.post(self.user,'/api/streamers/'+channel+'/token',{'publish':False})
+   self.assertEqual(result.status_code,200);self.assertFalse(mint.call_args.args[2])
+   self.assertEqual(self.post(self.user,'/api/streamers/'+channel+'/token',{'publish':True}).status_code,402)
+  self.assertEqual(self.user.get('/api/streamers/'+channel+'/access').status_code,200)
+  self.assertEqual(app.app.test_client().get('/api/streamers').status_code,401)
+  with app.app.app_context(),m.database() as conn:
+   conn.execute('INSERT INTO channel_subscription_settings(channel_id,exclusive_live) VALUES(?,1)',(channel,))
+  self.assertEqual(self.user.get('/api/streamers/'+channel+'/access').status_code,403)
+
+ def test_first_founder_has_no_broadcast_obligation(self):
+  self.grant_paid_fixture()
+  with app.app.app_context(),m.database() as conn:
+   conn.execute('INSERT INTO live_founders(member_id,number,claimed_at) VALUES(?,1,?)',(self.ident,m.stamp(m.now_utc())))
+   conn.execute('INSERT INTO founder_activity(member_id,qualification_until) VALUES(?,?)',(self.ident,m.stamp(m.now_utc()-timedelta(days=1))))
+   info=access.founder_activity(self.ident,conn)
+   self.assertTrue(info['activity_exempt']);self.assertTrue(info['eligible']);self.assertEqual(info['monthly_minutes'],0)
+   self.assertEqual(info['verified_seconds'],0);self.assertFalse(info['qualified'])
+   conn.execute('UPDATE live_founders SET number=2 WHERE member_id=?',(self.ident,))
+   self.assertFalse(access.founder_activity(self.ident,conn)['eligible'])
