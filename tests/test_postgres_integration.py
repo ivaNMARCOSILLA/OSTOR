@@ -142,9 +142,9 @@ class PostgresMembershipTests(unittest.TestCase):
         visitor=self.app.test_client()
         result=self.post(visitor,'/api/presence',{})
         self.assertEqual(result.status_code,200)
-        self.assertEqual(result.json['guests'],1)
-        self.assertEqual(self.post(visitor,'/api/presence',{}).json['guests'],1)
-        self.assertEqual(self.post(self.client,'/api/presence',{}).json['members'],1)
+        self.assertEqual(result.json,{'recorded':True});self.assertEqual(self.admin.get('/api/admin/statistics').json['online']['guests'],1)
+        self.post(visitor,'/api/presence',{});self.assertEqual(self.admin.get('/api/admin/statistics').json['online']['guests'],1)
+        self.post(self.client,'/api/presence',{});self.assertEqual(self.admin.get('/api/admin/statistics').json['online']['members'],1)
         self.assertEqual(self.grant(self.admin,'monthly','PG-STATISTICS-001').status_code,200)
         data=self.admin.get('/api/admin/statistics').json
         self.assertEqual(data['accounts']['registered'],1)

@@ -4,7 +4,7 @@
  const aliases={'#register':'#credentials','#create-account':'#credentials','#register-form':'#credentials','#login':'#login-form','#my-space':'#mi-espacio'};
  const livePaths=new Set(['/live','/streamers']);
  const reports=[];
- function visibleTarget(id){const target=document.getElementById(id);if(!target)return null;for(let p=target.parentElement;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;return target;}
+ function visibleTarget(id){const target=document.getElementById(id);if(!target)return null;if(target.tagName==='DETAILS')target.open=true;for(let p=target.parentElement;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;return target;}
  function focusTarget(target){target.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});if(!target.matches('input,button,a,select,textarea'))target.setAttribute('tabindex','-1');target.focus({preventScroll:true});}
  function scan(){
   let repaired=0;const broken=[];

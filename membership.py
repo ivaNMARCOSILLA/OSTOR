@@ -72,6 +72,19 @@ def init_database():
           created_at TEXT NOT NULL, access_until TEXT,
           welcome_used INTEGER NOT NULL DEFAULT 0, session_version INTEGER NOT NULL DEFAULT 0
         );
+        CREATE TABLE IF NOT EXISTS live_stage_layouts (
+          channel_id TEXT PRIMARY KEY,layout TEXT NOT NULL,updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS channel_subscription_prices (
+          channel_id TEXT PRIMARY KEY,price_cents INTEGER NOT NULL,version INTEGER NOT NULL,updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS stripe_order_context (
+          order_id TEXT PRIMARY KEY,timezone TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS channel_subscription_drafts (
+          channel_id TEXT PRIMARY KEY,
+          price_cents INTEGER NOT NULL,benefits_json TEXT NOT NULL,updated_at TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS service_grants (
           member_id TEXT PRIMARY KEY REFERENCES members(id) ON DELETE CASCADE,
           granted_at TEXT NOT NULL,granted_by TEXT NOT NULL REFERENCES members(id),revoked_at TEXT

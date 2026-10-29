@@ -36,7 +36,11 @@ class ManagedPaymentTests(unittest.TestCase):
    if path.startswith('/accounts/'):return {'charges_enabled':True,'payouts_enabled':True}
    self.assertEqual(data['mode'],'payment');self.assertNotIn('payment_intent_data[application_fee_amount]',data)
    return {'id':checkout_id,'url':'https://checkout.stripe.com/c/pay/local-test'}
-  with patch.object(p,'ready',return_value=True),patch.object(p,'stripe',side_effect=provider):r=self.post(self.client,'/api/payments/checkout',{'channel_id':channel} if channel else {'annual_terms':True})
+  data={'annual_terms':True}
+  if channel:
+   with patch('human_check.new_code',return_value='OL234'):challenge=self.client.get('/api/account/human-check').json
+   data={'channel_id':channel,'human_id':challenge['id'],'human_answer':'OL234'}
+  with patch.object(p,'ready',return_value=True),patch.object(p,'stripe',side_effect=provider):r=self.post(self.client,'/api/payments/checkout',data)
   self.assertEqual(r.status_code,200,r.json)
   with app.app.app_context(),m.database() as c:return dict(c.execute('SELECT * FROM stripe_orders WHERE checkout_id=?',(checkout_id,)).fetchone())
  def event(self,order,ident='evt_local_paid',scope='platform',amount=None,kind='checkout.session.completed',obj=None,account=None):
@@ -84,14 +88,23 @@ class ManagedPaymentTests(unittest.TestCase):
    c.execute('UPDATE members SET access_until=? WHERE id=?',(m.stamp(m.end_of_plan(m.now_utc(),'annual')),self.ident))
   channel=self.post(creator,'/api/streamers/me',{'title':'Managed creator','paypal_url':'','owns_paypal':False}).json['channel']['id']
   self.post(self.admin,'/api/admin/subscription-moderator',{'username':'Gref'});self.post(self.admin,'/api/admin/moderator-permissions',{'permissions':['review_agreements','approve_agreements']})
-  proposal=self.post(creator,'/api/channel-subscriptions/propose',{'price_cents':450,'period':'month','benefits':['badge','exclusive_live']});self.assertEqual(proposal.status_code,200,proposal.json)
+  proposal=self.post(creator,'/api/channel-subscriptions/propose',{'price_cents':350,'period':'month','benefits':['badge','exclusive_live']});self.assertEqual(proposal.status_code,200,proposal.json)
   for client,party in [(creator,'creator'),(self.admin,'admin'),(mod,'moderator')]:self.assertEqual(self.post(client,'/api/channel-subscriptions/approve',{'agreement_id':proposal.json['agreement_id'],'party':party}).status_code,200)
-  order=self.checkout(channel,checkout_id='cs_local_creator');self.assertEqual(order['account_id'],'acct_local_creator');self.assertEqual(order['amount_cents'],450)
+  order=self.checkout(channel,checkout_id='cs_local_creator');self.assertEqual(order['account_id'],'acct_local_creator');self.assertEqual(order['amount_cents'],350)
   self.assertEqual(self.event(order,scope='connect',account='acct_unrelated').status_code,200)
   self.assertEqual(self.client.get('/api/channel-subscriptions/'+channel).json['subscriber_count'],0)
   self.assertEqual(self.event(order,scope='connect',ident='evt_correct_creator').status_code,200)
   info=self.client.get('/api/channel-subscriptions/'+channel).json;self.assertEqual(info['subscriber_count'],1);self.assertIn('badge',info['mine']);self.assertIsNone(info['payment_url'])
   self.assertEqual(self.client.get('/api/account/me').json['payments'],[])
+ def test_subscription_captcha_is_required_single_use_and_no_charge_on_failure(self):
+  with patch.object(p,'ready',return_value=True),patch.object(p,'stripe') as provider:
+   self.assertEqual(self.post(self.client,'/api/payments/checkout',{'channel_id':'no-channel'}).status_code,400)
+   with patch('human_check.new_code',return_value='OL234'):proof=self.client.get('/api/account/human-check').json
+   data={'channel_id':'no-channel','human_id':proof['id'],'human_answer':'WRONG'}
+   self.assertEqual(self.post(self.client,'/api/payments/checkout',data).status_code,400)
+   data['human_answer']='OL234';self.assertEqual(self.post(self.client,'/api/payments/checkout',data).status_code,400)
+   provider.assert_not_called()
+  with app.app.app_context(),m.database() as db:self.assertIsNone(db.execute('SELECT id FROM human_challenges WHERE id=?',(proof['id'],)).fetchone())
  def test_play_distribution_never_enables_web_checkout(self):
   self.client.get('/?distribution=googleplay')
   with patch.dict('os.environ',{'OL_PAYMENTS_ENABLED':'1','STRIPE_SECRET_KEY':'sk_live_local_only'}),patch.object(st,'streamer_sales_ready',return_value=True):self.assertFalse(self.client.get('/api/payments/status').json['enabled'])

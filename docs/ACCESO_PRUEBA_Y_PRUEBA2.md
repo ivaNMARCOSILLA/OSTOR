@@ -15,3 +15,9 @@ La ejecución real y las banderas de vídeo/cobro deben verificarse en producci�
 Las cuentas con concesión completa pueden entrar al estudio y al catálogo privado durante el próximo estreno. No se cambian las banderas de cobro ni se abre el catálogo a visitantes. Una cuenta publica únicamente en su propio canal y la otra recibe un token de espectador, sin permiso de publicación. LiveKit debe estar realmente configurado; la concesión no inventa una conexión ni elimina ese requisito.
 
 Primer dispositivo: entrar con prueba en /live#creator-panel, guardar canal, aceptar cámara/micrófono y pulsar Iniciar directo. Segundo dispositivo: entrar con prueba2 en /live#live-catalogue y abrir el canal en directo. Usar auriculares para evitar acoplamiento. La prueba entre dispositivos físicos sigue pendiente de realizar por el titular.
+
+## Continuidad del directo (9.11.3)
+
+Los errores temporales de verificación de presencia (25 segundos), listado (30 segundos) o consulta de sesión (60 segundos) ya no cierran por sí solos una conexión WebRTC. Se reintenta sin acreditar actividad hasta que LiveKit confirme el vídeo. Las comprobaciones no se solapan y las respuestas tardías no actúan sobre otra sesión. El espectador revalida su permiso por un endpoint autenticado independiente del listado; una finalización explícita o la pérdida de acceso sí cierra el directo.
+
+Las pruebas de regresión usan reloj de navegador y una sala LiveKit simulada para reproducir errores HTTP, desaparición del listado y revocación. No sustituyen la comprobación física de vídeo/audio entre los dispositivos del titular.

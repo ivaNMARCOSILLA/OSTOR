@@ -26,6 +26,24 @@ class PrivatePreviewTests(full.FullServiceTests):
    self.assertEqual(len(second.get('/api/live/catalogue').json['channels']),1)
    public=app.app.test_client().get('/api/live/catalogue').json;self.assertEqual(public['channels'],[]);self.assertTrue(public['premiere'])
    self.assertFalse(first.get('/api/payments/status').json['enabled'])
+ def test_viewer_revalidation_distinguishes_listing_expiry_and_explicit_end(self):
+  first=self.member('prueba');second=self.member('prueba2');self.migration()
+  from datetime import timedelta
+  with patch.dict('os.environ',{'OL_LIVE_PREMIERE':'1'}):
+   channel=self.post(first,'/api/streamers/me',{'title':'Continuidad privada'}).json['channel']['id']
+   with app.app.app_context(),m.database() as db:db.execute('UPDATE streamer_channels SET live_until=? WHERE id=?',(m.stamp(m.now_utc()-timedelta(seconds=1)),channel))
+   response=second.get('/api/streamers/'+channel+'/access');self.assertEqual(response.status_code,200);self.assertFalse(response.json['listed']);self.assertFalse(response.json['ended'])
+   with app.app.app_context(),m.database() as db:db.execute('UPDATE streamer_channels SET live_until=NULL WHERE id=?',(channel,))
+   self.assertTrue(second.get('/api/streamers/'+channel+'/access').json['ended'])
+   self.assertEqual(second.get('/api/streamers/missing/access').status_code,404)
+ def test_only_the_channel_owner_manages_its_layout(self):
+  first=self.member('prueba');second=self.member('prueba2');self.migration()
+  with patch.dict('os.environ',{'OL_LIVE_PREMIERE':'1'}):
+   channel=self.post(first,'/api/streamers/me',{'title':'Pantalla gestionada'}).json['channel']['id']
+   self.assertEqual(self.post(second,'/api/streamers/me/layout',{'channel_id':channel,'layout':'screen'}).status_code,409)
+   self.assertEqual(self.post(first,'/api/streamers/me/layout',{'layout':'screen'}).status_code,200)
+   self.assertEqual(second.get('/api/streamers/'+channel+'/access').json['layout'],'screen')
+   self.assertEqual(self.post(first,'/api/streamers/me/layout',{'layout':'unsafe'}).status_code,400)
  def test_private_permission_does_not_bypass_missing_video_configuration(self):
   c=self.member('prueba');self.migration()
   with patch.dict('os.environ',{'OL_LIVE_PREMIERE':'1','MAGGY_STREAMERS_ENABLED':'0'}):

@@ -13,7 +13,7 @@ import requests
 from datetime import timedelta
 from urllib.parse import urlparse
 from flask import Blueprint, current_app, jsonify, request
-from membership import database, get_user, now_utc, stamp, user_public
+from membership import database, get_user, now_utc, stamp, user_public,allow_attempt
 
 bp=Blueprint('streamers',__name__)
 LIVE_PRICE_CENTS=2500
@@ -232,8 +232,33 @@ def save_channel():
     return jsonify(ok=True,channel=channel_public(own_channel()))
 
 
+@bp.post('/api/streamers/me/layout')
+def stage_layout():
+    if not publisher_allowed():return jsonify(error='Solo el creador puede gestionar su pantalla.'),403
+    layout=(request.get_json(silent=True) or {}).get('layout')
+    if layout not in {'auto','screen','camera'}:return jsonify(error='Vista no válida.'),400
+    channel=own_channel()
+    if not channel:return jsonify(error='Guarda primero tu canal.'),409
+    with database() as conn:conn.execute('INSERT INTO live_stage_layouts VALUES(?,?,?) ON CONFLICT(channel_id) DO UPDATE SET layout=excluded.layout,updated_at=excluded.updated_at',(channel['id'],layout,stamp(now_utc())))
+    return jsonify(ok=True,layout=layout)
+
+
+@bp.get('/api/streamers/<channel_id>/access')
+def room_access(channel_id):
+    # Presence expiry is a directory hint, not an instruction to close WebRTC.
+    user=get_user()
+    with database() as conn:
+        channel=conn.execute('SELECT * FROM streamer_channels WHERE id=?',(channel_id,)).fetchone()
+        if not channel:return jsonify(error='El canal ya no existe.',code='channel_removed'),404
+        from subscriptions import watch_allowed
+        if not watch_allowed(conn,channel,user):return jsonify(error='Ya no tienes acceso a este directo.',code='creator_subscription_required'),403
+        layout=conn.execute('SELECT layout FROM live_stage_layouts WHERE channel_id=?',(channel_id,)).fetchone()
+    return jsonify(allowed=True,layout=layout['layout'] if layout else 'auto',ended=channel['live_until'] is None,listed=bool(channel['live_until'] and channel['live_until']>stamp(now_utc())))
+
+
 @bp.post('/api/streamers/<channel_id>/token')
 def token(channel_id):
+    if not allow_attempt('live-room-token',limit=30):return jsonify(error='Demasiadas conexiones seguidas. Espera un minuto.'),429
     if not live_ready(): return jsonify(error='Las emisiones todavía no están activadas. No se ha cobrado ningún alta de Ol Livis Creador.',code='live_not_configured'),503
     with database() as conn:
         channel=conn.execute('SELECT * FROM streamer_channels WHERE id=?',(channel_id,)).fetchone()
@@ -258,7 +283,7 @@ def presence():
     channel=own_channel()
     if live:
         from live_access import verified_broadcast
-        if not channel or not verified_broadcast(channel,get_user()):return jsonify(error='No hemos podido verificar una emisión de vídeo en LiveKit. Tu tiempo aún no se acredita.'),409
+        if not channel or not verified_broadcast(channel,get_user()):return jsonify(error='No hemos podido verificar una emisión de vídeo en LiveKit. Tu tiempo aún no se acredita.',code='broadcast_unverified'),409
     with database() as conn:
         conn.execute('UPDATE streamer_channels SET live_until=?,updated_at=? WHERE member_id=?',
                      (stamp(now_utc()+timedelta(seconds=75)) if live else None,stamp(now_utc()),get_user()['id']))

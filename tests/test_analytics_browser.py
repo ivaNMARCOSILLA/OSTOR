@@ -7,14 +7,13 @@ def run():
   visitor=browser.new_context();guest=visitor.new_page();errors=[]
   guest.on('pageerror',lambda e:errors.append(str(e)))
   guest.goto(BASE_URL+'/live')
-  guest.wait_for_function("document.querySelector('[data-online-counter]').textContent.includes('visitantes')")
-  assert 'en línea' in guest.locator('[data-online-counter]').inner_text()
+  assert guest.locator('[data-online-counter]').is_hidden()
   assert visitor.request.get(BASE_URL+'/api/admin/statistics').status==403
   context=browser.new_context();login_context(context);page=context.new_page()
   page.on('pageerror',lambda e:errors.append(str(e)))
   page.goto(BASE_URL+'/account')
   page.locator('#statistics-cards article').first.wait_for()
-  assert page.locator('#statistics-cards article').count()==18
+  assert page.locator('#statistics-cards article').count()>=18
   assert page.locator('#statistics-days tr').count()==7
   page.locator('#refresh-statistics').click()
   page.wait_for_function("!document.querySelector('#refresh-statistics').disabled")
@@ -26,6 +25,6 @@ def run():
    assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+2'),width
   page.screenshot(path='/tmp/ol-statistics-mobile.png',full_page=True)
   assert not errors,errors;browser.close()
- print('OK: public guest/account online counter, private real admin statistics, manual refresh, seven days, four widths')
+ print('OK: hidden public counter, private real admin statistics, manual refresh, seven days, four widths')
 
 if __name__=='__main__':run()

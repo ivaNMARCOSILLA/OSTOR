@@ -162,10 +162,11 @@ def validate_order(c,user,channel_id=None):
   if not channel or channel['member_id']==user['id'] or not user_public(user)['active']:raise PaymentError('Necesitas acceso a Ol Livis y una cuenta distinta del creador.')
   mode=sub.settings(c,channel_id);agreement=c.execute('SELECT * FROM subscription_agreements WHERE id=?',(mode['agreement_id'] or '',)).fetchone();account=account_for(c,channel['member_id'])
   if not agreement or not sub.approvals_valid(c,agreement) or not account or agreement['paypal_url']!='stripe:'+account:raise PaymentError('El precio, los beneficios y el destinatario Stripe deben estar aprobados por las tres partes.')
+  if not 300<=sub.channel_price(c,channel_id,agreement['price_cents'])<=400 or agreement['period']!='month':raise PaymentError('El precio del canal debe estar entre 3 y 4 € al mes y volver a aprobarse.')
   if sub.active_benefits(c,channel_id,user['id']):raise PaymentError('Ya tienes una suscripción activa. Renueva cuando termine su periodo.')
   pending=c.execute("SELECT id FROM stripe_orders WHERE member_id=? AND channel_id=? AND paid_at IS NULL AND state='open' AND created_at>?",(user['id'],channel_id,stamp(now_utc()-timedelta(minutes=32)))).fetchone()
   if pending:raise PaymentError('Ya hay un pago pendiente para este canal. Completa o deja caducar la sesión anterior.')
-  return dict(kind='creator',channel_id=channel_id,agreement_id=agreement['id'],account_id=account,amount_cents=agreement['price_cents'],label='Ol Livis · '+channel['title'])
+  return dict(kind='creator',channel_id=channel_id,agreement_id=agreement['id'],account_id=account,amount_cents=sub.channel_price(c,channel_id,agreement['price_cents'],user['id']),label='Ol Livis · '+channel['title'])
  release_expired(c);entitlement=details(user['id'],c);slot=reservation(c,user['id'])
  if entitlement.get('revoked_at'):raise PaymentError('Contacta con administración para revisar el acceso antes de contratar.')
  if user['role']=='admin' or user_public(user)['complimentary'] or user_public(user)['live_lifetime']:raise PaymentError('Esta cuenta ya dispone de acceso; no corresponde cobrar.')
@@ -181,12 +182,22 @@ def checkout():
  if not allow_attempt('stripe-checkout',limit=8):return jsonify(error='Espera unos minutos antes de volver a pagar.'),429
  channel_id=payload().get('channel_id')
  if channel_id is not None and not isinstance(channel_id,str):return jsonify(error='Canal no válido.'),400
+ if channel_id:
+  from human_check import verify
+  with database() as check:
+   check.execute('BEGIN IMMEDIATE');human_ok=verify(check)
+  if not human_ok:return jsonify(error='Completa la comprobación humana antes de pagar la suscripción del canal.',code='human_required'),400
  order_id=secrets.token_hex(16)
+ timezone_name=str(payload().get('timezone','UTC'))
+ from zoneinfo import ZoneInfo,ZoneInfoNotFoundError
+ try:ZoneInfo(timezone_name)
+ except (ZoneInfoNotFoundError,ValueError):return jsonify(error='Zona horaria no válida.'),400
  try:
   with database() as c:
    c.execute('BEGIN IMMEDIATE');order=validate_order(c,user,channel_id)
    if order['kind']=='platform_annual' and payload().get('annual_terms') is not True:raise PaymentError('Debes aceptar las condiciones del acceso anual antes de contratar.')
    c.execute('INSERT INTO stripe_orders(id,member_id,kind,channel_id,agreement_id,account_id,amount_cents,currency,created_at,state) VALUES(?,?,?,?,?,?,?,?,?,?)',(order_id,user['id'],order['kind'],order['channel_id'],order['agreement_id'],order['account_id'],order['amount_cents'],'eur',stamp(now_utc()),'open'))
+   c.execute('INSERT INTO stripe_order_context VALUES(?,?)',(order_id,timezone_name))
   if order['account_id']:
    account=stripe('GET','/accounts/'+order['account_id'])
    if not account.get('charges_enabled') or not account.get('payouts_enabled'):raise PaymentError('El creador debe completar la verificación bancaria en Stripe antes de cobrar.')
@@ -236,7 +247,9 @@ def fulfill(c,order,obj):
   c.execute('INSERT INTO streamer_access(member_id,until_at) VALUES(?,?) ON CONFLICT(member_id) DO UPDATE SET until_at=excluded.until_at',(order['member_id'],end))
  else:
   agreement=c.execute('SELECT * FROM subscription_agreements WHERE id=?',(order['agreement_id'],)).fetchone()
-  end=stamp(end_of_plan(now_utc(),'monthly')) if agreement['period']=='month' else None
+  from subscriptions import month_end
+  context=c.execute('SELECT timezone FROM stripe_order_context WHERE order_id=?',(order['id'],)).fetchone()
+  end=stamp(month_end(now_utc(),context['timezone'] if context else 'UTC')) if agreement['period']=='month' else None
   c.execute('INSERT INTO creator_subscriptions(id,channel_id,member_id,agreement_id,amount_cents,benefits_json,starts_at,ends_at,verified_at,verified_by,reference) VALUES(?,?,?,?,?,?,?,?,?,?,?)',(secrets.token_hex(16),order['channel_id'],order['member_id'],order['agreement_id'],order['amount_cents'],agreement['benefits_json'],now,end,now,order['member_id'],reference))
  c.execute("UPDATE stripe_orders SET paid_at=?,payment_intent=?,state='paid' WHERE id=?",(now,obj.get('payment_intent'),order['id']))
  return True

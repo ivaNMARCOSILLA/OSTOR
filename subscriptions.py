@@ -2,7 +2,7 @@
 import json,secrets
 from datetime import datetime
 from flask import Blueprint,jsonify,request
-from membership import database,get_user,user_public,now_utc,stamp,payload,require_admin,end_of_plan
+from membership import database,get_user,user_public,now_utc,stamp,payload,require_admin,end_of_plan,allow_attempt
 from storage import INTEGRITY_ERRORS
 bp=Blueprint('subscriptions',__name__)
 BENEFITS={'badge':'Insignia de suscriptor','subscriber_chat':'Chat para suscriptores','exclusive_live':'Directos para suscriptores'}
@@ -42,6 +42,21 @@ MODERATOR_PERMISSIONS={'review_agreements':'Ver propuestas y sus condiciones','a
 def moderator(conn,user,permission='review_agreements'):
  return bool(user and conn.execute('SELECT p.member_id FROM pricing_moderators p JOIN members m ON m.id=p.member_id WHERE p.member_id=? AND p.revoked_at IS NULL AND m.password_hash IS NOT NULL AND EXISTS (SELECT 1 FROM moderator_permissions x WHERE x.member_id=p.member_id AND x.permission=?)',(user['id'],permission)).fetchone())
 
+def channel_price(conn,channel_id,fallback=350,member_id=None):
+ row=conn.execute('SELECT price_cents FROM channel_subscription_prices WHERE channel_id=?',(channel_id,)).fetchone()
+ price=row['price_cents'] if row else fallback
+ if member_id:
+  old=conn.execute('SELECT MIN(amount_cents) AS price FROM creator_subscriptions WHERE channel_id=? AND member_id=? AND revoked_at IS NULL AND amount_cents>0',(channel_id,member_id)).fetchone()
+  if old and old['price'] is not None:price=min(price,old['price'])
+ return price
+
+def month_end(start,timezone_name='UTC'):
+ from zoneinfo import ZoneInfo
+ import calendar
+ zone=ZoneInfo(timezone_name);local=start.astimezone(zone);month=local.month%12+1;year=local.year+(local.month==12)
+ return local.replace(year=year,month=month,day=min(local.day,calendar.monthrange(year,month)[1])).astimezone(start.tzinfo)
+
+
 def active_benefits(conn,channel_id,member_id):
  if not member_id:return set()
  if conn.execute('SELECT member_id FROM service_grants WHERE member_id=? AND revoked_at IS NULL',(member_id,)).fetchone():return set(BENEFITS)
@@ -77,6 +92,8 @@ def public_agreement(conn,row,private=False):
  result={key:row[key] for key in ['id','channel_id','version','price_cents','period','created_at']}
  title=conn.execute('SELECT c.title,m.username FROM streamer_channels c JOIN members m ON m.id=c.member_id WHERE c.id=?',(row['channel_id'],)).fetchone()
  result.update(title=title['title'],creator_name=title['username'])
+ if not private:result['price_cents']=channel_price(conn,row['channel_id'],row['price_cents'],get_user()['id'] if get_user() else None)
+ else:result['current_price_cents']=channel_price(conn,row['channel_id'],row['price_cents'])
  result.update(benefits=json.loads(row['benefits_json']),approvals={party:any(a['party']==party for a in approvals) for party in ['creator','admin','moderator']})
  if private:
   result.update(creator_id=row['creator_id'],moderator_id=row['moderator_id'])
@@ -87,6 +104,7 @@ def public_agreement(conn,row,private=False):
  return result
 
 def approvals_valid(conn,row):
+ if not 300<=channel_price(conn,row['channel_id'],row['price_cents'])<=400 or row['period']!='month':return False
  approvals={a['party']:a['member_id'] for a in conn.execute('SELECT party,member_id FROM subscription_approvals WHERE agreement_id=?',(row['id'],)).fetchall()}
  if set(approvals)!={'creator','admin','moderator'} or len(set(approvals.values()))!=3:return False
  if approvals['creator']!=row['creator_id'] or approvals['moderator']!=row['moderator_id']:return False
@@ -146,27 +164,37 @@ def creator_dashboard():
   if not channel:return jsonify(channel=None)
   latest=conn.execute('SELECT * FROM subscription_agreements WHERE channel_id=? ORDER BY version DESC LIMIT 1',(channel['id'],)).fetchone()
   gross=conn.execute('SELECT COALESCE(SUM(amount_cents),0) AS n FROM creator_subscriptions WHERE channel_id=?',(channel['id'],)).fetchone()['n']
-  return jsonify(channel=dict(id=channel['id'],title=channel['title'],subscriber_count=count(conn,channel['id']),gross_confirmed_cents=gross),latest=public_agreement(conn,latest,True),settings=settings(conn,channel['id']),benefits=BENEFITS)
+  draft=conn.execute('SELECT price_cents,benefits_json FROM channel_subscription_drafts WHERE channel_id=?',(channel['id'],)).fetchone()
+  return jsonify(current_price_cents=channel_price(conn,channel['id']),draft={'price_cents':draft['price_cents'],'benefits':json.loads(draft['benefits_json'])} if draft else None,channel=dict(id=channel['id'],title=channel['title'],subscriber_count=count(conn,channel['id']),gross_confirmed_cents=gross),latest=public_agreement(conn,latest,True),settings=settings(conn,channel['id']),benefits=BENEFITS)
 
 @bp.post('/api/channel-subscriptions/propose')
 def propose():
  user=get_user();data=payload()
  if not user or not user_public(user)['streamer_active']:return jsonify(error='Necesitas acceso de creador activo para proponer una suscripción.'),403
+ if not allow_attempt('creator-offer',limit=8):return jsonify(error='Demasiadas propuestas. Espera unos minutos.'),429
  cents=data.get('price_cents');period=data.get('period');benefits=data.get('benefits')
- if type(cents) is not int or not 1<=cents<=99999999 or period not in {'month','once'} or not isinstance(benefits,list) or not benefits or len(benefits)>3 or any(type(b) is not str or b not in BENEFITS for b in benefits):return jsonify(error='Indica un precio positivo en euros, periodo y beneficios válidos.'),400
+ if type(cents) is not int or not 300<=cents<=400 or period!='month' or not isinstance(benefits,list) or not benefits or len(benefits)>3 or any(type(b) is not str or b not in BENEFITS for b in benefits):return jsonify(error='Las suscripciones de canal deben costar entre 3 y 4 € al mes. Elige beneficios válidos.'),400
  with database() as conn:
   conn.execute('BEGIN IMMEDIATE');channel=conn.execute('SELECT * FROM streamer_channels WHERE member_id=?',(user['id'],)).fetchone()
   from payments import provider,account_for
   if not channel:return jsonify(error='Guarda antes tu canal.'),409
+  conn.execute('INSERT INTO channel_subscription_prices VALUES(?,?,1,?) ON CONFLICT(channel_id) DO UPDATE SET price_cents=excluded.price_cents,version=channel_subscription_prices.version+1,updated_at=excluded.updated_at',(channel['id'],cents,stamp(now_utc())))
+  existing_mode=settings(conn,channel['id']);existing=conn.execute('SELECT * FROM subscription_agreements WHERE id=?',(existing_mode['agreement_id'] or '',)).fetchone()
+  if existing and approvals_valid(conn,existing) and sorted(json.loads(existing['benefits_json']))==sorted(set(benefits)):
+   return jsonify(ok=True,automatic_price=True,published=True,price_cents=cents,message='Precio actualizado. Los suscriptores anteriores conservan su precio; los beneficios no cambian.')
   account=account_for(conn,user['id']) if provider()=='stripe' else None
-  payout='stripe:'+account if account else channel['paypal_url']
-  if provider()=='stripe' and not account:return jsonify(error='Conecta primero tu cuenta Stripe desde tu canal. Las tres partes deben aprobar el destinatario.'),409
-  if not payout:return jsonify(error='Guarda antes el destinatario de las suscripciones.'),409
+  payout=('stripe:'+account if account else '') if provider()=='stripe' else channel['paypal_url']
+  pending=[]
+  if not payout:pending.append('Conectar Stripe del creador' if provider()=='stripe' else 'Configurar destinatario')
   mod=conn.execute('SELECT p.member_id FROM pricing_moderators p JOIN members m ON m.id=p.member_id WHERE p.revoked_at IS NULL AND LOWER(m.username)=? ORDER BY p.assigned_at DESC LIMIT 1',('gref',)).fetchone()
-  if not mod:return jsonify(error='Administración debe designar primero la cuenta de Gref como moderador de acuerdos.'),409
+  if not mod:pending.append('Designar a Gref desde administración')
+  if pending:
+   conn.execute('INSERT INTO channel_subscription_drafts VALUES(?,?,?,?) ON CONFLICT(channel_id) DO UPDATE SET price_cents=excluded.price_cents,benefits_json=excluded.benefits_json,updated_at=excluded.updated_at',(channel['id'],cents,json.dumps(sorted(set(benefits))),stamp(now_utc())))
+   return jsonify(ok=True,draft=True,published=False,pending=pending,message='Borrador guardado. Falta: '+'. '.join(pending)+'. Después se solicitarán las tres aprobaciones.')
   if mod['member_id']==user['id']:return jsonify(error='El creador y el moderador deben usar cuentas distintas.'),409
   mode=settings(conn,channel['id'])
   if (mode['subscriber_chat'] and 'subscriber_chat' not in benefits) or (mode['exclusive_live'] and 'exclusive_live' not in benefits):return jsonify(error='Desactiva expresamente los modos exclusivos antes de quitar esos beneficios del siguiente acuerdo.'),409
+  conn.execute('DELETE FROM channel_subscription_drafts WHERE channel_id=?',(channel['id'],))
   version=conn.execute('SELECT COALESCE(MAX(version),0)+1 AS n FROM subscription_agreements WHERE channel_id=?',(channel['id'],)).fetchone()['n'];ident=secrets.token_hex(16)
   conn.execute('INSERT INTO subscription_agreements(id,channel_id,version,creator_id,moderator_id,price_cents,period,benefits_json,paypal_url,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)',(ident,channel['id'],version,user['id'],mod['member_id'],cents,period,json.dumps(sorted(set(benefits))),payout,stamp(now_utc())))
  from notifications import notify
@@ -217,8 +245,10 @@ def offer(channel_id):
   enabled=bool(valid and streamer_sales_ready() and row['paypal_url']==channel['paypal_url'] and user and user_public(user)['active'] and user['id']!=channel['member_id'])
   from payments import provider,ready,account_for
   if provider()=='stripe':enabled=bool(valid and ready() and row['paypal_url']=='stripe:'+str(account_for(conn,channel['member_id'])) and user and user_public(user)['active'] and user['id']!=channel['member_id'])
-  link=(row['paypal_url']+f"/{row['price_cents']//100}.{row['price_cents']%100:02d}EUR") if enabled and provider()!='stripe' else None
-  return jsonify(checkout_available=enabled and provider()=='stripe',channel_id=channel_id,title=channel['title'],subscriber_count=count(conn,channel_id),agreement=public_agreement(conn,row) if valid else None,benefits=BENEFITS,mine=sorted(benefits),payments_enabled=enabled,payment_url=link,exclusive_live=bool(mode['exclusive_live']),subscriber_chat=bool(mode['subscriber_chat']),payment_mode='stripe' if provider()=='stripe' else 'creator_verified_external_paypal',commission_cents=0)
+  personal_price=channel_price(conn,channel_id,row['price_cents'],user['id'] if user else None) if row else None
+  own_period=conn.execute('SELECT MAX(ends_at) AS ends_at FROM creator_subscriptions WHERE channel_id=? AND member_id=? AND revoked_at IS NULL',(channel_id,user['id'])).fetchone() if user else None
+  link=(row['paypal_url']+f"/{personal_price//100}.{personal_price%100:02d}EUR") if enabled and provider()!='stripe' else None
+  return jsonify(subscription_ends_at=own_period['ends_at'] if own_period else None,price_cents=personal_price,checkout_available=enabled and provider()=='stripe' and not benefits,channel_id=channel_id,title=channel['title'],subscriber_count=count(conn,channel_id),agreement=public_agreement(conn,row) if valid else None,benefits=BENEFITS,mine=sorted(benefits),payments_enabled=enabled,payment_url=link,exclusive_live=bool(mode['exclusive_live']),subscriber_chat=bool(mode['subscriber_chat']),payment_mode='stripe' if provider()=='stripe' else 'creator_verified_external_paypal',commission_cents=0)
 
 @bp.post('/api/channel-subscriptions/<channel_id>/mode')
 def update_mode(channel_id):
@@ -248,13 +278,14 @@ def confirm_subscription(channel_id):
    if not channel or user['id']!=channel['member_id'] or not user_public(user)['streamer_active']:return jsonify(error='Solo el creador activo puede confirmar un ingreso en su propio PayPal.'),403
    mode=settings(conn,channel_id);row=conn.execute('SELECT * FROM subscription_agreements WHERE id=?',(mode['agreement_id'] or '',)).fetchone()
    if not row or not approvals_valid(conn,row) or row['paypal_url']!=channel['paypal_url']:return jsonify(error='No hay un acuerdo vigente aprobado por las tres partes.'),409
-   if type(data.get('amount_cents')) is not int or data['amount_cents']!=row['price_cents']:return jsonify(error='El importe comprobado debe coincidir exactamente con el precio acordado.'),400
    member=conn.execute("SELECT id FROM members WHERE LOWER(username)=LOWER(?) AND password_hash IS NOT NULL",(str(data.get('username','')).strip(),)).fetchone()
    if not member or member['id']==user['id']:return jsonify(error='Indica la cuenta activada del suscriptor, distinta del creador.'),400
+   expected_price=channel_price(conn,channel_id,row['price_cents'],member['id'])
+   if type(data.get('amount_cents')) is not int or data['amount_cents']!=expected_price:return jsonify(error='El importe debe coincidir con el precio conservado por este suscriptor.'),400
    old=conn.execute('SELECT ends_at FROM creator_subscriptions WHERE channel_id=? AND member_id=? AND revoked_at IS NULL ORDER BY CASE WHEN ends_at IS NULL THEN 0 ELSE 1 END,ends_at DESC LIMIT 1',(channel_id,member['id'])).fetchone()
    if old and old['ends_at'] is None:return jsonify(error='Esta cuenta ya tiene una suscripción sin vencimiento a tu canal.'),409
    start=max(now_utc(),datetime.fromisoformat(old['ends_at'])) if old else now_utc();end=stamp(end_of_plan(start,'monthly')) if row['period']=='month' else None
-   conn.execute('INSERT INTO creator_subscriptions(id,channel_id,member_id,agreement_id,amount_cents,benefits_json,starts_at,ends_at,verified_at,verified_by,reference) VALUES(?,?,?,?,?,?,?,?,?,?,?)',(secrets.token_hex(16),channel_id,member['id'],row['id'],row['price_cents'],row['benefits_json'],stamp(start),end,stamp(now_utc()),user['id'],reference))
+   conn.execute('INSERT INTO creator_subscriptions(id,channel_id,member_id,agreement_id,amount_cents,benefits_json,starts_at,ends_at,verified_at,verified_by,reference) VALUES(?,?,?,?,?,?,?,?,?,?,?)',(secrets.token_hex(16),channel_id,member['id'],row['id'],expected_price,row['benefits_json'],stamp(start),end,stamp(now_utc()),user['id'],reference))
   from notifications import notify
   import hashlib
   notify('creator_payment','Ingreso de suscripción confirmado por un creador',f'Un creador ha confirmado un ingreso de {row["price_cents"]/100:.2f} € en su propio PayPal para una suscripción de canal. Este importe no es ingreso ni saldo de electronicama. Revisa los registros privados del canal.',event_key='creator-receipt:'+hashlib.sha256(reference.encode()).hexdigest())

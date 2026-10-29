@@ -16,8 +16,9 @@ def run():
  with sync_playwright() as p:
   browser=p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox']);errors=[]
   owner=browser.new_context(viewport={'width':390,'height':844});register(owner,'creator-'+secrets.token_hex(3))
-  proof=owner.request.get(BASE_URL+'/api/account/human-check').json()
-  assert post(owner,'/api/live/founders/claim',{'human_id':proof['id'],'human_answer':'OL234'}).ok
+  setup_admin=browser.new_context();login_context(setup_admin)
+  ident=owner.request.get(BASE_URL+'/api/account/me').json()['user']['id']
+  assert post(setup_admin,'/api/admin/full-service-access',{'member_id':ident,'active':True}).ok
   channel=post(owner,'/api/streamers/me',{'title':'Canal de pruebas Ol','paypal_url':'https://paypal.me/CreatorOnly','owns_paypal':True}).json()['channel']['id']
   mod=browser.new_context();register(mod,'gref')
   admin=browser.new_context();login_context(admin)
@@ -39,9 +40,9 @@ def run():
   controls.locator('#moderator-permissions-form button[type=submit]').click()
   controls.wait_for_function("document.querySelector('#moderator-permissions-status').textContent.includes('Permisos guardados')")
   controls.close()
-  creator=owner.new_page();creator.on('pageerror',lambda e:errors.append(str(e)));creator.goto(BASE_URL+'/live')
+  creator=owner.new_page();creator.on('pageerror',lambda e:errors.append(str(e)));creator.goto(BASE_URL+'/live');creator.locator('#channel-subscription-settings > summary').click()
   creator.locator('#creator-subscriptions').wait_for(state='visible')
-  creator.locator('#creator-offer-price').fill('4,50');creator.locator('#creator-offer-form button').click()
+  creator.locator('#creator-offer-price').fill('3.50');creator.locator('#creator-offer-form button').click()
   creator.locator('#creator-offer-approve').wait_for(state='visible');creator.locator('#creator-offer-approve').click()
   creator.wait_for_function("document.querySelector('#creator-agreement-current').textContent.includes('Creador: aprobado')")
   manager=admin.new_page();manager.on('pageerror',lambda e:errors.append(str(e)));manager.goto(BASE_URL+'/account')
@@ -54,14 +55,14 @@ def run():
   moderator.locator('#subscription-review-list button').first.click()
   moderator.wait_for_function("document.querySelector('#subscription-review-list').textContent.includes('Gref: aprobado')")
   offer=owner.request.get(BASE_URL+'/api/channel-subscriptions/'+channel).json()
-  assert offer['agreement']['price_cents']==450 and not offer['payments_enabled'] and offer['subscriber_count']==0
+  assert offer['agreement']['price_cents']==350 and not offer['payments_enabled'] and offer['subscriber_count']==0
   creator.locator('#creator-subscriptions > details').first.locator('summary').click()
   creator.locator('#creator-exclusive-form > label').first.locator('input').check()
   creator.locator('#creator-exclusive-form button').click()
   creator.wait_for_function("document.querySelector('#creator-offer-status').textContent.includes('Modos del canal guardados')")
   creator.evaluate("async id=>{const ui=await import('/assets/subscriptions.js?v=9.7.1');await ui.openSubscription(id)}",channel)
   assert creator.locator('#creator-subscription-dialog').is_visible()
-  assert '4,50' in creator.locator('#creator-subscription-details').inner_text()
+  assert '3,50' in creator.locator('#creator-subscription-details').inner_text()
   assert creator.locator('#creator-subscription-details a').count()==0
   creator.locator('#creator-subscription-close').click()
   for width in [1440,768,390,320]:

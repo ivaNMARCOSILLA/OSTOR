@@ -30,13 +30,13 @@ class CreatorSubscriptionTests(unittest.TestCase):
    conn.execute('INSERT INTO live_entitlements(member_id,trial_started_at,trial_until,paid_at) VALUES(?,?,?,?)',(ident,m.stamp(m.now_utc()),m.stamp(m.now_utc()-timedelta(days=1)),m.stamp(m.now_utc())))
    conn.execute('UPDATE members SET access_until=? WHERE id=?',(m.stamp(m.end_of_plan(m.now_utc(),'annual')),ident))
   return c
- def proposal(self,price=450):
+ def proposal(self,price=350):
   r=self.post(self.creator,'/api/channel-subscriptions/propose',{'price_cents':price,'period':'month','benefits':['badge','subscriber_chat','exclusive_live']});self.assertEqual(r.status_code,200);return r.json['agreement_id']
  def approve_all(self,ident):
   for client,party in [(self.creator,'creator'),(self.admin,'admin'),(self.mod,'moderator')]:
    r=self.post(client,'/api/channel-subscriptions/approve',{'agreement_id':ident,'party':party});self.assertEqual(r.status_code,200)
   self.assertTrue(r.json['agreement_activated'])
- def confirm(self,reference='CREATOR-RECEIPT-001',price=450,client=None):
+ def confirm(self,reference='CREATOR-RECEIPT-001',price=350,client=None):
   with patch.object(st,'streamer_sales_ready',return_value=True):return self.post(client or self.creator,'/api/channel-subscriptions/'+self.channel+'/confirm',{'username':'channel-viewer','reference':reference,'amount_cents':price,'verified_receipt':True})
  def test_three_independent_approvals_and_revision_cannot_reuse_old_consents(self):
   ident=self.proposal();url='/api/channel-subscriptions/'+self.channel
@@ -49,11 +49,13 @@ class CreatorSubscriptionTests(unittest.TestCase):
   self.approve_all(ident)
   with patch.object(st,'streamer_sales_ready',return_value=False):self.assertIsNone(self.viewer.get(url).json['payment_url'])
   with patch.object(st,'streamer_sales_ready',return_value=True):
-   offer=self.viewer.get(url).json;self.assertEqual(offer['payment_url'],'https://paypal.me/CreatorOnly/4.50EUR')
-  next_id=self.proposal(650)
-  self.assertEqual(self.viewer.get(url).json['agreement']['price_cents'],450)
+   offer=self.viewer.get(url).json;self.assertEqual(offer['payment_url'],'https://paypal.me/CreatorOnly/3.50EUR')
+  changed=self.post(self.creator,'/api/channel-subscriptions/propose',{'price_cents':400,'period':'month','benefits':['badge','subscriber_chat','exclusive_live']})
+  self.assertTrue(changed.json['automatic_price']);self.assertEqual(self.viewer.get(url).json['agreement']['price_cents'],400)
+  revised=self.post(self.creator,'/api/channel-subscriptions/propose',{'price_cents':400,'period':'month','benefits':['badge']})
+  self.assertEqual(revised.status_code,200);next_id=revised.json['agreement_id']
   self.assertEqual(self.post(self.mod,'/api/channel-subscriptions/approve',{'agreement_id':ident,'party':'moderator'}).status_code,409)
-  self.approve_all(next_id);self.assertEqual(self.viewer.get(url).json['agreement']['price_cents'],650)
+  self.approve_all(next_id);self.assertEqual(self.viewer.get(url).json['agreement']['price_cents'],400)
  def test_receipt_amount_reference_and_privileges_are_enforced(self):
   self.approve_all(self.proposal())
   self.assertEqual(self.confirm(client=self.viewer).status_code,403)

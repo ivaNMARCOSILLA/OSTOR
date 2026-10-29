@@ -33,7 +33,7 @@ def heartbeat():
         conn.execute('DELETE FROM online_presence WHERE seen_at<=?', (stamp(instant-timedelta(seconds=WINDOW)),))
         conn.execute('INSERT INTO online_presence(visitor_id,member_id,seen_at) VALUES(?,?,?) ON CONFLICT(visitor_id) DO UPDATE SET member_id=excluded.member_id,seen_at=excluded.seen_at', (ident, user['id'] if user else None, stamp(instant)))
         result = online(conn)
-    response = jsonify(result)
+    response = jsonify(result if user and user['role']=='admin' else {'recorded':True})
     response.set_cookie(COOKIE, signer.dumps(ident), max_age=86400, httponly=True,
                         secure=current_app.config['SESSION_COOKIE_SECURE'], samesite='Lax')
     return response
