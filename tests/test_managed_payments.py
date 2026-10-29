@@ -36,7 +36,7 @@ class ManagedPaymentTests(unittest.TestCase):
    if path.startswith('/accounts/'):return {'charges_enabled':True,'payouts_enabled':True}
    self.assertEqual(data['mode'],'payment');self.assertNotIn('payment_intent_data[application_fee_amount]',data)
    return {'id':checkout_id,'url':'https://checkout.stripe.com/c/pay/local-test'}
-  data={'annual_terms':True}
+  data={'annual_terms':True,'legal_name':'Nombre Real de Prueba'}
   if channel:
    with patch('human_check.new_code',return_value='OL234'):challenge=self.client.get('/api/account/human-check').json
    data={'channel_id':channel,'human_id':challenge['id'],'human_answer':'OL234'}
@@ -58,7 +58,7 @@ class ManagedPaymentTests(unittest.TestCase):
    customer_calls=[call for call in deliver.call_args_list if call.args[0]=='verified@example.test']
    self.assertEqual(len(customer_calls),1)
    args=customer_calls[0].args
-   self.assertEqual(args[0],'verified@example.test');self.assertIn('solicita tu plaza',args[1]);self.assertIn('/live#founders',args[2])
+   self.assertEqual(args[0],'verified@example.test');self.assertIn('acceso anual está activo',args[1]);self.assertIn('automáticamente',args[2]);self.assertIn('/account#pricing',args[2])
    self.assertEqual(self.event(order).status_code,200)
    with app.app.app_context():p.send_annual_access_emails()
    self.assertEqual(len([call for call in deliver.call_args_list if call.args[0]=='verified@example.test']),1)
@@ -129,9 +129,53 @@ class ManagedPaymentTests(unittest.TestCase):
     self.assertEqual(self.admin.get('/api/payments/connect-return?state='+token+'&code=local').status_code,403);stripe.assert_not_called()
    with app.app.app_context(),m.database() as c:self.assertIsNone(c.execute('SELECT * FROM stripe_accounts').fetchone())
 
+ def test_paid_annual_assigns_founder_automatically_and_backfills_confirmed_orders(self):
+  order=self.checkout();self.assertEqual(self.event(order).status_code,200)
+  user=self.client.get('/api/account/me').json['user']
+  self.assertEqual(user['founder_number'],1);self.assertTrue(user['founder_active']);self.assertTrue(user['live_annual'])
+  self.assertEqual(self.client.get('/api/live/founders').json['remaining'],99)
+  self.assertEqual(self.event(order).status_code,200)
+  with app.app.app_context(),m.database() as c:
+   c.execute('DELETE FROM live_founders WHERE member_id=?',(self.ident,))
+  self.assertEqual(self.client.get('/api/account/me').json['user']['founder_number'],1)
+  self.assertEqual(len(self.client.get('/api/account/me').json['payments']),1)
+
+ def test_reconcile_uses_only_own_checkout_and_validates_stripe_response(self):
+  order=self.checkout()
+  obj={'id':order['checkout_id'],'livemode':True,'payment_status':'paid','amount_total':2500,'currency':'eur','metadata':{'ol_order':order['id']},'payment_intent':'pi_authoritative'}
+  other=self.member('not-the-buyer')
+  with patch.object(p,'stripe') as stripe:
+   response=self.post(other,'/api/payments/reconcile',{'member_id':self.ident,'checkout_id':order['checkout_id']})
+   self.assertEqual(response.status_code,200);self.assertFalse(response.json['confirmed']);stripe.assert_not_called()
+  with patch.object(p,'stripe',return_value=dict(obj,amount_total=1)):
+   self.assertEqual(self.post(self.client,'/api/payments/reconcile',{}).status_code,409)
+  self.assertFalse(self.client.get('/api/account/me').json['user']['live_annual'])
+  self.assertEqual(self.post(self.client,'/api/admin/payments/reconcile',{'member_id':self.ident}).status_code,403)
+  with patch.object(p,'stripe',return_value=obj) as stripe:
+   response=self.post(self.admin,'/api/admin/payments/reconcile',{'member_id':self.ident})
+   self.assertEqual(response.status_code,200);self.assertTrue(response.json['confirmed'])
+   stripe.assert_called_once_with('GET','/checkout/sessions/'+order['checkout_id'])
+  self.assertTrue(self.client.get('/api/account/me').json['user']['live_annual'])
+  self.assertEqual(self.client.get('/api/account/me').json['user']['founder_number'],1)
+  self.assertEqual(self.event(order).status_code,200)
+  self.assertEqual(len(self.client.get('/api/account/me').json['payments']),1)
+
+ def test_legal_name_is_private_and_recorded_with_the_order(self):
+  with patch.object(p,'ready',return_value=True),patch.object(p,'stripe') as stripe:
+   response=self.post(self.client,'/api/payments/checkout',{'annual_terms':True})
+   self.assertEqual(response.status_code,409);self.assertIn('nombre real',response.json['error']);stripe.assert_not_called()
+  order=self.checkout()
+  profile=self.client.get('/api/account/me').json['profile'];self.assertEqual(profile['legal_name'],'Nombre Real de Prueba')
+  with app.app.app_context(),m.database() as c:
+   self.assertEqual(c.execute('SELECT legal_name FROM stripe_order_names WHERE order_id=?',(order['id'],)).fetchone()['legal_name'],'Nombre Real de Prueba')
+  self.assertNotIn('Nombre Real de Prueba',str(self.client.get('/api/live/founders').json))
+  admin_member=next(u for u in self.admin.get('/api/admin/members').json['members'] if u['id']==self.ident)
+  self.assertEqual(admin_member['legal_name'],'Nombre Real de Prueba')
+  self.assertEqual(self.client.get('/api/admin/members').status_code,403)
+
  def test_no_charge_before_configuration_and_browser_return_never_grants(self):
   self.assertFalse(self.client.get('/api/payments/status').json['enabled'])
-  self.assertEqual(self.post(self.client,'/api/payments/checkout',{'annual_terms':True}).status_code,409)
+  self.assertEqual(self.post(self.client,'/api/payments/checkout',{'annual_terms':True,'legal_name':'Persona de Prueba'}).status_code,409)
   self.client.get('/account?payment=processing')
   self.assertFalse(self.client.get('/api/account/me').json['user']['live_annual'])
   self.assertEqual(app.app.test_client().post('/api/payments/webhook/platform',json={'payment_status':'paid'}).status_code,400)
@@ -157,8 +201,8 @@ class ManagedPaymentTests(unittest.TestCase):
   with self.assertRaises(ValueError):p.verified_event(raw,'t='+str(int(time.time()))+',v1=0000','whsec_test')
  def test_ambiguous_checkout_cannot_create_second_order(self):
   with patch.object(p,'ready',return_value=True),patch.object(p,'stripe',side_effect=p.PaymentError('local unavailable')):
-   self.assertEqual(self.post(self.client,'/api/payments/checkout',{'annual_terms':True}).status_code,409)
-   self.assertEqual(self.post(self.client,'/api/payments/checkout',{'annual_terms':True}).status_code,409)
+   self.assertEqual(self.post(self.client,'/api/payments/checkout',{'annual_terms':True,'legal_name':'Persona de Prueba'}).status_code,409)
+   self.assertEqual(self.post(self.client,'/api/payments/checkout',{'annual_terms':True,'legal_name':'Persona de Prueba'}).status_code,409)
   with app.app.app_context(),m.database() as c:self.assertEqual(c.execute('SELECT COUNT(*) AS n FROM stripe_orders').fetchone()['n'],1)
  def test_creator_uses_approved_destination_and_same_processor_without_commission(self):
   creator=self.member('managed-creator',paid=True);mod=self.member('gref');creator_id=creator.get('/api/account/me').json['user']['id']

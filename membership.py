@@ -108,6 +108,7 @@ def init_database():
         CREATE TABLE IF NOT EXISTS annual_preferences (
           member_id TEXT PRIMARY KEY REFERENCES members(id) ON DELETE CASCADE,cancelled_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS member_legal_names (member_id TEXT PRIMARY KEY REFERENCES members(id) ON DELETE CASCADE,legal_name TEXT NOT NULL,updated_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS member_profiles (
           member_id TEXT PRIMARY KEY REFERENCES members(id) ON DELETE CASCADE,email TEXT UNIQUE,
           nickname TEXT NOT NULL DEFAULT '',email_verified INTEGER NOT NULL DEFAULT 0,updated_at TEXT NOT NULL
@@ -336,14 +337,19 @@ def account_me():
     from operations import premiere
     from founder_slots import cleanup,reservation
     cleanup()
+    if user and 'payments' in current_app.blueprints:
+        from payments import assign_confirmed_founders
+        with database() as conn:
+            conn.execute('BEGIN IMMEDIATE');assign_confirmed_founders(conn)
     if user:
         from flask import g
         if hasattr(g,'member'):del g.member
         user=get_user()
     with database() as conn:
+        legal=conn.execute('SELECT legal_name FROM member_legal_names WHERE member_id=?',(user['id'],)).fetchone() if user else None
         slot=reservation(conn,user['id']) if user else None
         last_release=conn.execute('SELECT number,trial_until,released_at FROM founder_slot_history WHERE member_id=? ORDER BY released_at DESC,id DESC LIMIT 1',(user['id'],)).fetchone() if user else None
-    return jsonify(user=user_public(user) if user else None, csrf=csrf_token(), payments=payments, payment_mode='manual_verified', streamer_available=streamer_sales_ready(),premium_available=streamer_sales_ready(),founder_reservation=slot,founder_last_release=dict(last_release) if last_release else None,live_video_ready=live_ready(),music_free=True,live_price_cents=2500,live_trial_months=0,live_trial_days=0,live_billing_period='year',live_premiere=premiere(),profile={'email':user['profile_email'],'nickname':user['nickname'] or '', 'email_verified':bool(user['profile_email_verified'])} if user else None)
+    return jsonify(user=user_public(user) if user else None, csrf=csrf_token(), payments=payments, payment_mode='manual_verified', streamer_available=streamer_sales_ready(),premium_available=streamer_sales_ready(),founder_reservation=slot,founder_last_release=dict(last_release) if last_release else None,live_video_ready=live_ready(),music_free=True,live_price_cents=2500,live_trial_months=0,live_trial_days=0,live_billing_period='year',live_premiere=premiere(),profile={'legal_name':legal['legal_name'] if legal else '', 'email':user['profile_email'],'nickname':user['nickname'] or '', 'email_verified':bool(user['profile_email_verified'])} if user else None)
 
 
 @bp.post('/api/account/register')
@@ -354,8 +360,8 @@ def register():
     try:
         name = clean_username(data.get('username'))
         validate_password(data.get('password'))
-        from email_security import clean_email,clean_nickname
-        email=clean_email(data.get('email'));nickname=clean_nickname(data.get('nickname'))
+        from email_security import clean_email,clean_nickname,clean_legal_name
+        email=clean_email(data.get('email'));nickname=clean_nickname(data.get('nickname'));legal_name=clean_legal_name(data.get('legal_name'))
         with database() as conn:
             conn.execute('BEGIN IMMEDIATE')
             from human_check import verify
@@ -364,6 +370,7 @@ def register():
             ident = secrets.token_hex(16)
             conn.execute('INSERT INTO members(id,username,password_hash,created_at) VALUES(?,?,?,?)',
                          (ident, name, generate_password_hash(data['password']), stamp(now_utc())))
+            if legal_name:conn.execute('INSERT INTO member_legal_names VALUES(?,?,?)',(ident,legal_name,stamp(now_utc())))
             if email or nickname:conn.execute('INSERT INTO member_profiles(member_id,email,nickname,updated_at) VALUES(?,?,?,?)',(ident,email,nickname,stamp(now_utc())))
         session.clear()
         session.update(member_id=ident, session_version=0,csrf=secrets.token_urlsafe(32))
@@ -410,6 +417,11 @@ def list_members():
         from live_access import founder_activity
         users = [user_public(row,founder_state=founder_activity(row['id'],conn) if row['founder_number'] else None)|{'account_activated':bool(row['password_hash'])} for row in conn.execute('SELECT m.*,p.nickname AS nickname,p.email AS profile_email,p.email_verified AS profile_email_verified,s.until_at AS streamer_until,f.granted_at AS friend_granted_at,f.revoked_at AS friend_revoked_at,l.number AS founder_number,l.revoked_at AS founder_revoked_at,e.trial_until AS live_trial_until,e.paid_at AS live_paid_at,e.revoked_at AS live_revoked_at,cr.community_role AS community_role,ap.cancelled_at AS annual_cancelled_at,sg.granted_at AS service_granted_at,sg.revoked_at AS service_revoked_at FROM members m LEFT JOIN member_profiles p ON p.member_id=m.id LEFT JOIN streamer_access s ON s.member_id=m.id LEFT JOIN friend_access f ON f.member_id=m.id LEFT JOIN live_founders l ON l.member_id=m.id LEFT JOIN live_entitlements e ON e.member_id=m.id LEFT JOIN community_roles cr ON cr.member_id=m.id LEFT JOIN annual_preferences ap ON ap.member_id=m.id LEFT JOIN service_grants sg ON sg.member_id=m.id ORDER BY m.created_at DESC')]
         payments = [dict(row) for row in conn.execute('SELECT p.*,m.username FROM payments p JOIN members m ON m.id=p.member_id ORDER BY verified_at DESC LIMIT 300')]
+        legal_names={r['member_id']:r['legal_name'] for r in conn.execute('SELECT member_id,legal_name FROM member_legal_names').fetchall()}
+        for member in users:
+            member['legal_name']=legal_names.get(member['id'],'')
+            last=conn.execute("SELECT amount_cents,verified_at,ends_at,reference,plan FROM payments WHERE member_id=? ORDER BY verified_at DESC LIMIT 1",(member['id'],)).fetchone()
+            member['last_payment']=dict(last) if last else None
     return jsonify(members=users, payments=payments)
 
 

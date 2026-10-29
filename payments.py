@@ -36,7 +36,7 @@ def ready():
  return not premiere() and not session.get('ol_play_distribution',False) and configured() and streamer_sales_ready() and state()['scope'] not in {'all','payments','live'}
 
 def init_database():
- with database() as c:c.executescript('''CREATE TABLE IF NOT EXISTS annual_access_emails (
+ with database() as c:c.executescript('''CREATE TABLE IF NOT EXISTS stripe_order_names (order_id TEXT PRIMARY KEY,legal_name TEXT NOT NULL);CREATE TABLE IF NOT EXISTS annual_access_emails (
  order_id TEXT PRIMARY KEY,member_id TEXT NOT NULL,recipient TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending'
  );CREATE TABLE IF NOT EXISTS stripe_accounts (
  member_id TEXT PRIMARY KEY REFERENCES members(id),account_id TEXT NOT NULL UNIQUE,linked_at TEXT NOT NULL
@@ -211,18 +211,27 @@ def checkout():
   with database() as c:
    c.execute('BEGIN IMMEDIATE');order=validate_order(c,user,channel_id)
    if order['kind']=='platform_annual' and payload().get('annual_terms') is not True:raise PaymentError('Debes aceptar las condiciones del acceso anual antes de contratar.')
+   legal_name=None
+   if order['kind']=='platform_annual':
+    from email_security import clean_legal_name
+    saved=c.execute('SELECT legal_name FROM member_legal_names WHERE member_id=?',(user['id'],)).fetchone()
+    legal_name=clean_legal_name(payload().get('legal_name') or (saved['legal_name'] if saved else ''))
+    if not legal_name:raise PaymentError('Indica tu nombre real completo para identificar el pago de Ol Livis.')
+    c.execute('INSERT INTO member_legal_names(member_id,legal_name,updated_at) VALUES(?,?,?) ON CONFLICT(member_id) DO UPDATE SET legal_name=excluded.legal_name,updated_at=excluded.updated_at',(user['id'],legal_name,stamp(now_utc())))
    c.execute('INSERT INTO stripe_orders(id,member_id,kind,channel_id,agreement_id,account_id,amount_cents,currency,created_at,state) VALUES(?,?,?,?,?,?,?,?,?,?)',(order_id,user['id'],order['kind'],order['channel_id'],order['agreement_id'],order['account_id'],order['amount_cents'],'eur',stamp(now_utc()),'open'))
    c.execute('INSERT INTO stripe_order_context VALUES(?,?)',(order_id,timezone_name))
+   if legal_name:c.execute('INSERT INTO stripe_order_names VALUES(?,?)',(order_id,legal_name))
   if order['account_id']:
    account=stripe('GET','/accounts/'+order['account_id'])
    if not account.get('charges_enabled') or not account.get('payouts_enabled'):raise PaymentError('El creador debe completar la verificación bancaria en Stripe antes de cobrar.')
   data={'mode':'payment','managed_payments[enabled]':'false','success_url':ORIGIN+'/account?payment=processing','cancel_url':ORIGIN+'/account?payment=cancelled','client_reference_id':order_id,'metadata[ol_order]':order_id,'payment_intent_data[metadata][ol_order]':order_id,'line_items[0][quantity]':'1','line_items[0][price_data][currency]':'eur','line_items[0][price_data][unit_amount]':str(order['amount_cents']),'line_items[0][price_data][product_data][name]':order['label'],'expires_at':str(int(time.time())+1860),'payment_method_types[0]':'card'}
-  if order['kind']=='platform_annual':data['metadata[annual_terms_version]']='2026-10-29-v1'
+  if order['kind']=='platform_annual':
+   data['metadata[annual_terms_version]']='2026-10-29-v2';data['metadata[registered_legal_name]']=legal_name;data['payment_intent_data[metadata][registered_legal_name]']=legal_name;data['billing_address_collection']='required';data['custom_text[submit][message]']='Utiliza el mismo nombre real que has indicado en electronicama.'
   result=stripe('POST','/checkout/sessions',data,account=order['account_id'] or None,idempotency='ol-'+order_id)
   if not str(result.get('url','')).startswith('https://checkout.stripe.com/') or not str(result.get('id','')).startswith('cs_'):raise PaymentError('El gestor no devolvió una sesión válida.')
   with database() as c:c.execute('UPDATE stripe_orders SET checkout_id=? WHERE id=?',(result['id'],order_id))
   return jsonify(url=result['url'])
- except PaymentError as e:
+ except (PaymentError,ValueError) as e:
   # Keep ambiguous requests pending until Checkout expires: retries must not produce a second charge.
   return jsonify(error=str(e)),409
 
@@ -239,6 +248,53 @@ def verified_event(raw,signature,secret):
  event=json.loads(raw)
  if not isinstance(event,dict) or not isinstance(event.get('id'),str):raise ValueError('event')
  return event
+
+def assign_confirmed_founders(c):
+ """Caller holds the payment/account transaction. Never infer a payment from a return URL."""
+ from founder_slots import release_expired,reserve
+ from storage import PostgresConnection
+ exists=c.execute("SELECT table_name FROM information_schema.tables WHERE table_schema='maggy' AND table_name='stripe_orders'").fetchone() if isinstance(c,PostgresConnection) else c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='stripe_orders'").fetchone()
+ if not exists:return
+ release_expired(c)
+ if c.execute('SELECT COUNT(*) AS n FROM live_founders').fetchone()['n']>=100:return
+ rows=c.execute("SELECT m.id,MIN(o.paid_at) AS paid FROM members m JOIN stripe_orders o ON o.member_id=m.id JOIN live_entitlements e ON e.member_id=m.id WHERE o.kind='platform_annual' AND o.paid_at IS NOT NULL AND o.reversed_at IS NULL AND e.paid_at IS NOT NULL AND e.revoked_at IS NULL AND m.role!='admin' AND m.access_until>? AND NOT EXISTS(SELECT 1 FROM live_founders f WHERE f.member_id=m.id) GROUP BY m.id ORDER BY paid,m.id LIMIT 100",(stamp(now_utc()),)).fetchall()
+ for member in rows:
+  if reserve(c,member['id']) is None:break
+
+@bp.post('/api/payments/reconcile')
+def reconcile():
+ user=get_user()
+ if not user:return jsonify(error='Inicia sesión para comprobar tu pago.'),401
+ return reconcile_member(user)
+
+@bp.post('/api/admin/payments/reconcile')
+@require_admin
+def admin_reconcile():
+ with database() as c:member=c.execute('SELECT * FROM members WHERE id=?',(str(payload().get('member_id','')),)).fetchone()
+ if not member or member['role']=='admin':return jsonify(error='Selecciona una cuenta de cliente.'),400
+ return reconcile_member(member)
+
+def reconcile_member(user):
+ with database() as c:
+  order=c.execute("SELECT * FROM stripe_orders WHERE member_id=? AND kind='platform_annual' AND paid_at IS NULL AND reversed_at IS NULL AND checkout_id IS NOT NULL AND state IN ('open','expired') ORDER BY created_at DESC LIMIT 1",(user['id'],)).fetchone()
+ if not order:return jsonify(ok=True,confirmed=False,pending=False)
+ if not allow_attempt('stripe-reconcile:'+user['id'],limit=6):return jsonify(error='Espera unos minutos antes de comprobar de nuevo este pago.'),429
+ try:
+  obj=stripe('GET','/checkout/sessions/'+order['checkout_id'])
+  if obj.get('livemode') is not True:return jsonify(error='La sesión de Stripe no corresponde a un pago real.'),409
+  if obj.get('payment_status')!='paid':return jsonify(ok=True,confirmed=False,pending=True)
+  with database() as c:
+   c.execute('BEGIN IMMEDIATE')
+   current=c.execute('SELECT * FROM stripe_orders WHERE id=?',(order['id'],)).fetchone()
+   changed=fulfill(c,current,obj)
+   final=c.execute('SELECT paid_at,reversed_at FROM stripe_orders WHERE id=?',(order['id'],)).fetchone()
+   confirmed=bool(final['paid_at'] and not final['reversed_at'])
+  if changed:
+   send_annual_access_emails()
+   from notifications import notify
+   notify('payment','Pago sincronizado con Stripe','Stripe ha confirmado un pago anual de 25 €. El acceso está activo y la plaza se asigna según disponibilidad.',event_key='stripe-order:'+order['id'])
+ except (PaymentError,ValueError,TypeError):return jsonify(error='No se ha podido confirmar todavía el pago con Stripe. Tu pedido se conserva; no repitas el cobro.'),409
+ return jsonify(ok=True,confirmed=confirmed,pending=False)
 
 def fulfill(c,order,obj):
  if order['paid_at'] or order['reversed_at']:return False
@@ -271,6 +327,7 @@ def fulfill(c,order,obj):
   end=stamp(month_end(now_utc(),context['timezone'] if context else 'UTC')) if agreement['period']=='month' else None
   c.execute('INSERT INTO creator_subscriptions(id,channel_id,member_id,agreement_id,amount_cents,benefits_json,starts_at,ends_at,verified_at,verified_by,reference) VALUES(?,?,?,?,?,?,?,?,?,?,?)',(secrets.token_hex(16),order['channel_id'],order['member_id'],order['agreement_id'],order['amount_cents'],agreement['benefits_json'],now,end,now,order['member_id'],reference))
  c.execute("UPDATE stripe_orders SET paid_at=?,payment_intent=?,state='paid' WHERE id=?",(now,obj.get('payment_intent'),order['id']))
+ if order['kind']=='platform_annual':assign_confirmed_founders(c)
  return True
 
 @bp.post('/api/payments/webhook/<scope>')
@@ -324,7 +381,9 @@ def send_annual_access_emails():
    claimed=c.execute("UPDATE annual_access_emails SET status='sending' WHERE order_id=? AND status='pending'",(row['order_id'],)).rowcount
   if not claimed:continue
   try:
-   deliver_to(row['recipient'],'Ol Livis · solicita tu plaza','Tu pago de 25 € está confirmado y tu acceso anual a Ol Livis está activo.\n\nSolicita tu plaza de fundador, si quedan insignias disponibles:\n'+ORIGIN+'/live#founders\n\nEntra con la misma cuenta del pago. La solicitud no requiere otro cobro. Hay 100 insignias numeradas, sujetas a disponibilidad y condiciones de actividad; pagar no reserva un número. Si se han agotado, conservas tu acceso anual ordinario.\n\nGestiona tu acceso en '+ORIGIN+'/account#pricing')
+   with database() as c:founder=c.execute('SELECT number,revoked_at FROM live_founders WHERE member_id=?',(row['member_id'],)).fetchone()
+   badge=('Tu plaza de fundador n.º '+str(founder['number'])+' se ha asignado automáticamente. Conserva el acceso anual y cumple las condiciones de actividad.' if founder and not founder['revoked_at'] else 'Tienes acceso anual como participante de Ol Livis. Las 100 insignias de fundador están sujetas a disponibilidad; no limitan el acceso ordinario.')
+   deliver_to(row['recipient'],'Ol Livis · tu acceso anual está activo','Tu pago de 25 € está confirmado y tu acceso anual a Ol Livis está activo.\n\n'+badge+'\n\nNo necesitas solicitar otra plaza ni realizar otro pago.\n\nConsulta tu estado y vencimiento en '+ORIGIN+'/account#pricing')
   except Exception:
    with database() as c:c.execute("UPDATE annual_access_emails SET status='pending' WHERE order_id=?",(row['order_id'],))
   else:

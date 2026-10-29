@@ -20,7 +20,7 @@ def run():
   page.goto(BASE_URL+'/account#pricing');page.wait_for_function("!document.querySelector('#trial-start').disabled")
   page.locator('#trial-start').click();assert not page.locator('#annual-terms').is_checked()
   assert ctx.request.get(BASE_URL+'/api/account/me').json()['payments']==[]
-  page.locator('#annual-terms').check()
+  page.locator('#annual-legal-name').fill('Persona Real de Prueba');page.locator('#annual-terms').check()
   page.route('https://checkout.stripe.com/**',lambda r:r.fulfill(content_type='text/html',body='<p>Proveedor Stripe simulado: 25 EUR por un año</p>'))
   page.locator('#trial-start').click();page.wait_for_url('https://checkout.stripe.com/**')
   query=parse_qs(urlsplit(page.url).query);order=query['order'][0];checkout=query['checkout'][0]
@@ -35,12 +35,12 @@ def run():
   page.reload();page.wait_for_function("document.querySelector('#access-status').textContent.includes('anual activo')")
   account=ctx.request.get(BASE_URL+'/api/account/me').json();assert account['user']['live_annual'] and len(account['payments'])==1
   mails=[json.loads(line) for line in mail_path.read_text().splitlines()]
-  invites=[m for m in mails if 'solicita tu plaza' in m['title']]
-  assert len(invites)==1 and '/live#founders' in invites[0]['body']
-  page.goto(BASE_URL+'/live#founders');page.wait_for_function("document.querySelector('#founder-claim').textContent==='Solicitar mi plaza de fundador'")
-  page.locator('#founder-claim').click();page.wait_for_function("!document.querySelector('#human-answer').disabled&&document.querySelector('#human-image').src.length>0")
-  page.locator('#human-answer').fill('OL234');page.locator('#founder-claim').click();page.wait_for_url('**/live?welcome=founder#creator-panel')
-  assert ctx.request.get(BASE_URL+'/api/account/me').json()['user']['founder_number']==1
+  invites=[m for m in mails if 'acceso anual está activo' in m['title']]
+  assert len(invites)==1 and 'automáticamente' in invites[0]['body']
+  assert account['user']['founder_number']==1
+  assert page.locator('#trial-start').is_disabled()
+  assert 'tu estado actual' in page.locator('#trial-start').inner_text()
+  assert 'Persona Real de Prueba' not in str(ctx.request.get(BASE_URL+'/api/live/founders').json())
   assert not errors,errors;browser.close()
- print('OK: register, verify email, accept annual terms, 25 EUR Checkout, no access on return alone, signed confirmation once, one customer email, then founder claim')
+ print('OK: register, verify email, accept annual terms, 25 EUR Checkout, no access on return alone, signed confirmation once, one customer email, automatic founder allocation and private legal name')
 if __name__=='__main__':run()

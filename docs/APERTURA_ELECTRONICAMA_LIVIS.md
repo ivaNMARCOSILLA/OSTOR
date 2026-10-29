@@ -40,3 +40,32 @@ no impide contratar el acceso anual ordinario.
 Los fallos de entrega quedan pendientes y se reintentan desde el botón administrativo
 existente de reintento de notificaciones. El correo no concede acceso: lo confirma el
 pedido pagado. La entrega real depende de la configuración de Resend/SMTP.
+
+
+## 9.14.0 · Activación y plaza automáticas
+
+Esta versión sustituye el recorrido de solicitud manual de 9.13.6. Cada pago anual
+confirmado activa el acceso y asigna una insignia disponible de las 100 dentro de
+la misma transacción. Al agotarse, el comprador conserva el mismo acceso anual
+ordinario como participante, sin las ventajas exclusivas de fundador. Los pedidos
+anuales ya confirmados y vigentes se revisan al consultar la cuenta y se asignan
+por orden de confirmación, sin inventar pagos ni cambiar los números existentes.
+Las cuentas gratuitas sin un pago confirmado no reciben una insignia por esta vía.
+
+La cuenta muestra estado y vencimiento; solo ofrece renovación durante los últimos
+30 días o contratación cuando ya no tiene el año vigente. Al volver de Checkout
+se consulta el pedido propio con Stripe si la confirmación aún no ha llegado. La
+consulta no crea pedidos ni cargos. En administración, «Sincronizar pago con Stripe»
+permite la misma consulta para la cuenta elegida, con permisos exclusivos de admin.
+
+El nombre real es privado y separado del usuario/apodo. Se solicita para la compra,
+se guarda una copia con el pedido y se envía en los metadatos de Stripe; Checkout
+recoge además los datos de facturación. El nombre no sustituye una verificación de
+identidad ni se usa como clave para asignar pagos: se usan los identificadores de
+cuenta, pedido y sesión de Stripe. El panel permite filtrar estado, buscar por
+usuario/apodo/nombre privado y ordenar por pago registrado o usuario.
+
+El correo tras el pago informa del acceso activo y del número asignado o de la
+condición de participante; no solicita otro pago ni una nueva petición de plaza.
+La entrega real y el pedido de rosas requieren comprobación en producción: este
+entorno no puede acceder a la cuenta Stripe ni a la base de clientes desplegada.

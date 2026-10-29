@@ -11,6 +11,12 @@ bp=Blueprint('email_security',__name__)
 ORIGIN='https://electronicama.com'
 GENERIC='Si ese correo está confirmado en electronicama, recibirás un enlace para cambiar la contraseña. Revisa también spam.'
 
+def clean_legal_name(value):
+ name=' '.join(str(value or '').split())
+ if not name:return ''
+ if not 3<=len(name)<=120 or not any(c.isalpha() for c in name) or any(not(c.isalpha() or c in " '-’.") for c in name):raise ValueError('Indica tu nombre real completo, sin números ni símbolos.')
+ return name
+
 def clean_email(value):
  email=str(value or '').strip().lower()
  if not email:return None
@@ -72,10 +78,12 @@ def save_profile():
  from two_factor import login_factor
  if not login_factor(user,data):return jsonify(error='Introduce un código válido de tu autenticador.',code='two_factor_required'),403
  try:
-  email=clean_email(data.get('email'));nickname=clean_nickname(data.get('nickname'))
+  email=clean_email(data.get('email'));nickname=clean_nickname(data.get('nickname'));legal_name=clean_legal_name(data.get('legal_name'))
   with database() as c:
    c.execute('BEGIN IMMEDIATE');fresh=c.execute('SELECT session_version FROM members WHERE id=?',(user['id'],)).fetchone()
    if not fresh or fresh['session_version']!=user['session_version']:return jsonify(error='La sesión ha cambiado. Vuelve a iniciar sesión.'),401
+   if 'legal_name' in data:
+    c.execute('INSERT INTO member_legal_names VALUES(?,?,?) ON CONFLICT(member_id) DO UPDATE SET legal_name=excluded.legal_name,updated_at=excluded.updated_at',(user['id'],legal_name,stamp(now_utc())))
    old=profile(c,user['id']);verified=old['email_verified'] if old['email']==email else 0
    c.execute('INSERT INTO member_profiles(member_id,email,nickname,email_verified,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(member_id) DO UPDATE SET email=excluded.email,nickname=excluded.nickname,email_verified=excluded.email_verified,updated_at=excluded.updated_at',(user['id'],email,nickname,verified,stamp(now_utc())))
    if old['email']!=email:c.execute('DELETE FROM email_tokens WHERE member_id=?',(user['id'],))

@@ -45,9 +45,11 @@ def run():
             def stripe_fixture(method,path,data=None,**kwargs):
                 if method=='POST' and path=='/checkout/sessions':
                     assert data['mode']=='payment' and data['line_items[0][price_data][unit_amount]']=='2500'
-                    assert data['metadata[annual_terms_version]']=='2026-10-29-v1'
+                    assert data['metadata[annual_terms_version]']=='2026-10-29-v2'
                     checkout='cs_local_'+secrets.token_hex(8)
                     return {'id':checkout,'url':'https://checkout.stripe.com/c/pay/local-fixture?'+urlencode({'order':data['metadata[ol_order]'],'checkout':checkout})}
+                if method=='GET' and path.startswith('/checkout/sessions/'):
+                    return {'id':path.rsplit('/',1)[-1],'livemode':True,'payment_status':'unpaid'}
                 raise AssertionError('Unexpected external Stripe operation: '+path)
             stripe_fixture_patches=[patch.dict(os.environ,{'OL_PAYMENT_PROVIDER':'stripe','OL_LIVE_PREMIERE':'0','STRIPE_WEBHOOK_SECRET':'whsec_browser_local_fixture'}),patch.object(payments,'ready',return_value=True),patch.object(payments,'stripe',side_effect=stripe_fixture),patch.object(notifications,'mail_ready',return_value=True),patch.object(notifications,'deliver_to',side_effect=capture_mail)]
             for fixture in stripe_fixture_patches:fixture.start()

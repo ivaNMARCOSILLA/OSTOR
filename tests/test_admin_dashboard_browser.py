@@ -7,6 +7,8 @@ def run():
   context=browser.new_context();login_context(context);page=context.new_page();errors=[];calls=[]
   page.on('pageerror',lambda e:errors.append(str(e)))
   members=[{'id':str(i),'username':f'client-{i:03}','role':'member','active':i%2==0,'complimentary':i%3==0,'access_until':None,'streamer_until':None} for i in range(61)]
+  members[0].update(legal_name='Alex Real',live_annual=True,founder_active=True,founder_number=1,last_payment={'amount_cents':2500,'verified_at':'2026-10-29T12:00:00+00:00'})
+  members[1].update(legal_name='Persona Real',live_annual=True,founder_active=False,last_payment={'amount_cents':2500,'verified_at':'2026-10-28T12:00:00+00:00'})
   page.route('**/api/admin/members',lambda route:route.fulfill(json={'members':members,'payments':[]}))
   def invitations(route):
    calls.append(route.request.url);route.fulfill(json={'total':0,'pages':1,'page':1,'invitations':[]})
@@ -17,6 +19,13 @@ def run():
   assert all('summary=1' in url for url in calls)
   page.locator('#members-next').click();assert 'Página 2' in page.locator('#member-page').inner_text()
   page.locator('#admin-member-search').fill('client-060');assert page.locator('#admin-members tr').count()==1
+  page.locator('#admin-member-search').fill('Alex Real');assert page.locator('#admin-members tr').count()==1
+  assert 'Alex Real' in page.locator('#admin-members').inner_text()
+  page.locator('#admin-member-search').fill('');page.locator('#admin-client-filter').select_option('paid');assert page.locator('#admin-members tr').count()==2
+  page.locator('#admin-client-filter').select_option('founder');assert page.locator('#admin-members tr').count()==1
+  page.locator('#admin-client-filter').select_option('participant');assert page.locator('#admin-members tr').count()==1
+  page.locator('#admin-client-filter').select_option('all');page.locator('#admin-client-sort').select_option('payment')
+  assert 'client-000' in page.locator('#admin-members tr').first.inner_text()
   page.locator('#invitation-history summary').click();page.wait_for_function("document.querySelector('#invitation-count').textContent.includes('0 invitaciones')")
   page.locator('#notification-history summary').click();page.wait_for_function("document.querySelector('#mail-status').textContent.includes('normalesoutro@gmail.com')")
   assert page.locator('#retry-notifications').is_disabled()
