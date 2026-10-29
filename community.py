@@ -98,4 +98,28 @@ def moderation_log():
     return jsonify(records=[dict(row) for row in rows],total=total,page=page,pages=pages,retention_days=RETENTION_DAYS)
 
 
+@bp.post('/api/admin/community-role')
+@require_admin
+def set_community_role():
+    from membership import payload
+    data=payload();role=data.get('community_role');ident=data.get('member_id')
+    if role not in {'activo','voluntario','docente'} or not isinstance(ident,str):return jsonify(error='Rol de comunidad no válido.'),400
+    with database() as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        target=conn.execute('SELECT id FROM members WHERE id=?',(ident,)).fetchone()
+        if not target:return jsonify(error='La cuenta no existe.'),404
+        conn.execute('INSERT INTO community_roles VALUES(?,?,?,?) ON CONFLICT(member_id) DO UPDATE SET community_role=excluded.community_role,approved_by=excluded.approved_by,updated_at=excluded.updated_at',(ident,role,get_user()['id'],stamp(now_utc())))
+    return jsonify(ok=True,community_role=role,administrative_permissions_changed=False)
+
+@bp.post('/api/account/annual/cancel')
+def cancel_annual():
+    from membership import user_public
+    user=get_user()
+    if not user:return jsonify(error='Inicia sesión.'),401
+    if not user_public(user).get('live_annual'):return jsonify(error='No tienes un periodo anual vigente.'),409
+    with database() as conn:
+        conn.execute('INSERT INTO annual_preferences VALUES(?,?) ON CONFLICT(member_id) DO NOTHING',(user['id'],stamp(now_utc())))
+    return jsonify(ok=True,access_until=user['access_until'],automatic_renewal=False,message='Cancelación registrada. Conservas el acceso hasta el vencimiento del año pagado. No habrá cargos automáticos.')
+
+
 def install(app):app.register_blueprint(bp)

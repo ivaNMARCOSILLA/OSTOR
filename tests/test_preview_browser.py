@@ -1,4 +1,4 @@
-"""Free music works before registration; premium is exclusive to Ol Live."""
+"""Free music works before registration; premium is exclusive to Ol Livis."""
 import io,wave
 from playwright.sync_api import sync_playwright
 from browser_support import BASE_URL

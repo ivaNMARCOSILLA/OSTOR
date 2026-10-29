@@ -24,34 +24,17 @@ class LiveAccessTests(unittest.TestCase):
   return client.post(path,json=data,headers={'X-CSRF-Token':token})
  def pay(self,client=None,reference='REAL-REFERENCE-001',member=None,plan='lifetime'):
   return self.post(client or self.admin,'/api/admin/confirm-payment',{'member_id':member or self.ident,'plan':plan,'reference':reference})
- def test_seven_day_trial_once_and_no_premature_or_repeated_billing(self):
-  initial=datetime(2027,1,31,12,tzinfo=timezone.utc)
-  with patch.object(st,'live_ready',return_value=False):
-   self.assertEqual(self.post(self.user,'/api/account/live-trial',{}).status_code,409)
-  with app.app.app_context(),m.database() as conn:self.assertEqual(conn.execute('SELECT COUNT(*) AS n FROM live_entitlements').fetchone()['n'],0)
-  with patch.object(st,'live_ready',return_value=True),patch.object(st,'streamer_sales_ready',return_value=True),patch.object(access,'now_utc',return_value=initial),patch.object(m,'now_utc',return_value=initial):
-   self.assertEqual(self.pay().status_code,409)
-   trial=self.post(self.user,'/api/account/live-trial',{});self.assertEqual(trial.json['trial_until'],'2027-02-07T12:00:00+00:00')
-   self.assertEqual(self.post(self.user,'/api/account/live-trial',{}).json['trial_until'],trial.json['trial_until'])
-   self.assertTrue(self.user.get('/api/account/me').json['user']['streamer_active'])
-   self.assertEqual(self.pay().status_code,409)
-   for retired in ['welcome','monthly','streamer']:self.assertEqual(self.pay(plan=retired).status_code,400)
-  expired=datetime(2027,2,7,12,tzinfo=timezone.utc)
-  with patch.object(st,'streamer_sales_ready',return_value=True),patch.object(m,'now_utc',return_value=expired):
-   self.assertFalse(self.user.get('/api/account/me').json['user']['active'])
-   self.assertEqual(self.pay(self.user).status_code,403)
-   result=self.pay();self.assertEqual(result.status_code,200)
-   me=self.user.get('/api/account/me').json;self.assertTrue(me['user']['live_lifetime']);self.assertTrue(me['user']['streamer_active'])
-   self.assertEqual(me['payments'][0]['amount_cents'],2500)
-   self.assertEqual(self.pay(reference='OTHER-REFERENCE-002').status_code,409)
-   other=app.app.test_client();self.post(other,'/api/account/register',{'username':'other-live','password':'other-live-password-123'});otherid=other.get('/api/account/me').json['user']['id']
-   with app.app.app_context(),m.database() as conn:conn.execute('INSERT INTO live_entitlements(member_id,trial_until) VALUES(?,?)',(otherid,m.stamp(expired-timedelta(seconds=1))))
-   self.assertEqual(self.pay(member=otherid).status_code,409)
-  self.post(self.admin,'/api/admin/revoke',{'member_id':self.ident})
-  self.post(self.user,'/api/account/login',{'username':'live-user','password':'live-user-password-123'})
+ def test_trials_are_retired_and_never_grant_access(self):
+  for ready in [False,True]:
+   with patch.object(st,'live_ready',return_value=ready):self.assertEqual(self.post(self.user,'/api/account/live-trial',{}).status_code,410)
   self.assertFalse(self.user.get('/api/account/me').json['user']['active'])
-  with patch.object(st,'live_ready',return_value=True):self.assertTrue(self.post(self.user,'/api/account/live-trial',{}).json['already_started'])
+  with app.app.app_context(),m.database() as conn:self.assertEqual(conn.execute('SELECT COUNT(*) AS n FROM live_entitlements').fetchone()['n'],0)
+ def grant_paid_fixture(self):
+  with app.app.app_context(),m.database() as conn:
+   conn.execute('UPDATE members SET access_until=? WHERE id=?',(m.stamp(m.end_of_plan(m.now_utc(),'annual')),self.ident))
+   conn.execute('INSERT INTO live_entitlements(member_id,paid_at) VALUES(?,?)',(self.ident,m.stamp(m.now_utc())))
  def test_visual_check_wrong_answer_replay_and_session_binding(self):
+  self.grant_paid_fixture()
   with patch('human_check.new_code',return_value='OL234'):
    first=self.user.get('/api/account/human-check').json
    self.assertNotIn('OL234',str(first));self.assertTrue(first['image'].startswith('data:image/png;base64,'))
@@ -65,6 +48,7 @@ class LiveAccessTests(unittest.TestCase):
    mine=self.user.get('/api/live/founders').json['mine'];self.assertTrue(mine['future_transfer_eligible'])
    self.assertFalse(self.user.get('/api/live/founders').json['transfer_sales_open'])
  def test_private_camera_and_unverified_heartbeats_cannot_earn_founder_time(self):
+  self.grant_paid_fixture()
   with app.app.app_context(),m.database() as conn:
    conn.execute('INSERT INTO live_founders(member_id,number,claimed_at) VALUES(?,1,?)',(self.ident,m.stamp(m.now_utc())))
   self.post(self.user,'/api/streamers/me',{'title':'Mi directo'})

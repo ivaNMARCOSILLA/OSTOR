@@ -15,7 +15,7 @@ with zipfile.ZipFile(args.archive) as z:
  for line in manifest.splitlines():
   digest,name=line.split('  ',1);assert hashlib.sha256(z.read('Ol/'+name)).hexdigest()==digest,'SHA-256 mismatch: '+name;verified.add('Ol/'+name)
  assert set(names)==verified|{'Ol/MAGGY_SHA256.txt'},'Unmanifested files'
- web=json.loads(z.read('Ol/manifest.webmanifest'));assert web['name'].startswith('Ol') and web['start_url']=='/'
+ web=json.loads(z.read('Ol/manifest.webmanifest'));assert web['name'].startswith('electronicama') and web['start_url']=='/'
  for key in ['Ol/app.py','Ol/payments.py','Ol/operations.py','Ol/assets/vendor/livekit-client-2.23.0.umd.js','Ol/android/twa-manifest.template.json']:
   assert key in verified,'Missing runtime or packaging component'
  print('Verified source ZIP:',len(verified),'files; SHA-256 matches; no private account data or signing keys.')

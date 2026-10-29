@@ -1,8 +1,8 @@
-import {openSubscription} from '/assets/subscriptions.js?v=9.8.4';
-import {founderBadge} from '/assets/badges.js?v=9.8.4';
+import {openSubscription} from '/assets/subscriptions.js?v=9.11.0';
+import {founderBadge} from '/assets/badges.js?v=9.11.0';
 'use strict';
-import {StreamCommunity} from '/assets/community.js?v=9.8.4';
-import {StudioTools} from '/assets/studio-tools.js?v=9.8.4';
+import {StreamCommunity} from '/assets/community.js?v=9.11.0';
+import {StudioTools} from '/assets/studio-tools.js?v=9.11.0';
 const $=id=>document.getElementById(id);
 let premiereOnly=false;
 let publicInfo=null,liveCategory='all';
@@ -47,9 +47,9 @@ function renderCatalogue(){
  const matches=channels.filter(channel=>(liveCategory==='all'||(liveCategory==='featured'?channel.featured:channel.category===liveCategory))&&[channel.title,channel.username,channel.bio].join(' ').toLocaleLowerCase('es').includes(query));
  document.querySelectorAll('[data-live-category]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.liveCategory===liveCategory)));
  $('channel-filter').disabled=!directory?.video_ready;
- $('catalogue-status').textContent=!directory?'Comprobando los canales de Ol Live…':!directory.video_ready?'Las emisiones aún no están activadas. Las listas están preparadas para los canales reales.':`${matches.length} de ${channels.length} canales emitiendo ahora · actualización cada 30 segundos.${active?'':' Ver y comentar requiere Ol Live Premium.'}`;
+ $('catalogue-status').textContent=!directory?'Comprobando los canales de Ol Livis…':!directory.video_ready?'Las emisiones aún no están activadas. Las listas están preparadas para los canales reales.':`${matches.length} de ${channels.length} canales emitiendo ahora · actualización cada 30 segundos.${active?'':' Ver y comentar requiere Ol Livis Premium.'}`;
  $('live-empty').classList.toggle('hidden',matches.length>0);
- $('live-empty').textContent=!directory?.video_ready?'Todavía no hay vídeos de Ol Live disponibles.':query||liveCategory!=='all'?'No hay emisiones que coincidan con esta lista o búsqueda en este momento.':!channels.length?'Nadie está emitiendo ahora. Puedes actualizar la lista o volver más tarde.':'';
+ $('live-empty').textContent=!directory?.video_ready?'Todavía no hay vídeos de Ol Livis disponibles.':query||liveCategory!=='all'?'No hay emisiones que coincidan con esta lista o búsqueda en este momento.':!channels.length?'Nadie está emitiendo ahora. Puedes actualizar la lista o volver más tarde.':'';
  for(const channel of matches){
   const card=node('article');card.className='live-channel';card.id='canal-'+channel.id;
   const visual=node('div');visual.className='channel-video-cover';const image=node('img');image.src='/assets/ol-infinity.svg';image.alt='';const badge=node('span','EN DIRECTO · VÍDEO');badge.className='channel-live-badge';visual.append(image,badge);
@@ -68,7 +68,7 @@ function navigateSection(hash){
  if(!['#creator-panel','#stream-studio'].includes(hash))return;
  if(!window.MaggySession.premium){$('stream-access').querySelector('a').href='/account?next='+encodeURIComponent('/live'+hash);focusSection($('stream-access'),$('stream-access').querySelector('h2'));return;}
  if(!info){status('No se pudo comprobar el acceso al estudio. Pulsa «Actualizar canales» para reintentar.');focusSection($('live-catalogue'),$('catalogue-title'));return;}
- if(!info.streamer_active){$('creator-access-message').textContent=info.streamer_sales_available?'Activa tus siete días de prueba de Ol Live desde tu cuenta. Después, si quieres continuar, el pago único es de 25 €.':'Puedes ver los directos con tu acceso habitual cuando estén disponibles. Crear y emitir requiere el plan Ol Live Creador; sus altas y cobros siguen bloqueados mientras se prepara el servicio.';focusSection($('creator-access'),$('creator-access-title'));return;}
+ if(!info.streamer_active){$('creator-access-message').textContent=info.streamer_sales_available?'Contrata Ol Livis por 25 € al año desde tu cuenta. Sin prueba gratuita; el acceso se activa cuando Stripe confirma el pago.':'Puedes ver los directos con tu acceso habitual cuando estén disponibles. Crear y emitir requiere el plan Ol Livis Creador; sus altas y cobros siguen bloqueados mientras se prepara el servicio.';focusSection($('creator-access'),$('creator-access-title'));return;}
  if(hash==='#creator-panel'||!info.mine){focusSection($('creator-panel'),$('creator-form-title'));return;}
  showStudio();
 }
@@ -98,7 +98,7 @@ function renderStudio(){
  if(!tools.devicesInitialized){tools.devicesInitialized=true;tools.devices();}
  $('studio-title').textContent=`Tu estudio · ${info.mine.title}`;
  $('start-camera').disabled=!info.video_ready||connecting;
- $('studio-service-status').textContent=info.video_ready?'Cuando estés preparado, pulsa «Iniciar directo».':'Puedes preparar tu cámara en privado. Ol Live aún no está disponible: comprueba la conexión con LiveKit arriba.';
+ $('studio-service-status').textContent=info.video_ready?'Cuando estés preparado, pulsa «Iniciar directo».':'Puedes preparar tu cámara en privado. Ol Livis aún no está disponible: comprueba la conexión con LiveKit arriba.';
 }
 function showStudio(){
  renderStudio();const target=publishing?$('live-stage'):$('stream-studio');
@@ -107,7 +107,7 @@ function showStudio(){
 }
 async function privatePreview(){
  if(connecting||publishing){$('studio-status').textContent='Espera a terminar la conexión antes de activar una cámara privada.';return;}
- if(!info?.mine||!info.streamer_active){$('studio-status').textContent='Guarda primero tu canal con una cuenta Ol Live Creador activa.';return;}
+ if(!info?.mine||!info.streamer_active){$('studio-status').textContent='Guarda primero tu canal con una cuenta Ol Livis Creador activa.';return;}
  stopPreview();const generation=previewGeneration;$('preview-camera').disabled=true;$('preview-camera').textContent='Activando cámara…';$('close-preview').classList.remove('hidden');
  $('studio-status').textContent='Autoriza la cámara y el micrófono en el navegador. Esta vista es privada.';
  try{
@@ -173,8 +173,8 @@ window.addEventListener('maggy:access-changed',event=>{if(!event.detail.premium)
 window.addEventListener('pagehide',()=>{community.stop();stopPreview('',true);if(publishing)window.MaggySession.fetch('/api/streamers/me/live',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({live:false}),keepalive:true}).catch(()=>{});room?.disconnect();});
 await window.MaggySession.ready;
 $('stream-access').classList.toggle('hidden',window.MaggySession.premium);
-if(window.MaggySession.premium){try{await refresh();status(info?.video_ready?'Elige un directo o prepara tu canal.':'Zona preparada; las emisiones y las altas de Ol Live aún no están disponibles.');navigateSection(location.hash);}catch(error){status(error.message);}}
-else{try{await refresh();}catch(error){$('catalogue-status').textContent=error.message;}status('Explora Ol Live. Para ver o emitir necesitas acceso premium.');const hash=/^#canal-[a-f0-9]{32}$/.test(location.hash)||['#live-catalogue','#creator-panel','#stream-studio'].includes(location.hash)?location.hash:'#live-catalogue';$('stream-access').querySelector('a').href='/account?next='+encodeURIComponent('/live'+hash);}
+if(window.MaggySession.premium){try{await refresh();status(info?.video_ready?'Elige un directo o prepara tu canal.':'Zona preparada; las emisiones y las altas de Ol Livis aún no están disponibles.');navigateSection(location.hash);}catch(error){status(error.message);}}
+else{try{await refresh();}catch(error){$('catalogue-status').textContent=error.message;}status('Explora Ol Livis. Para ver o emitir necesitas acceso premium.');const hash=/^#canal-[a-f0-9]{32}$/.test(location.hash)||['#live-catalogue','#creator-panel','#stream-studio'].includes(location.hash)?location.hash:'#live-catalogue';$('stream-access').querySelector('a').href='/account?next='+encodeURIComponent('/live'+hash);}
 if(window.MaggySession.premium&&/^#canal-[a-f0-9]{32}$/.test(location.hash)){const card=document.getElementById(location.hash.slice(1));if(card)card.scrollIntoView({behavior:'smooth'});else status('Este canal no está en directo ahora. Vuelve a abrir el enlace cuando comience la emisión.');}
 renderCatalogue();
 setInterval(()=>refresh().catch(error=>status(error.message)),30000);

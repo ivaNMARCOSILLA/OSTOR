@@ -28,6 +28,7 @@ class CreatorSubscriptionTests(unittest.TestCase):
   ident=c.get('/api/account/me').json['user']['id']
   with app.app.app_context(),m.database() as conn:
    conn.execute('INSERT INTO live_entitlements(member_id,trial_started_at,trial_until,paid_at) VALUES(?,?,?,?)',(ident,m.stamp(m.now_utc()),m.stamp(m.now_utc()-timedelta(days=1)),m.stamp(m.now_utc())))
+   conn.execute('UPDATE members SET access_until=? WHERE id=?',(m.stamp(m.end_of_plan(m.now_utc(),'annual')),ident))
   return c
  def proposal(self,price=450):
   r=self.post(self.creator,'/api/channel-subscriptions/propose',{'price_cents':price,'period':'month','benefits':['badge','subscriber_chat','exclusive_live']});self.assertEqual(r.status_code,200);return r.json['agreement_id']

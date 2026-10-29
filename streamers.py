@@ -132,7 +132,7 @@ def rate_limit():
     from operations import premiere
     if premiere() and request.path.startswith('/api/streamers') and '/admin/' not in request.path:
         user=get_user()
-        if not user or user['role']!='admin':return jsonify(error='Ol Live · próximo estreno.',code='live_premiere'),409
+        if not user or user['role']!='admin':return jsonify(error='Ol Livis · próximo estreno.',code='live_premiere'),409
     limiter=current_app.extensions.get('streamer_rate_limiter')
     if request.path.startswith('/api/') and limiter and not limiter('streamers',240):
         return jsonify(error='Espera un momento antes de volver a intentarlo.'),429
@@ -202,10 +202,10 @@ def channels():
 
 @bp.post('/api/streamers/me')
 def save_channel():
-    if not publisher_allowed(): return jsonify(error='Activa tu prueba de Ol Live o revisa tu acceso completo desde tu cuenta.'),403
+    if not publisher_allowed(): return jsonify(error='Activa tu prueba de Ol Livis o revisa tu acceso completo desde tu cuenta.'),403
     data=request.get_json(silent=True) or {}
     title=str(data.get('title','')).strip();bio=str(data.get('bio','')).strip();category=data.get('category','entretenimiento')
-    if category not in LIVE_CATEGORIES:return jsonify(error='Elige una categoría válida para Ol Live.'),400
+    if category not in LIVE_CATEGORIES:return jsonify(error='Elige una categoría válida para Ol Livis.'),400
     if not 3<=len(title)<=80 or len(bio)>400: return jsonify(error='Indica un título de 3 a 80 caracteres y una presentación de hasta 400.'),400
     try: validate_public_text(title+' '+bio)
     except ValueError as exc: return jsonify(error=str(exc)),400
@@ -229,14 +229,14 @@ def save_channel():
 
 @bp.post('/api/streamers/<channel_id>/token')
 def token(channel_id):
-    if not live_ready(): return jsonify(error='Las emisiones todavía no están activadas. No se ha cobrado ningún alta de Ol Live Creador.',code='live_not_configured'),503
+    if not live_ready(): return jsonify(error='Las emisiones todavía no están activadas. No se ha cobrado ningún alta de Ol Livis Creador.',code='live_not_configured'),503
     with database() as conn:
         channel=conn.execute('SELECT * FROM streamer_channels WHERE id=?',(channel_id,)).fetchone()
     if channel and is_abusive(channel['title']+' '+channel['bio']): return jsonify(error='El canal debe corregir su título o presentación antes de emitir.'),409
     if not channel: return jsonify(error='Este canal no existe.'),404
     publish=(request.get_json(silent=True) or {}).get('publish') is True
     user=get_user()
-    if publish and (channel['member_id']!=user['id'] or not publisher_allowed()): return jsonify(error='Solo el creador con plan Ol Live Creador activo puede emitir en este canal.'),403
+    if publish and (channel['member_id']!=user['id'] or not publisher_allowed()): return jsonify(error='Solo el creador con plan Ol Livis Creador activo puede emitir en este canal.'),403
     if not publish and not (channel['live_until'] and channel['live_until']>stamp(now_utc())): return jsonify(error='Este canal no está en directo.'),404
     if not publish:
         from subscriptions import watch_allowed
@@ -247,7 +247,7 @@ def token(channel_id):
 
 @bp.post('/api/streamers/me/live')
 def presence():
-    if not publisher_allowed(): return jsonify(error='Tu plan Ol Live Creador no está activo.'),403
+    if not publisher_allowed(): return jsonify(error='Tu plan Ol Livis Creador no está activo.'),403
     live=(request.get_json(silent=True) or {}).get('live') is True
     if live and not live_ready(): return jsonify(error='Las emisiones no están activadas.'),503
     channel=own_channel()
@@ -278,7 +278,7 @@ def gift_link(channel_id):
         from live_access import founder_activity
         with database() as conn:founder_ok=founder_activity(row['member_id'],conn)['eligible']
     active_creator=row['role']=='admin' or founder_ok or bool(not row['live_revoked_at'] and (row['live_paid_at'] or (row['live_trial_until'] and row['live_trial_until']>stamp(now_utc())))) or bool(row['access_until'] and row['access_until']>stamp(now_utc()) and row['streamer_until'] and row['streamer_until']>stamp(now_utc()))
-    if not active_creator: return jsonify(error='Este canal no tiene plan Ol Live Creador activo.'),409
+    if not active_creator: return jsonify(error='Este canal no tiene plan Ol Livis Creador activo.'),409
     return jsonify(url=paypal_link(row['paypal_url'])+f'/{amount//100}.{amount%100:02d}EUR',creator=row['username'],amount_cents=amount,
                    maggy_commission_cents=0,mode='external_paypal_link',payment_confirmed=False)
 

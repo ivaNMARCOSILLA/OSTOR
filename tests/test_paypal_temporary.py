@@ -18,10 +18,10 @@ class TemporaryPayPalTests(unittest.TestCase):
    stripe.assert_not_called()
  def test_manual_payment_cannot_bypass_video_or_maintenance_gate(self):
   with patch('streamers.streamer_sales_ready',return_value=False):
-   result=self.admin.post('/api/admin/confirm-payment',json={'plan':'lifetime','reference':'COMPLETED-REFERENCE','member_id':'none'})
+   result=self.admin.post('/api/admin/confirm-payment',json={'plan':'annual','reference':'COMPLETED-REFERENCE','member_id':'none'})
    self.assertEqual(result.status_code,409)
   with patch('streamers.streamer_sales_ready',return_value=True),patch('operations.state',return_value={'scope':'payments'}):
-   result=self.admin.post('/api/admin/confirm-payment',json={'plan':'lifetime','reference':'COMPLETED-REFERENCE','member_id':'none'})
+   result=self.admin.post('/api/admin/confirm-payment',json={'plan':'annual','reference':'COMPLETED-REFERENCE','member_id':'none'})
    self.assertEqual(result.status_code,409)
  def test_premiere_hides_public_channels_and_blocks_trials_without_losing_admin_tools(self):
   with patch.dict('os.environ',{'OL_LIVE_PREMIERE':'1'}),patch('streamers.streamer_sales_ready',return_value=True):
@@ -30,7 +30,7 @@ class TemporaryPayPalTests(unittest.TestCase):
    catalogue=public.get('/api/live/catalogue').json
    self.assertEqual(catalogue['channels'],[]);self.assertFalse(catalogue['video_ready'])
    self.assertIn(public.get('/api/streamers').status_code,(401,409))
-   self.assertEqual(self.admin.post('/api/account/live-trial',json={}).status_code,409)
+   self.assertEqual(self.admin.post('/api/account/live-trial',json={}).status_code,410)
    self.assertEqual(self.admin.post('/api/live/founders/claim',json={}).status_code,409)
    self.assertFalse(self.admin.get('/api/payments/status').json['enabled'])
    self.assertEqual(self.admin.get('/api/streamers').status_code,200)

@@ -14,7 +14,7 @@
    let next=raw,label=null;
    if(url.pathname==='/streamers'&&!raw.startsWith('#'))next='/live'+url.search+url.hash;
    if(aliases[url.hash]&&((url.pathname===location.pathname&&!document.getElementById(url.hash.slice(1)))||url.pathname==='/account'))next=url.pathname+url.search+aliases[url.hash];
-   if(availability.premiere&&!availability.admin&&livePaths.has(url.pathname)&&['#live-catalogue','#creator-panel','#stream-studio'].includes(url.hash)){next='/live#ol-live-premiere';label=url.hash==='#live-catalogue'?'Próximo estreno':'Ol Live · en preparación';}
+   if(availability.premiere&&!availability.admin&&livePaths.has(url.pathname)&&['#live-catalogue','#creator-panel','#stream-studio'].includes(url.hash)){next='/live#ol-live-premiere';label=url.hash==='#live-catalogue'?'Próximo estreno':'Ol Livis · en preparación';}
    if(next!==raw){if(!link.dataset.olOriginalHref){link.dataset.olOriginalHref=raw;link.dataset.olOriginalText=link.textContent;}if(link.getAttribute('href')!==next){link.setAttribute('href',next);repaired++;}if(label){const spans=link.querySelectorAll('span');if(spans.length>1)spans[spans.length-1].textContent=label;else link.textContent=label;}}
    else if(link.dataset.olOriginalHref){link.setAttribute('href',raw);link.textContent=link.dataset.olOriginalText;delete link.dataset.olOriginalHref;delete link.dataset.olOriginalText;}
    const actual=new URL(link.href,location.href);if(actual.pathname===location.pathname&&actual.hash){try{if(!document.getElementById(decodeURIComponent(actual.hash.slice(1))))broken.push(actual.pathname+actual.hash);}catch{broken.push('fragmento no válido');}}

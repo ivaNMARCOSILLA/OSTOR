@@ -37,7 +37,7 @@ class StreamerTests(unittest.TestCase):
         os.environ.update(LIVEKIT_URL='wss://video.example.org',LIVEKIT_API_KEY='test-key',LIVEKIT_API_SECRET='x'*40,MAGGY_STREAMERS_ENABLED='1',MAGGY_STREAMER_SALES_ENABLED='1')
 
     def pay(self,ident,plan,ref):
-        if plan=='lifetime':return self.admin.post('/api/admin/confirm-payment',json={'member_id':ident,'plan':plan,'reference':ref})
+        if plan=='annual':return self.admin.post('/api/admin/confirm-payment',json={'member_id':ident,'plan':plan,'reference':ref})
         return legacy_payment(app.app,self.admin,ident,plan,ref)
 
     def creator(self):
@@ -60,8 +60,8 @@ class StreamerTests(unittest.TestCase):
     def test_no_streamer_sale_until_video_is_explicitly_enabled(self):
         client,ident=self.member('viewer')
         self.assertFalse(client.get('/api/account/me').json['streamer_available'])
-        self.assertEqual(self.pay(ident,'lifetime','STREAMER-NOT-ACTIVE').status_code,409)
-        self.assertEqual(self.pay(ident,'lifetime','VIEWER-NOT-READY').status_code,409)
+        self.assertEqual(self.pay(ident,'annual','STREAMER-NOT-ACTIVE').status_code,409)
+        self.assertEqual(self.pay(ident,'annual','VIEWER-NOT-READY').status_code,409)
         self.enable()
         self.assertEqual(self.pay(ident,'monthly','VIEWER-OK-001').status_code,200)
         self.assertFalse(client.get('/api/account/me').json['user']['streamer_active'])
@@ -72,7 +72,7 @@ class StreamerTests(unittest.TestCase):
         self.assertTrue(st.live_ready());self.assertFalse(st.streamer_sales_ready())
         client,ident=self.member('preview-viewer')
         self.assertFalse(client.get('/api/account/me').json['streamer_available'])
-        self.assertEqual(self.pay(ident,'lifetime','PREVIEW-NO-SALE').status_code,409)
+        self.assertEqual(self.pay(ident,'annual','PREVIEW-NO-SALE').status_code,409)
 
     @patch.object(st.requests,'post')
     def test_admin_can_probe_service_without_disclosing_credentials_or_creating_rooms(self,post):

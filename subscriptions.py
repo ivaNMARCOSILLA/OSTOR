@@ -240,7 +240,7 @@ def confirm_subscription(channel_id):
  user=get_user();data=payload();reference=str(data.get('reference','')).strip()
  if not user or data.get('verified_receipt') is not True or not 4<=len(reference)<=120:return jsonify(error='El creador debe comprobar el ingreso en su PayPal e indicar una referencia única.'),400
  from streamers import streamer_sales_ready
- if not streamer_sales_ready():return jsonify(error='Los pagos esperan a que Ol Live esté disponible.'),409
+ if not streamer_sales_ready():return jsonify(error='Los pagos esperan a que Ol Livis esté disponible.'),409
  try:
   with database() as conn:
    conn.execute('BEGIN IMMEDIATE');channel=conn.execute('SELECT * FROM streamer_channels WHERE id=?',(channel_id,)).fetchone()

@@ -73,9 +73,20 @@ def account_for(c,member_id):
 def status():
  user=get_user()
  with database() as c:account=account_for(c,user['id']) if user else None
- return jsonify(provider=provider(),configured=configured(),enabled=ready(),creator_connected=bool(account),connect_available=bool(provider()=='stripe' and os.getenv('STRIPE_CONNECT_CLIENT_ID','').startswith('ca_') and os.getenv('STRIPE_SECRET_KEY','').startswith('sk_live_')),platform_price_cents=2500,currency='eur',platform_commission_percent=0,renewal='manual',play_distribution=bool(session.get('ol_play_distribution')),pending_reason=None if ready() else 'Ol Live · próximo estreno. Todavía no hay cobros disponibles.')
+ return jsonify(provider=provider(),configured=configured(),enabled=ready(),creator_connected=bool(account),connect_available=bool(provider()=='stripe' and os.getenv('STRIPE_CONNECT_CLIENT_ID','').startswith('ca_') and os.getenv('STRIPE_SECRET_KEY','').startswith('sk_live_')),platform_price_cents=2500,currency='eur',platform_commission_percent=0,renewal='manual',billing_period='year',trial_days=0,play_distribution=bool(session.get('ol_play_distribution')),pending_reason=None if ready() else 'Ol Livis · próximo estreno. Todavía no hay cobros disponibles.')
 
 def sandbox_configured():return bool(os.getenv('STRIPE_TEST_SECRET_KEY','').startswith(('sk_test_','rk_test_')) and os.getenv('STRIPE_TEST_WEBHOOK_SECRET','').startswith('whsec_'))
+
+@bp.get('/api/admin/payments/account-health')
+@require_admin
+def account_health():
+ if not allow_attempt('stripe-account-health',limit=4):return jsonify(error='Espera un minuto antes de volver a comprobar Stripe.'),429
+ if not os.getenv('STRIPE_SECRET_KEY','').startswith(('sk_live_','rk_live_')):return jsonify(error='Falta la clave secreta real de Stripe en Vercel Production.'),409
+ try:account=stripe('GET','/account')
+ except PaymentError as error:return jsonify(error=str(error),code=error.code),502
+ # Return only readiness flags, never identity, bank, key or document fields.
+ requirements=account.get('requirements') or {}
+ return jsonify(connected=True,charges_enabled=bool(account.get('charges_enabled')),payouts_enabled=bool(account.get('payouts_enabled')),details_submitted=bool(account.get('details_submitted')),requirements_pending=len(requirements.get('currently_due') or []),requirements_overdue=len(requirements.get('past_due') or []),payments_enabled=ready(),read_only=True)
 
 @bp.get('/api/admin/payments/test-status')
 @require_admin
@@ -148,18 +159,19 @@ def validate_order(c,user,channel_id=None):
  if channel_id:
   import subscriptions as sub
   channel=c.execute('SELECT * FROM streamer_channels WHERE id=?',(channel_id,)).fetchone()
-  if not channel or channel['member_id']==user['id'] or not user_public(user)['active']:raise PaymentError('Necesitas acceso a Ol Live y una cuenta distinta del creador.')
+  if not channel or channel['member_id']==user['id'] or not user_public(user)['active']:raise PaymentError('Necesitas acceso a Ol Livis y una cuenta distinta del creador.')
   mode=sub.settings(c,channel_id);agreement=c.execute('SELECT * FROM subscription_agreements WHERE id=?',(mode['agreement_id'] or '',)).fetchone();account=account_for(c,channel['member_id'])
   if not agreement or not sub.approvals_valid(c,agreement) or not account or agreement['paypal_url']!='stripe:'+account:raise PaymentError('El precio, los beneficios y el destinatario Stripe deben estar aprobados por las tres partes.')
   if sub.active_benefits(c,channel_id,user['id']):raise PaymentError('Ya tienes una suscripción activa. Renueva cuando termine su periodo.')
   pending=c.execute("SELECT id FROM stripe_orders WHERE member_id=? AND channel_id=? AND paid_at IS NULL AND state='open' AND created_at>?",(user['id'],channel_id,stamp(now_utc()-timedelta(minutes=32)))).fetchone()
   if pending:raise PaymentError('Ya hay un pago pendiente para este canal. Completa o deja caducar la sesión anterior.')
-  return dict(kind='creator',channel_id=channel_id,agreement_id=agreement['id'],account_id=account,amount_cents=agreement['price_cents'],label='Ol Live · '+channel['title'])
+  return dict(kind='creator',channel_id=channel_id,agreement_id=agreement['id'],account_id=account,amount_cents=agreement['price_cents'],label='Ol Livis · '+channel['title'])
  release_expired(c);entitlement=details(user['id'],c);slot=reservation(c,user['id'])
- if user['role']=='admin' or user_public(user)['complimentary'] or entitlement.get('paid_at'):raise PaymentError('Esta cuenta ya dispone de acceso; no corresponde cobrar.')
- if not payment_allowed(entitlement,slot):raise PaymentError('El pago de 25 € aún no está disponible para tu prueba.')
- if c.execute("SELECT id FROM stripe_orders WHERE member_id=? AND kind='platform' AND paid_at IS NULL AND state='open' AND created_at>?",(user['id'],stamp(now_utc()-timedelta(minutes=32)))).fetchone():raise PaymentError('Ya hay un pago pendiente. Completa o deja caducar la sesión anterior.')
- return dict(kind='platform',channel_id=None,agreement_id=None,account_id='',amount_cents=2500,label='Ol Live · acceso de pago único')
+ if entitlement.get('revoked_at'):raise PaymentError('Contacta con administración para revisar el acceso antes de contratar.')
+ if user['role']=='admin' or user_public(user)['complimentary'] or user_public(user)['live_lifetime']:raise PaymentError('Esta cuenta ya dispone de acceso; no corresponde cobrar.')
+ if user_public(user)['active'] and user['access_until'] and user['access_until']>stamp(now_utc()+timedelta(days=30)):raise PaymentError('Tu acceso anual sigue vigente. Podrás renovar durante sus últimos 30 días.')
+ if c.execute("SELECT id FROM stripe_orders WHERE member_id=? AND kind IN ('platform','platform_annual') AND paid_at IS NULL AND state='open' AND created_at>?",(user['id'],stamp(now_utc()-timedelta(minutes=32)))).fetchone():raise PaymentError('Ya hay un pago pendiente. Completa o deja caducar la sesión anterior.')
+ return dict(kind='platform_annual',channel_id=None,agreement_id=None,account_id='',amount_cents=2500,label='Ol Livis · 25 EUR por un año, sin prueba gratuita')
 
 @bp.post('/api/payments/checkout')
 def checkout():
@@ -173,11 +185,13 @@ def checkout():
  try:
   with database() as c:
    c.execute('BEGIN IMMEDIATE');order=validate_order(c,user,channel_id)
+   if order['kind']=='platform_annual' and payload().get('annual_terms') is not True:raise PaymentError('Debes aceptar las condiciones del acceso anual antes de contratar.')
    c.execute('INSERT INTO stripe_orders(id,member_id,kind,channel_id,agreement_id,account_id,amount_cents,currency,created_at,state) VALUES(?,?,?,?,?,?,?,?,?,?)',(order_id,user['id'],order['kind'],order['channel_id'],order['agreement_id'],order['account_id'],order['amount_cents'],'eur',stamp(now_utc()),'open'))
   if order['account_id']:
    account=stripe('GET','/accounts/'+order['account_id'])
    if not account.get('charges_enabled') or not account.get('payouts_enabled'):raise PaymentError('El creador debe completar la verificación bancaria en Stripe antes de cobrar.')
   data={'mode':'payment','managed_payments[enabled]':'false','success_url':ORIGIN+'/account?payment=processing','cancel_url':ORIGIN+'/account?payment=cancelled','client_reference_id':order_id,'metadata[ol_order]':order_id,'payment_intent_data[metadata][ol_order]':order_id,'line_items[0][quantity]':'1','line_items[0][price_data][currency]':'eur','line_items[0][price_data][unit_amount]':str(order['amount_cents']),'line_items[0][price_data][product_data][name]':order['label'],'expires_at':str(int(time.time())+1860),'payment_method_types[0]':'card'}
+  if order['kind']=='platform_annual':data['metadata[annual_terms_version]']='2026-10-29-v1'
   result=stripe('POST','/checkout/sessions',data,account=order['account_id'] or None,idempotency='ol-'+order_id)
   if not str(result.get('url','')).startswith('https://checkout.stripe.com/') or not str(result.get('id','')).startswith('cs_'):raise PaymentError('El gestor no devolvió una sesión válida.')
   with database() as c:c.execute('UPDATE stripe_orders SET checkout_id=? WHERE id=?',(result['id'],order_id))
@@ -209,10 +223,14 @@ def fulfill(c,order,obj):
  now=stamp(now_utc());reference='stripe:'+obj['id']
  if order['kind']=='test':
   c.execute("UPDATE stripe_orders SET paid_at=?,payment_intent=?,state='test_paid' WHERE id=?",(now,obj.get('payment_intent'),order['id']));return False
- if order['kind']=='platform':
-  end=stamp(end_of_plan(now_utc(),'lifetime'))
+ if order['kind'] in {'platform','platform_annual'}:
+  plan='annual' if order['kind']=='platform_annual' else 'lifetime'
+  member=c.execute('SELECT access_until FROM members WHERE id=?',(order['member_id'],)).fetchone()
+  start=max(now_utc(),datetime.fromisoformat(member['access_until'])) if member['access_until'] and plan=='annual' else now_utc()
+  end=stamp(end_of_plan(start,plan))
   # Automated receipt explicitly attributes verification to the account holder, not a fabricated administrator.
-  c.execute('INSERT INTO payments VALUES(?,?,?,?,?,?,?,?,?)',(secrets.token_hex(16),order['member_id'],'lifetime',2500,now,end,now,order['member_id'],reference))
+  c.execute('INSERT INTO payments VALUES(?,?,?,?,?,?,?,?,?)',(secrets.token_hex(16),order['member_id'],plan,2500,stamp(start),end,now,order['member_id'],reference))
+  c.execute('DELETE FROM annual_preferences WHERE member_id=?',(order['member_id'],))
   c.execute('UPDATE members SET access_until=?,welcome_used=1 WHERE id=?',(end,order['member_id']))
   c.execute('INSERT INTO live_entitlements(member_id,paid_at) VALUES(?,?) ON CONFLICT(member_id) DO UPDATE SET paid_at=excluded.paid_at,revoked_at=NULL',(order['member_id'],now))
   c.execute('INSERT INTO streamer_access(member_id,until_at) VALUES(?,?) ON CONFLICT(member_id) DO UPDATE SET until_at=excluded.until_at',(order['member_id'],end))
@@ -251,7 +269,7 @@ def webhook(scope):
     if order and (kind=='charge.dispute.created' or obj.get('refunded') is True):
      now=stamp(now_utc());c.execute("UPDATE stripe_orders SET reversed_at=?,state='reversed' WHERE id=?",(now,order['id']))
      if order['kind']=='creator':c.execute('UPDATE creator_subscriptions SET revoked_at=? WHERE reference=?',(now,'stripe:'+order['checkout_id']))
-     elif order['kind']=='platform':
+     elif order['kind'] in {'platform','platform_annual'} and not c.execute("SELECT 1 FROM payments p JOIN members m ON m.id=p.member_id WHERE p.member_id=? AND p.reference=? AND p.ends_at<m.access_until",(order['member_id'],'stripe:'+order['checkout_id'])).fetchone():
       c.execute('UPDATE live_entitlements SET paid_at=NULL,revoked_at=? WHERE member_id=?',(now,order['member_id']))
       c.execute('UPDATE streamer_access SET until_at=? WHERE member_id=?',(now,order['member_id']))
       c.execute('UPDATE members SET access_until=? WHERE id=?',(now,order['member_id']))
@@ -259,7 +277,7 @@ def webhook(scope):
  except (ValueError,TypeError):return jsonify(error='El evento no coincide con el pedido registrado.'),400
  if changed:
   from notifications import notify
-  notify('payment' if order['kind']=='platform' else 'creator_payment','Pago confirmado por Stripe','Stripe ha confirmado un pago de '+format(order['amount_cents']/100,'.2f')+' €. Consulta el detalle privado en electronicama y en el gestor.',event_key='stripe-order:'+order['id'])
+  notify('payment' if order['kind'] in {'platform','platform_annual'} else 'creator_payment','Pago confirmado por Stripe','Stripe ha confirmado un pago de '+format(order['amount_cents']/100,'.2f')+' €. Consulta el detalle privado en electronicama y en el gestor.',event_key='stripe-order:'+order['id'])
  return jsonify(ok=True)
 
 def install(app):

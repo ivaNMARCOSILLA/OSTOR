@@ -6,18 +6,18 @@ PHRASES = (
  '¡Un aplauso para ti!', '¡Esto suena muy bien!', '¡Vamos a por otra sonrisa!',
  '¡Compartir sienta bien!', '¡Me encanta esa idea!', '¡Qué buena energía!',
  '¡Un abrazo de lejitos!', '¡Brillas con luz propia!', '¡Así da gusto!',
- '¡Ol Live, tu mejor momento!', '¡Hoy toca disfrutar!', '¡Tú pones la chispa!',
+ '¡Ol Livis, tu mejor momento!', '¡Hoy toca disfrutar!', '¡Tú pones la chispa!',
  '¡Menudo descubrimiento!', '¡Esto merece un sticker!', '¡Vamos, equipo!',
  '¡Qué gusto coincidir!', '¡Buen ritmo, viejo!', '¡Lo bueno se comparte!',
  '¡Pequeños momentos, grandes sonrisas!', '¡Qué bonito te sale!',
  '¡A tu ritmo, siempre!', '¡Traes electronicama del bueno!', '¡Una más y sonreímos!',
- '¡Bienvenido a tu espacio!', '¡Me has alegrado el día!', '¡Nos vemos en Ol Live!'
+ '¡Bienvenido a tu espacio!', '¡Me has alegrado el día!', '¡Nos vemos en Ol Livis!'
 )
 ENDINGS=(
  '', 'electronicama del bueno.', 'Tu momento es ahora.', 'A tu ritmo.', 'Con una sonrisa.',
  'Lo bueno se comparte.', 'Gracias por estar aquí.', 'En buena compañía.',
  'Un instante para recordar.', 'Hoy creamos juntos.', 'Tu chispa se nota.',
- 'Vamos por otro buen momento.', 'Nos vemos en Ol Live.', 'Siempre sumando.',
+ 'Vamos por otro buen momento.', 'Nos vemos en Ol Livis.', 'Siempre sumando.',
  'Hay mucho por descubrir.', 'Qué gusto tenerte cerca.', 'Un poquito de alegría.',
  'Que siga la buena onda.', 'Eso merece celebrarse.', 'De lejitos, con cariño.',
  'Viejo, va por ti.', 'Este espacio también es tuyo.', 'Celebremos las pequeñas cosas.',

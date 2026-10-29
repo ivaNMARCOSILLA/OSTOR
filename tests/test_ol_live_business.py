@@ -22,16 +22,20 @@ class OlLiveBusinessTests(unittest.TestCase):
   if path=='/api/live/founders/claim':data=dict(data,human_id=client.get('/api/account/human-check').json['id'],human_answer='OL234')
   return client.post(path,json=data,headers={'X-CSRF-Token':csrf})
  def member(self,name):
-  client=app.app.test_client();self.assertEqual(self.post(client,'/api/account/register',{'username':name,'password':'ol-live-user-password-123'}).status_code,201);return client
+  client=app.app.test_client();self.assertEqual(self.post(client,'/api/account/register',{'username':name,'password':'ol-live-user-password-123'}).status_code,201);ident=client.get('/api/account/me').json['user']['id']
+  with app.app.app_context(),m.database() as conn:
+   conn.execute('UPDATE members SET access_until=? WHERE id=?',(m.stamp(m.end_of_plan(m.now_utc(),'annual')),ident))
+   conn.execute('INSERT INTO live_entitlements(member_id,paid_at) VALUES(?,?)',(ident,m.stamp(m.now_utc())))
+  return client
  def test_all_new_premium_billing_is_blocked_before_live_is_ready(self):
   client=self.member('premium-pending');ident=client.get('/api/account/me').json['user']['id']
   with patch.object(st,'streamer_sales_ready',return_value=False):
-   for plan in ['lifetime']:
+   for plan in ['annual']:
     self.assertEqual(self.post(self.admin,'/api/admin/confirm-payment',{'member_id':ident,'plan':plan,'reference':'PENDING-'+plan}).status_code,409)
   self.assertEqual(client.get('/api/account/me').json['payments'],[])
   self.assertEqual(client.get('/api/resolve/audius_test').status_code,200)
   self.assertEqual(client.get('/api/rewards').status_code,200)
- def test_last_founder_place_is_atomic_and_number_is_not_recycled(self):
+ def test_last_founder_place_is_atomic_and_revocation_releases_annual_place(self):
   with app.app.app_context(),m.database() as conn:
    for number in range(1,100):
     ident='seed-founder-'+str(number);conn.execute('INSERT INTO members(id,username,created_at) VALUES(?,?,?)',(ident,ident,m.stamp(m.now_utc())))
@@ -47,7 +51,7 @@ class OlLiveBusinessTests(unittest.TestCase):
   self.assertEqual(self.post(winner,'/api/live/founders/claim',{}).json['number'],100)
   self.post(self.admin,'/api/admin/revoke',{'member_id':info['user']['id']})
   state=app.app.test_client().get('/api/live/founders').json
-  self.assertEqual(state['remaining'],0);self.assertEqual(state['claimed'],100)
+  self.assertEqual(state['remaining'],1);self.assertEqual(state['claimed'],99)
  def test_founder_signature_keeps_official_number_and_public_category_is_real(self):
   owner=self.member('founder-art');result=self.post(owner,'/api/live/founders/claim',{})
   self.assertEqual(result.json['number'],1)

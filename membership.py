@@ -22,7 +22,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 bp = Blueprint('membership', __name__)
 UTC = timezone.utc
-PLANS = {'lifetime': {'cents': 2500}}
+PLANS = {'annual': {'cents': 2500}}
 
 
 def now_utc():
@@ -34,6 +34,7 @@ def stamp(value):
 
 
 def end_of_plan(start, plan):
+    if plan == 'annual':return start.replace(year=start.year+1,day=min(start.day,calendar.monthrange(start.year+1,start.month)[1]))
     if plan == 'lifetime':return datetime.max.replace(tzinfo=UTC,microsecond=0)
     if plan == 'welcome':
         return start + timedelta(days=14)
@@ -70,6 +71,13 @@ def init_database():
           password_hash TEXT, role TEXT NOT NULL DEFAULT 'member',
           created_at TEXT NOT NULL, access_until TEXT,
           welcome_used INTEGER NOT NULL DEFAULT 0, session_version INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS community_roles (
+          member_id TEXT PRIMARY KEY REFERENCES members(id) ON DELETE CASCADE,
+          community_role TEXT NOT NULL,approved_by TEXT NOT NULL REFERENCES members(id),updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS annual_preferences (
+          member_id TEXT PRIMARY KEY REFERENCES members(id) ON DELETE CASCADE,cancelled_at TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS member_profiles (
           member_id TEXT PRIMARY KEY REFERENCES members(id) ON DELETE CASCADE,email TEXT UNIQUE,
@@ -202,24 +210,25 @@ def user_public(user,founder_state=None):
     trial_until=user['live_trial_until'] if 'live_trial_until' in user.keys() else None
     paid_at=user['live_paid_at'] if 'live_paid_at' in user.keys() else None
     live_revoked=user['live_revoked_at'] if 'live_revoked_at' in user.keys() else None
-    live_lifetime=bool(paid_at and not live_revoked)
-    trial_active=bool(trial_until and not live_revoked and trial_until>stamp(now_utc()))
+    paid_current=bool(paid_at and not live_revoked and user['access_until'] and user['access_until']>stamp(now_utc()))
+    live_lifetime=bool(paid_current and datetime.fromisoformat(user['access_until']).year>9000)
+    trial_active=False  # New policy: no free trial grants live access.
     if founder_active:
         from live_access import founder_activity
         if founder_state is None:
             with database() as conn:founder_state=founder_activity(user['id'],conn)
-        founder_active=founder_state['eligible'] and (live_lifetime or not trial_until or trial_until>stamp(now_utc()))
-    active = user['role'] == 'admin' or complimentary or founder_active or live_lifetime or trial_active or bool(user['access_until'] and datetime.fromisoformat(user['access_until']) > now_utc())
+        founder_active=founder_state['eligible'] and paid_current
+    active = user['role'] == 'admin' or complimentary or founder_active or paid_current or trial_active or bool(user['access_until'] and datetime.fromisoformat(user['access_until']) > now_utc())
     streamer_until=user['streamer_until'] if 'streamer_until' in user.keys() else None
-    streamer_active=active and (user['role']=='admin' or founder_active or live_lifetime or trial_active or bool(streamer_until and datetime.fromisoformat(streamer_until)>now_utc()))
-    return {key: user[key] for key in ('id', 'username', 'role', 'access_until', 'welcome_used')} | {'nickname':user['nickname'] if 'nickname' in user.keys() and user['nickname'] else user['username'],'active': active, 'complimentary':complimentary,'founder_number':founder_number,'founder_active':founder_active,'live_lifetime':live_lifetime,'live_trial_until':trial_until,'trial_active':trial_active, 'streamer_until':streamer_until, 'streamer_active':streamer_active}
+    streamer_active=active and (user['role']=='admin' or founder_active or paid_current or trial_active or bool(streamer_until and datetime.fromisoformat(streamer_until)>now_utc()))
+    return {key: user[key] for key in ('id', 'username', 'role', 'access_until', 'welcome_used')} | {'nickname':user['nickname'] if 'nickname' in user.keys() and user['nickname'] else user['username'],'active': active, 'complimentary':complimentary,'founder_number':founder_number,'founder_active':founder_active,'live_lifetime':live_lifetime,'live_annual':paid_current and not live_lifetime,'community_role':user['community_role'] if 'community_role' in user.keys() and user['community_role'] else 'activo','annual_cancelled_at':user['annual_cancelled_at'] if 'annual_cancelled_at' in user.keys() else None,'live_trial_until':trial_until,'trial_active':trial_active, 'streamer_until':streamer_until, 'streamer_active':streamer_active}
 
 
 def get_user():
     if hasattr(g, 'member'):
         return g.member
     with database() as conn:
-        row = conn.execute('SELECT m.*,p.nickname AS nickname,p.email AS profile_email,p.email_verified AS profile_email_verified,s.until_at AS streamer_until,f.granted_at AS friend_granted_at,f.revoked_at AS friend_revoked_at,l.number AS founder_number,l.revoked_at AS founder_revoked_at,e.trial_until AS live_trial_until,e.paid_at AS live_paid_at,e.revoked_at AS live_revoked_at FROM members m LEFT JOIN member_profiles p ON p.member_id=m.id LEFT JOIN streamer_access s ON s.member_id=m.id LEFT JOIN friend_access f ON f.member_id=m.id LEFT JOIN live_founders l ON l.member_id=m.id LEFT JOIN live_entitlements e ON e.member_id=m.id WHERE m.id=?', (session.get('member_id', ''),)).fetchone()
+        row = conn.execute('SELECT m.*,p.nickname AS nickname,p.email AS profile_email,p.email_verified AS profile_email_verified,s.until_at AS streamer_until,f.granted_at AS friend_granted_at,f.revoked_at AS friend_revoked_at,l.number AS founder_number,l.revoked_at AS founder_revoked_at,e.trial_until AS live_trial_until,e.paid_at AS live_paid_at,e.revoked_at AS live_revoked_at,cr.community_role AS community_role,ap.cancelled_at AS annual_cancelled_at FROM members m LEFT JOIN member_profiles p ON p.member_id=m.id LEFT JOIN streamer_access s ON s.member_id=m.id LEFT JOIN friend_access f ON f.member_id=m.id LEFT JOIN live_founders l ON l.member_id=m.id LEFT JOIN live_entitlements e ON e.member_id=m.id LEFT JOIN community_roles cr ON cr.member_id=m.id LEFT JOIN annual_preferences ap ON ap.member_id=m.id WHERE m.id=?', (session.get('member_id', ''),)).fetchone()
     g.member = row if row and row['session_version'] == session.get('session_version') else None
     return g.member
 
@@ -249,7 +258,7 @@ def verify_csrf():
 
 
 def restrict_music():
-    # Music is free. Account collections require login; Ol Live requires premium.
+    # Music is free. Account collections require login; Ol Livis requires premium.
     path=request.path
     if not path.startswith('/api/') or path.startswith(('/api/account/','/api/admin/','/api/play/','/api/resolve/','/api/channel-subscriptions/','/api/payments/')) or path in {'/api/status','/api/search','/api/trending','/api/proxy','/api/promotion/event','/api/presence','/api/live/catalogue','/api/live/founders','/api/live/founders/claim'}:
         return None
@@ -260,7 +269,7 @@ def restrict_music():
         if not user:return jsonify(error='Inicia sesión con una cuenta gratuita para guardar tu colección.',code='login_required'),401
         return None
     if not user or not user_public(user)['active']:
-        return jsonify(error='Ver y participar en Ol Live requiere acceso premium. La música sigue siendo gratuita.',code='premium_required'),402 if user else 401
+        return jsonify(error='Ver y participar en Ol Livis requiere acceso premium. La música sigue siendo gratuita.',code='premium_required'),402 if user else 401
 
 
 def payload():
@@ -304,7 +313,7 @@ def account_me():
     with database() as conn:
         slot=reservation(conn,user['id']) if user else None
         last_release=conn.execute('SELECT number,trial_until,released_at FROM founder_slot_history WHERE member_id=? ORDER BY released_at DESC,id DESC LIMIT 1',(user['id'],)).fetchone() if user else None
-    return jsonify(user=user_public(user) if user else None, csrf=csrf_token(), payments=payments, payment_mode='manual_verified', streamer_available=streamer_sales_ready(),premium_available=streamer_sales_ready(),founder_reservation=slot,founder_last_release=dict(last_release) if last_release else None,live_video_ready=live_ready(),music_free=True,live_price_cents=2500,live_trial_months=0,live_trial_days=7,live_premiere=premiere(),profile={'email':user['profile_email'],'nickname':user['nickname'] or '', 'email_verified':bool(user['profile_email_verified'])} if user else None)
+    return jsonify(user=user_public(user) if user else None, csrf=csrf_token(), payments=payments, payment_mode='manual_verified', streamer_available=streamer_sales_ready(),premium_available=streamer_sales_ready(),founder_reservation=slot,founder_last_release=dict(last_release) if last_release else None,live_video_ready=live_ready(),music_free=True,live_price_cents=2500,live_trial_months=0,live_trial_days=0,live_billing_period='year',live_premiere=premiere(),profile={'email':user['profile_email'],'nickname':user['nickname'] or '', 'email_verified':bool(user['profile_email_verified'])} if user else None)
 
 
 @bp.post('/api/account/register')
@@ -369,7 +378,7 @@ def logout():
 def list_members():
     with database() as conn:
         from live_access import founder_activity
-        users = [user_public(row,founder_state=founder_activity(row['id'],conn) if row['founder_number'] else None)|{'account_activated':bool(row['password_hash'])} for row in conn.execute('SELECT m.*,p.nickname AS nickname,p.email AS profile_email,p.email_verified AS profile_email_verified,s.until_at AS streamer_until,f.granted_at AS friend_granted_at,f.revoked_at AS friend_revoked_at,l.number AS founder_number,l.revoked_at AS founder_revoked_at,e.trial_until AS live_trial_until,e.paid_at AS live_paid_at,e.revoked_at AS live_revoked_at FROM members m LEFT JOIN member_profiles p ON p.member_id=m.id LEFT JOIN streamer_access s ON s.member_id=m.id LEFT JOIN friend_access f ON f.member_id=m.id LEFT JOIN live_founders l ON l.member_id=m.id LEFT JOIN live_entitlements e ON e.member_id=m.id ORDER BY m.created_at DESC')]
+        users = [user_public(row,founder_state=founder_activity(row['id'],conn) if row['founder_number'] else None)|{'account_activated':bool(row['password_hash'])} for row in conn.execute('SELECT m.*,p.nickname AS nickname,p.email AS profile_email,p.email_verified AS profile_email_verified,s.until_at AS streamer_until,f.granted_at AS friend_granted_at,f.revoked_at AS friend_revoked_at,l.number AS founder_number,l.revoked_at AS founder_revoked_at,e.trial_until AS live_trial_until,e.paid_at AS live_paid_at,e.revoked_at AS live_revoked_at,cr.community_role AS community_role,ap.cancelled_at AS annual_cancelled_at FROM members m LEFT JOIN member_profiles p ON p.member_id=m.id LEFT JOIN streamer_access s ON s.member_id=m.id LEFT JOIN friend_access f ON f.member_id=m.id LEFT JOIN live_founders l ON l.member_id=m.id LEFT JOIN live_entitlements e ON e.member_id=m.id LEFT JOIN community_roles cr ON cr.member_id=m.id LEFT JOIN annual_preferences ap ON ap.member_id=m.id ORDER BY m.created_at DESC')]
         payments = [dict(row) for row in conn.execute('SELECT p.*,m.username FROM payments p JOIN members m ON m.id=p.member_id ORDER BY verified_at DESC LIMIT 300')]
     return jsonify(members=users, payments=payments)
 
@@ -485,7 +494,7 @@ def confirm_payment():
     if plan not in PLANS or not 4 <= len(reference) <= 120:
         return jsonify(error='Indica plan y referencia única del pago comprobado en PayPal.'), 400
     from payments import ready
-    if not ready():return jsonify(error='Los cobros de Ol Live están bloqueados hasta que la emisión esté disponible. Escuchar música es gratuito.'),409
+    if not ready():return jsonify(error='Los cobros de Ol Livis están bloqueados hasta que la emisión esté disponible. Escuchar música es gratuito.'),409
     try:
         with database() as conn:
             conn.execute('BEGIN IMMEDIATE')
@@ -498,7 +507,7 @@ def confirm_payment():
             friend=conn.execute('SELECT revoked_at FROM friend_access WHERE member_id=?',(user['id'],)).fetchone()
             if friend and not friend['revoked_at']:return jsonify(error='Esta cuenta tiene acceso especial activo. No corresponde registrar un cobro.'),409
             entitlement=details(user['id'],conn)
-            if entitlement.get('paid_at'):return jsonify(error='Esta cuenta ya tiene el pago único de Ol Live.'),409
+            if entitlement.get('paid_at'):return jsonify(error='Esta cuenta ya tiene el pago único de Ol Livis.'),409
             slot=reservation(conn,user['id'])
             if not payment_allowed(entitlement,slot):return jsonify(error='El pago único se habilita al terminar la prueba de siete días. Los plazos históricos ya iniciados se conservan.'),409
             start=now_utc();end=end_of_plan(start,plan)

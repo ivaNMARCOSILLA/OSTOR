@@ -95,7 +95,7 @@ def maintenance_report():
  add('Archivos esenciales','error' if missing else 'ok','Faltan: '+', '.join(missing) if missing else 'Páginas, acceso, decoración y recursos de la aplicación presentes.')
  add('Correos','ok' if mail_ready() else 'pending','Servicio configurado; esta revisión no envía correos ni confirma su llegada.' if mail_ready() else 'Configura el remitente y Resend o SMTP antes de probar confirmación y recuperación.')
  add('YouTube','ok' if os.getenv('YOUTUBE_API_KEY','').strip() else 'pending','Clave de búsqueda presente; usa el filtro YouTube para comprobar cuota y permisos. Los vídeos utilizan el reproductor oficial.' if os.getenv('YOUTUBE_API_KEY','').strip() else 'Falta YOUTUBE_API_KEY en este entorno. Las demás fuentes siguen disponibles.')
- add('Ol Live','pending' if premiere() or not live_ready() else 'ok','Próximo estreno; la prueba pública sigue detenida.' if premiere() else 'Configuración de vídeo presente; comprueba una emisión entre dos dispositivos.' if live_ready() else 'Falta completar la configuración de vídeo.')
+ add('Ol Livis','pending' if premiere() or not live_ready() else 'ok','Próximo estreno; la prueba pública sigue detenida.' if premiere() else 'Configuración de vídeo presente; comprueba una emisión entre dos dispositivos.' if live_ready() else 'Falta completar la configuración de vídeo.')
  add('Cobros','ok' if ready() else 'pending','Cobros habilitados según configuración; esta revisión no realiza transacciones.' if ready() else 'Cobros desactivados o pendientes de configuración. No se ha cambiado este estado.')
  try:
   scope=state()['scope']

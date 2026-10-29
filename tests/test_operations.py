@@ -58,7 +58,7 @@ class OperationsTests(unittest.TestCase):
   self.assertEqual(rows['Base de datos']['status'],'ok')
   self.assertEqual(rows['Archivos esenciales']['status'],'ok')
   self.assertEqual(rows['Correos']['status'],'pending')
-  self.assertEqual(rows['Ol Live']['status'],'pending')
+  self.assertEqual(rows['Ol Livis']['status'],'pending')
   self.assertNotIn('SECRET',response.get_data(as_text=True))
   with app.app.app_context(),m.database() as c:
    self.assertEqual(c.execute('SELECT COUNT(*) AS n FROM members').fetchone()['n'],before)

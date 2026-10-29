@@ -1,4 +1,4 @@
-"""Ol Live: one seven-day trial, one fixed price, verified creator activity."""
+"""Ol Livis: one seven-day trial, one fixed price, verified creator activity."""
 import calendar,os,time
 from datetime import datetime,timedelta
 from flask import Blueprint,jsonify
@@ -36,32 +36,7 @@ def founder_activity(member_id,conn):
 
 @bp.post('/api/account/live-trial')
 def trial():
- user=get_user()
- if not user:return jsonify(error='Entra en tu cuenta para iniciar la prueba.'),401
- from streamers import live_ready
- from operations import premiere
- if premiere():return jsonify(error='Ol Live · próximo estreno. Las pruebas todavía no empiezan.'),409
- if not live_ready() or not video_service_available():return jsonify(error='Tus siete días empezarán cuando Ol Live esté disponible. Todavía no consumimos tu prueba.'),409
- with database() as conn:
-  conn.execute('BEGIN IMMEDIATE')
-  from founder_slots import release_expired,reserve
-  release_expired(conn);existing=details(user['id'],conn)
-  own=conn.execute('SELECT number,revoked_at FROM live_founders WHERE member_id=?',(user['id'],)).fetchone()
-  if existing:return jsonify(ok=True,trial_until=existing.get('trial_until'),already_started=True,founder_number=own['number'] if own else None)
-  if not own:
-   used=conn.execute('SELECT COUNT(*) AS n FROM live_founders').fetchone()['n']
-   if used>=100:return jsonify(error='Las 100 plazas de prueba están reservadas. Vuelve cuando quede una disponible.'),409
-   from human_check import verify
-   if not verify(conn):return jsonify(error='Completa la comprobación visual para reservar una plaza de prueba.',code='human_required'),400
-  elif own['revoked_at']:return jsonify(error='Tu plaza fue desactivada. Contacta con administración.'),403
-  number=reserve(conn,user['id'])
-  if number is None:return jsonify(error='Las 100 plazas de prueba están reservadas.'),409
-  start=now_utc();end=trial_end(start)
-  conn.execute("INSERT INTO live_launch(id,started_at) VALUES('live',?) ON CONFLICT(id) DO NOTHING",(stamp(start),))
-  conn.execute('INSERT INTO live_entitlements(member_id,trial_started_at,trial_until) VALUES(?,?,?)',(user['id'],stamp(start),stamp(end)))
-  if number:
-   conn.execute('INSERT INTO founder_activity(member_id,qualification_until) VALUES(?,?) ON CONFLICT(member_id) DO NOTHING',(user['id'],stamp(end)))
- return jsonify(ok=True,trial_until=stamp(end),already_started=False,founder_number=number)
+ return jsonify(error='Ol Livis cuesta 25 € al año desde la contratación. No se ofrecen pruebas gratuitas.',code='trial_retired'),410
 
 def verified_broadcast(channel,user):
  """Ask LiveKit for actual published tracks; never trust the browser's live flag."""

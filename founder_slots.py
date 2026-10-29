@@ -8,6 +8,8 @@ LIMIT=100
 PAYMENT_NOTICE_DAYS=7
 
 def deadline(conn,row,launch=None,known_launch=False):
+ member=conn.execute('SELECT access_until FROM members WHERE id=?',(row['member_id'],)).fetchone()
+ if row['paid_at'] and member and member['access_until']:return member['access_until']
  if row['trial_until']:return row['trial_until']
  if not known_launch:launch=conn.execute("SELECT started_at FROM live_launch WHERE id='live'").fetchone()
  if not launch:return None
@@ -24,9 +26,9 @@ def release_expired(conn):
   if until and not row['trial_until'] and not row['paid_at']:
    start=max(datetime.fromisoformat(launch['started_at']),datetime.fromisoformat(row['claimed_at']))
    conn.execute('INSERT INTO live_entitlements(member_id,trial_started_at,trial_until) VALUES(?,?,?) ON CONFLICT(member_id) DO UPDATE SET trial_started_at=COALESCE(live_entitlements.trial_started_at,excluded.trial_started_at),trial_until=COALESCE(live_entitlements.trial_until,excluded.trial_until)',(row['member_id'],stamp(start),until))
-  if row['paid_at'] or not until or until>instant:continue
+  if not until or until>instant:continue
   signature=conn.execute('SELECT mode,letter,caption,audio_json FROM founder_signatures WHERE member_id=?',(row['member_id'],)).fetchone()
-  conn.execute('INSERT INTO founder_slot_history(id,member_id,number,claimed_at,trial_until,released_at,reason,signature_json) VALUES(?,?,?,?,?,?,?,?)',(secrets.token_hex(16),row['member_id'],row['number'],row['claimed_at'],until,instant,'trial_unpaid',json.dumps(dict(signature),ensure_ascii=False) if signature else None))
+  conn.execute('INSERT INTO founder_slot_history(id,member_id,number,claimed_at,trial_until,released_at,reason,signature_json) VALUES(?,?,?,?,?,?,?,?)',(secrets.token_hex(16),row['member_id'],row['number'],row['claimed_at'],until,instant,'annual_expired' if row['paid_at'] else 'trial_unpaid',json.dumps(dict(signature),ensure_ascii=False) if signature else None))
   # Retain the used trial even for reservations made before trial activation.
   conn.execute('INSERT INTO live_entitlements(member_id,trial_started_at,trial_until) VALUES(?,?,?) ON CONFLICT(member_id) DO UPDATE SET trial_until=COALESCE(live_entitlements.trial_until,excluded.trial_until)',(row['member_id'],row['claimed_at'],until))
   conn.execute('DELETE FROM live_founders WHERE member_id=?',(row['member_id'],))
@@ -53,7 +55,7 @@ def reservation(conn,member_id):
  row=conn.execute('SELECT f.*,e.trial_started_at,e.trial_until,e.paid_at FROM live_founders f LEFT JOIN live_entitlements e ON e.member_id=f.member_id WHERE f.member_id=?',(member_id,)).fetchone()
  if not row:return None
  until=deadline(conn,row)
- return dict(payment_due_at=until,payment_confirmation_days=PAYMENT_NOTICE_DAYS,number=row['number'],trial_until=until,confirmed=bool(row['paid_at']),payment_required=not bool(row['paid_at']),payment_opens_at=payment_opening(row,until) if until else None)
+ return dict(payment_due_at=until,payment_confirmation_days=PAYMENT_NOTICE_DAYS,number=row['number'],trial_until=until,confirmed=bool(row['paid_at'] and until and until>stamp(now_utc())),payment_required=not bool(row['paid_at']),payment_opens_at=payment_opening(row,until) if until else None)
 
 def payment_opening(row,until):
  start=row['trial_started_at'] if 'trial_started_at' in row.keys() else row['claimed_at']

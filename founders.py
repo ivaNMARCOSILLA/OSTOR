@@ -1,4 +1,4 @@
-"""One hundred numbered, durable Ol Live founding-creator places."""
+"""One hundred numbered, durable Ol Livis founding-creator places."""
 from flask import Blueprint,jsonify
 from membership import database,get_user,now_utc,stamp,allow_attempt,require_admin,payload
 from notifications import notify
@@ -27,12 +27,12 @@ def status():
   with database() as conn:mine['activity']=founder_activity(user['id'],conn)
   mine['signature']=signature_from_row(preferences or {})
  if mine:mine['future_transfer_eligible']=mine['number']==1
- return jsonify(limit=LIMIT,claimed=claimed,remaining=max(0,LIMIT-claimed),mine=mine if mine else None,lifetime=False,transfer_sales_open=False,activity_required=True,payment_required=True,trial_months=0,trial_days=7)
+ return jsonify(limit=LIMIT,claimed=claimed,remaining=max(0,LIMIT-claimed),mine=mine if mine else None,lifetime=False,transfer_sales_open=False,activity_required=True,payment_required=True,trial_months=0,trial_days=0,billing_period='year')
 
 @bp.post('/api/live/founders/claim')
 def claim():
  from operations import premiere
- if premiere():return jsonify(error='Ol Live · próximo estreno. Las plazas aún no están abiertas.'),409
+ if premiere():return jsonify(error='Ol Livis · próximo estreno. Las plazas aún no están abiertas.'),409
  user=get_user()
  if not user:return jsonify(error='Crea una cuenta gratuita o inicia sesión para reservar tu plaza.'),401
  if not allow_attempt('founder-claim',12):return jsonify(error='Demasiados intentos. Espera unos minutos.'),429
@@ -46,17 +46,11 @@ def claim():
    return jsonify(ok=True,number=existing['number'],already_claimed=True,lifetime=False,payment_required=True)
   from human_check import verify
   if not verify(conn):return jsonify(error='Completa la comprobación visual antes de reservar. El código caduca y solo se usa una vez.'),400
-  entitlement=conn.execute('SELECT * FROM live_entitlements WHERE member_id=?',(user['id'],)).fetchone()
-  if entitlement and not entitlement['paid_at'] and entitlement['trial_until'] and entitlement['trial_until']<=stamp(now_utc()):return jsonify(error='Tu prueba ya terminó. Puedes continuar con el pago único de 25 €, pero el número liberado puede haberse asignado a otra persona.'),409
+  from membership import user_public
+  if not user_public(user).get('live_annual') and not user_public(user).get('live_lifetime'):return jsonify(error='Primero contrata Ol Livis por 25 € al año. Las plazas requieren un pago confirmado.'),409
   number=reserve(conn,user['id'])
-  if number is None:return jsonify(error='Las 100 plazas de prueba ya están reservadas.'),409
-  launch=conn.execute("SELECT started_at FROM live_launch WHERE id='live'").fetchone()
-  if launch:
-   from live_access import trial_end
-   end=stamp(trial_end(now_utc()))
-   conn.execute('INSERT INTO live_entitlements(member_id,trial_started_at,trial_until) VALUES(?,?,?) ON CONFLICT(member_id) DO NOTHING',(user['id'],stamp(now_utc()),end))
-   conn.execute('INSERT INTO founder_activity(member_id,qualification_until) VALUES(?,?) ON CONFLICT(member_id) DO NOTHING',(user['id'],end))
- notify('founder','Nueva plaza Ol Live fundadores',f'Se ha reservado la plaza {number} de 100. Reserva durante siete días. Para conservarla se debe confirmar el pago único de 25 € antes del vencimiento y mantener la actividad indicada. Consulta la cuenta en administración.',event_key='founder:'+user['id'])
+  if number is None:return jsonify(error='Las 100 plazas están ocupadas.'),409
+ notify('founder','Nueva plaza Ol Livis fundadores',f'Se ha reservado la plaza {number} de 100. Acceso anual confirmado. Para conservarla se debe renovar el acceso de 25 € al año y mantener la actividad indicada. Consulta la cuenta en administración.',event_key='founder:'+user['id'])
  return jsonify(ok=True,number=number,already_claimed=False,lifetime=False,payment_required=True)
 
 @bp.post('/api/admin/founders/revoke')

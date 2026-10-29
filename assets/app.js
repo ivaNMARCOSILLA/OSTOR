@@ -325,7 +325,7 @@ function playTrack(track, queue = filteredTracks()) {
   state.playSerial += 1;
   if (window.MaggySession && !window.MaggySession.requireAccess()) return;
   // Keep the same native element, and call play() in the tap event on iOS.
-  // Music playback is free; Ol Live access is managed separately.
+  // Music playback is free; Ol Livis access is managed separately.
   if(track.source==='YOUTUBE'||state.youtube||state.youtubeLoading)destroyMedia();
   state.audio?.pause();
   state.currentTrack = track;

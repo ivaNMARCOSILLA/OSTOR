@@ -163,13 +163,11 @@ hr{height:12px;border:0;background:url("data:image/svg+xml,%3Csvg xmlns='http://
 .player-details strong,.player-details small{white-space:normal;overflow-wrap:anywhere}
 
 /* Account preparation stays outside the public music navigation. */
-.content a[href="/account"],.content a[href^="/account#"],.content a[href^="/account?"]{display:none!important}
 
 /* Premiere navigation contains only available destinations, with clear tap targets. */
-.ol-live-premiere-only .platform-header .account-link{display:none!important}
+
 .ol-live-premiere-only .platform-header nav a,.ol-live-premiere-only .hero-actions .button,.ol-live-premiere-only .ol-live-premiere>a{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;min-height:44px;box-sizing:border-box;max-width:100%;padding:11px 17px;border:1px solid #a9bcd7;border-radius:16px 21px 15px 22px;background:#edf3fc;color:#294e83;font-size:14px;font-weight:650;line-height:1.5;text-decoration:none;white-space:normal;overflow-wrap:anywhere}
 .ol-live-premiere-only .hero-actions .button:not(.secondary),.ol-live-premiere-only .ol-live-premiere>a{background:#3562a5;color:#fff;border-color:#3562a5}
 .ol-live-premiere-only .hero-actions .button:hover,.ol-live-premiere-only .ol-live-premiere>a:hover{filter:brightness(.94)}
 .ol-live-premiere-only .hero-actions{display:flex;flex-wrap:wrap;gap:12px}
 @media(max-width:600px){.ol-live-premiere-only .hero-actions .button{flex:1 1 180px}.ol-live-premiere-only .ol-live-premiere>a{width:100%;margin:0}}
-.ol-live-premiere-only a[href="/account"],.ol-live-premiere-only a[href^="/account#"],.ol-live-premiere-only a[href^="/account?"]{display:none!important}

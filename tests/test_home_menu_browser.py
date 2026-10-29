@@ -11,7 +11,7 @@ def run():
   page.goto(BASE_URL+'/');page.locator('#consent-decline').click()
   menu=page.locator('#mobile-menu');nav=page.locator('#mobile-nav')
   menu.click();assert menu.get_attribute('aria-expanded')=='true'
-  assert nav.locator('.menu-group-title').all_text_contents()==['Música','Ol Live','Tu espacio']
+  assert nav.locator('.menu-group-title').all_text_contents()==['Música','Ol Livis','Tu espacio']
   assert nav.locator('a[href="/account"]').count()==1
   assert nav.locator('a[href="/live#live-catalogue"]').count()==1
   assert nav.locator('a[href="/live#creator-panel"]').count()==1
@@ -36,7 +36,7 @@ def run():
    if width==390:page.screenshot(path='/tmp/ol-home-menu-mobile.png')
    page.keyboard.press('Escape')
   page.set_viewport_size({'width':1440,'height':1000});assert menu.is_hidden()
-  assert page.locator('#main-nav .menu-group-title').all_text_contents()==['Música','Ol Live','Tu espacio']
+  assert page.locator('#main-nav .menu-group-title').all_text_contents()==['Música','Ol Livis','Tu espacio']
   page.locator('#main-nav [data-cookie-preferences]').click();assert page.locator('#consent-dialog').is_visible()
   assert not errors,errors;browser.close()
  print('OK: grouped mobile/desktop menu, working destinations, player overlap, account, cookies, Escape, outside click, touch targets and four widths')

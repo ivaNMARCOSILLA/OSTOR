@@ -11,6 +11,13 @@ class ManagedPaymentTests(unittest.TestCase):
   env=patch.dict('os.environ',{'OL_PAYMENT_PROVIDER':'stripe','OL_PAYMENTS_ENABLED':'0','STRIPE_WEBHOOK_SECRET':'whsec_local_test_platform','STRIPE_CONNECT_WEBHOOK_SECRET':'whsec_local_test_connect'});env.start();self.addCleanup(env.stop)
   self.client=self.member('managed-viewer');self.ident=self.client.get('/api/account/me').json['user']['id']
   with app.app.app_context(),m.database() as c:c.execute('INSERT INTO live_entitlements(member_id,trial_started_at,trial_until) VALUES(?,?,?)',(self.ident,m.stamp(m.now_utc()-timedelta(days=100)),m.stamp(m.now_utc()-timedelta(days=8))))
+ def test_account_health_admin_only_and_no_private_fields(self):
+  self.assertEqual(self.client.get('/api/admin/payments/account-health').status_code,403)
+  with patch.dict('os.environ',{'STRIPE_SECRET_KEY':'sk_live_local_fixture'}),patch('payments.stripe',return_value={'charges_enabled':True,'payouts_enabled':False,'details_submitted':True,'email':'private@example.test','requirements':{'currently_due':['business_profile.url'],'past_due':[]}}) as provider:
+   response=self.admin.get('/api/admin/payments/account-health')
+   self.assertEqual(response.status_code,200);self.assertTrue(response.json['charges_enabled']);self.assertEqual(response.json['requirements_pending'],1)
+   self.assertNotIn('private@example.test',response.get_data(as_text=True));provider.assert_called_once_with('GET','/account')
+
  def post(self,client,path,data):
   if path=='/api/account/register':
    from registration_support import registration_data
@@ -20,14 +27,16 @@ class ManagedPaymentTests(unittest.TestCase):
   client=app.app.test_client();self.assertEqual(self.post(client,'/api/account/register',{'username':name,'password':'local-managed-test-password-123'}).status_code,201)
   if paid:
    ident=client.get('/api/account/me').json['user']['id']
-   with app.app.app_context(),m.database() as c:c.execute('INSERT INTO live_entitlements(member_id,paid_at) VALUES(?,?)',(ident,m.stamp(m.now_utc())))
+   with app.app.app_context(),m.database() as c:
+    c.execute('INSERT INTO live_entitlements(member_id,paid_at) VALUES(?,?)',(ident,m.stamp(m.now_utc())))
+    c.execute('UPDATE members SET access_until=? WHERE id=?',(m.stamp(m.end_of_plan(m.now_utc(),'annual')),ident))
   return client
  def checkout(self,channel=None,checkout_id='cs_local_test'):
   def provider(method,path,data=None,**kwargs):
    if path.startswith('/accounts/'):return {'charges_enabled':True,'payouts_enabled':True}
    self.assertEqual(data['mode'],'payment');self.assertNotIn('payment_intent_data[application_fee_amount]',data)
    return {'id':checkout_id,'url':'https://checkout.stripe.com/c/pay/local-test'}
-  with patch.object(p,'ready',return_value=True),patch.object(p,'stripe',side_effect=provider):r=self.post(self.client,'/api/payments/checkout',{'channel_id':channel} if channel else {})
+  with patch.object(p,'ready',return_value=True),patch.object(p,'stripe',side_effect=provider):r=self.post(self.client,'/api/payments/checkout',{'channel_id':channel} if channel else {'annual_terms':True})
   self.assertEqual(r.status_code,200,r.json)
   with app.app.app_context(),m.database() as c:return dict(c.execute('SELECT * FROM stripe_orders WHERE checkout_id=?',(checkout_id,)).fetchone())
  def event(self,order,ident='evt_local_paid',scope='platform',amount=None,kind='checkout.session.completed',obj=None,account=None):
@@ -38,40 +47,41 @@ class ManagedPaymentTests(unittest.TestCase):
   return app.app.test_client().post('/api/payments/webhook/'+scope,data=raw,headers={'Content-Type':'application/json','Stripe-Signature':'t='+timestamp+',v1='+signature})
  def test_no_charge_before_configuration_and_browser_return_never_grants(self):
   self.assertFalse(self.client.get('/api/payments/status').json['enabled'])
-  self.assertEqual(self.post(self.client,'/api/payments/checkout',{}).status_code,409)
+  self.assertEqual(self.post(self.client,'/api/payments/checkout',{'annual_terms':True}).status_code,409)
   self.client.get('/account?payment=processing')
-  self.assertFalse(self.client.get('/api/account/me').json['user']['live_lifetime'])
+  self.assertFalse(self.client.get('/api/account/me').json['user']['live_annual'])
   self.assertEqual(app.app.test_client().post('/api/payments/webhook/platform',json={'payment_status':'paid'}).status_code,400)
   self.assertEqual(self.post(self.admin,'/api/admin/confirm-payment',{'plan':'lifetime','reference':'not-a-managed-payment'}).status_code,409)
  def test_signature_amount_idempotency_and_refund(self):
   order=self.checkout();self.assertEqual(self.event(order,amount=1).status_code,400)
-  self.assertFalse(self.client.get('/api/account/me').json['user']['live_lifetime'])
+  self.assertFalse(self.client.get('/api/account/me').json['user']['live_annual'])
   self.assertEqual(self.event(order).status_code,200)
-  self.assertTrue(self.client.get('/api/account/me').json['user']['live_lifetime'])
+  self.assertTrue(self.client.get('/api/account/me').json['user']['live_annual'])
   self.assertTrue(self.event(order).json['duplicate'])
   self.assertEqual(self.event(order,ident='evt_second_same_checkout').status_code,200)
   self.assertEqual(len(self.client.get('/api/account/me').json['payments']),1)
   refund=self.event(order,ident='evt_full_refund',kind='charge.refunded',obj={'payment_intent':'pi_local_test','refunded':True})
-  self.assertEqual(refund.status_code,200);self.assertFalse(self.client.get('/api/account/me').json['user']['live_lifetime'])
+  self.assertEqual(refund.status_code,200);self.assertFalse(self.client.get('/api/account/me').json['user']['live_annual'])
   self.assertEqual(len(self.client.get('/api/account/me').json['payments']),1)
  def test_out_of_order_refund_prevents_later_access(self):
   order=self.checkout();self.assertEqual(self.event(order,ident='evt_early_refund',kind='charge.refunded',obj={'payment_intent':'pi_local_test','refunded':True}).status_code,200)
   self.assertEqual(self.event(order).status_code,200)
-  self.assertFalse(self.client.get('/api/account/me').json['user']['live_lifetime'])
+  self.assertFalse(self.client.get('/api/account/me').json['user']['live_annual'])
  def test_timestamp_and_payload_tampering_are_rejected(self):
   raw=b'{"id":"evt_test"}';sig=hmac.new(b'whsec_test',b'1.'+raw,hashlib.sha256).hexdigest()
   with self.assertRaises(ValueError):p.verified_event(raw,'t=1,v1='+sig,'whsec_test')
   with self.assertRaises(ValueError):p.verified_event(raw,'t='+str(int(time.time()))+',v1=0000','whsec_test')
  def test_ambiguous_checkout_cannot_create_second_order(self):
   with patch.object(p,'ready',return_value=True),patch.object(p,'stripe',side_effect=p.PaymentError('local unavailable')):
-   self.assertEqual(self.post(self.client,'/api/payments/checkout',{}).status_code,409)
-   self.assertEqual(self.post(self.client,'/api/payments/checkout',{}).status_code,409)
+   self.assertEqual(self.post(self.client,'/api/payments/checkout',{'annual_terms':True}).status_code,409)
+   self.assertEqual(self.post(self.client,'/api/payments/checkout',{'annual_terms':True}).status_code,409)
   with app.app.app_context(),m.database() as c:self.assertEqual(c.execute('SELECT COUNT(*) AS n FROM stripe_orders').fetchone()['n'],1)
  def test_creator_uses_approved_destination_and_same_processor_without_commission(self):
   creator=self.member('managed-creator',paid=True);mod=self.member('gref');creator_id=creator.get('/api/account/me').json['user']['id']
   with app.app.app_context(),m.database() as c:
    c.execute('INSERT INTO stripe_accounts VALUES(?,?,?)',(creator_id,'acct_local_creator',m.stamp(m.now_utc())))
    c.execute('UPDATE live_entitlements SET paid_at=? WHERE member_id=?',(m.stamp(m.now_utc()),self.ident))
+   c.execute('UPDATE members SET access_until=? WHERE id=?',(m.stamp(m.end_of_plan(m.now_utc(),'annual')),self.ident))
   channel=self.post(creator,'/api/streamers/me',{'title':'Managed creator','paypal_url':'','owns_paypal':False}).json['channel']['id']
   self.post(self.admin,'/api/admin/subscription-moderator',{'username':'Gref'});self.post(self.admin,'/api/admin/moderator-permissions',{'permissions':['review_agreements','approve_agreements']})
   proposal=self.post(creator,'/api/channel-subscriptions/propose',{'price_cents':450,'period':'month','benefits':['badge','exclusive_live']});self.assertEqual(proposal.status_code,200,proposal.json)
