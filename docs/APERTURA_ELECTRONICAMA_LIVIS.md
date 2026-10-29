@@ -69,3 +69,13 @@ El correo tras el pago informa del acceso activo y del número asignado o de la
 condición de participante; no solicita otro pago ni una nueva petición de plaza.
 La entrega real y el pedido de rosas requieren comprobación en producción: este
 entorno no puede acceder a la cuenta Stripe ni a la base de clientes desplegada.
+
+
+## 9.14.1 · Aviso visible al sincronizar un cliente
+
+La consulta muestra «Comprobando Stripe» y un aviso junto al cliente. El resultado
+permanece después de recargar la tabla: confirmado, pendiente, sin pedido asociado
+o error. El botón vuelve a estar disponible al terminar. Un pedido anual ya
+confirmado y vigente se reconoce como confirmado, sin volver a cobrar ni prolongar
+el año por pulsar el botón. La comprobación no certifica desde el entorno local el
+pago real de una cuenta de producción.

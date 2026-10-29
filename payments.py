@@ -277,7 +277,12 @@ def admin_reconcile():
 def reconcile_member(user):
  with database() as c:
   order=c.execute("SELECT * FROM stripe_orders WHERE member_id=? AND kind='platform_annual' AND paid_at IS NULL AND reversed_at IS NULL AND checkout_id IS NOT NULL AND state IN ('open','expired') ORDER BY created_at DESC LIMIT 1",(user['id'],)).fetchone()
- if not order:return jsonify(ok=True,confirmed=False,pending=False)
+ if not order:
+  with database() as c:
+   paid=c.execute("SELECT o.id FROM stripe_orders o JOIN members m ON m.id=o.member_id JOIN live_entitlements e ON e.member_id=m.id WHERE o.member_id=? AND o.kind='platform_annual' AND o.paid_at IS NOT NULL AND o.reversed_at IS NULL AND e.revoked_at IS NULL AND m.access_until>? LIMIT 1",(user['id'],stamp(now_utc()))).fetchone()
+   if paid:
+    c.execute('BEGIN IMMEDIATE');assign_confirmed_founders(c)
+  return jsonify(ok=True,confirmed=bool(paid),pending=False)
  if not allow_attempt('stripe-reconcile:'+user['id'],limit=6):return jsonify(error='Espera unos minutos antes de comprobar de nuevo este pago.'),429
  try:
   obj=stripe('GET','/checkout/sessions/'+order['checkout_id'])

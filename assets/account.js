@@ -73,6 +73,7 @@ async function loadAdmin() {
   renderCalendar();
   await loadStatistics();
 }
+const paymentSyncResults=new Map(),paymentSyncBusy=new Set();
 function renderMembers(){
   const clients=members.filter(member=>member.role!=='admin'&&member.account_activated!==false);
   $('admin-counters').textContent=`${clients.length} clientes · ${clients.filter(member=>member.active).length} con Ol Livis · ${clients.filter(member=>member.complimentary).length} amigos con Ol Livis gratuito`;
@@ -93,7 +94,18 @@ function renderMembers(){
     for (const value of [member.username+(member.nickname&&member.nickname!==member.username?' · '+member.nickname:''), member.legal_name||'Pendiente de indicar', member.account_activated===false?'Sin activar':member.role === 'admin' ? 'Administrador' : member.founder_active ? 'Fundador n.º '+member.founder_number : member.complimentary ? 'Amigo · gratuito' : member.live_annual ? 'Participante Ol Livis' : member.streamer_active ? 'Ol Livis Creador' : 'Cliente', member.account_activated===false?'Cuenta sin activar':member.active ? 'Ol Livis activo' : 'Cuenta gratuita', member.account_activated===false?'Pendiente de activar':member.full_service?'Acceso completo gratuito · sin vencimiento':member.live_annual?date(member.access_until):member.founder_active ? 'Fundador · actividad requerida' : member.live_lifetime ? 'Sin vencimiento · pago único' : member.trial_active ? 'Prueba hasta '+date(member.live_trial_until) : member.complimentary ? 'Sin vencimiento · invitación gratuita' : member.streamer_until ? `electronicama: ${date(member.access_until)} · Ol Livis Creador: ${date(member.streamer_until)}` : date(member.access_until), member.last_payment?`${(member.last_payment.amount_cents/100).toFixed(2)} € · ${date(member.last_payment.verified_at)}`:'Sin pago registrado']) row.append(text('td', value));
     const actions = document.createElement('td');
     if(member.role!=='admin'){
-      const sync=text('button','Sincronizar pago con Stripe');sync.className='secondary';sync.type='button';sync.addEventListener('click',async()=>{sync.disabled=true;try{const result=await api('/api/admin/payments/reconcile',{member_id:member.id});status(result.confirmed?'Pago confirmado y acceso sincronizado.':result.pending?'Stripe todavía no confirma este pago; no repitas el cargo.':'No hay un Checkout pendiente vinculado a esta cuenta. Revisa su historial de pagos.');await loadAdmin();}catch(error){status(error.message);sync.disabled=false;}});actions.append(sync);
+      const sync=text('button',paymentSyncBusy.has(member.id)?'Comprobando Stripe…':'Sincronizar pago con Stripe');sync.className='secondary';sync.type='button';sync.disabled=paymentSyncBusy.has(member.id);
+      const syncStatus=text('p',paymentSyncResults.get(member.id)||'');syncStatus.className='client-payment-sync-status';syncStatus.dataset.memberId=member.id;syncStatus.setAttribute('role','status');syncStatus.setAttribute('aria-live','polite');
+      sync.addEventListener('click',async()=>{
+        paymentSyncBusy.add(member.id);sync.disabled=true;sync.textContent='Comprobando Stripe…';paymentSyncResults.set(member.id,'Consultando el pago de '+member.username+' en Stripe…');syncStatus.textContent=paymentSyncResults.get(member.id);
+        try{
+          const result=await api('/api/admin/payments/reconcile',{member_id:member.id});
+          const message=result.confirmed?'Pago confirmado. Acceso de Ol Livis sincronizado.':result.pending?'Pago pendiente en Stripe. No repitas el cargo.':'No se encontró un Checkout pendiente vinculado a esta cuenta. Revisa con qué cuenta se realizó el pago.';
+          paymentSyncResults.set(member.id,message);syncStatus.textContent=message;
+          try{await loadAdmin();}catch(error){paymentSyncResults.set(member.id,message+' No se pudo actualizar la lista: '+error.message);syncStatus.textContent=paymentSyncResults.get(member.id);}
+        }catch(error){paymentSyncResults.set(member.id,'No se pudo sincronizar: '+error.message);syncStatus.textContent=paymentSyncResults.get(member.id);}
+        finally{paymentSyncBusy.delete(member.id);renderMembers();}
+      });actions.append(sync,syncStatus);
     }
 
     const roleLabel=text('label','Rol de comunidad · '+member.username);const roleSelect=document.createElement('select');for(const [key,label] of Object.entries({activo:'Activo',voluntario:'Voluntario',docente:'Docente'})){const option=text('option',label);option.value=key;roleSelect.append(option);}roleSelect.value=member.community_role||'activo';roleLabel.append(roleSelect);const approve=text('button','Aprobar rol');approve.type='button';approve.addEventListener('click',async()=>{approve.disabled=true;try{await api('/api/admin/community-role',{member_id:member.id,community_role:roleSelect.value});await refresh();status('Rol de comunidad aprobado. No se han cambiado permisos administrativos.');}catch(error){status(error.message);}finally{approve.disabled=false;}});actions.append(roleLabel,approve);
