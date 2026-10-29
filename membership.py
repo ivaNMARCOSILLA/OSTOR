@@ -108,6 +108,7 @@ def init_database():
         CREATE TABLE IF NOT EXISTS annual_preferences (
           member_id TEXT PRIMARY KEY REFERENCES members(id) ON DELETE CASCADE,cancelled_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS sticker_voice_audio (cache_key TEXT PRIMARY KEY,audio_base64 TEXT,created_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS member_legal_names (member_id TEXT PRIMARY KEY REFERENCES members(id) ON DELETE CASCADE,legal_name TEXT NOT NULL,updated_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS member_profiles (
           member_id TEXT PRIMARY KEY REFERENCES members(id) ON DELETE CASCADE,email TEXT UNIQUE,

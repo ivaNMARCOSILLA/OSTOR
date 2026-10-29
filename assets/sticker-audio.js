@@ -1,27 +1,28 @@
-/* Speech starts only from a user's sticker click; no microphone is needed. */
-let player=null,revision=0;
+/* Synthetic voices always start on an explicit click. No microphone or cloning. */
+let player=null,revision=0,neural=false,neuralChecked=false,voiceProvider='',voicePanels=[];
+const female=/elvira|helena|sabina|monica|mónica|paulina|dalia|paloma|joana|lucia|lucía/i;
+const male=/alvaro|álvaro|pablo|jorge|raul|raúl|andres|andrés|diego|enric|carlos/i;
+const prefKey=()=>window.MaggySession?.key('sticker_voice_v2')||'electronicama_sticker_voice_v2';
+function preferences(){try{return {engine:neural?'neural':'device',profile:'female',voiceURI:'',...JSON.parse(localStorage.getItem(prefKey())||'{}')}}catch{return {engine:neural?'neural':'device',profile:'female',voiceURI:''}}}
+function save(value){try{localStorage.setItem(prefKey(),JSON.stringify(value));}catch{}revision++;player?.pause();window.speechSynthesis?.cancel();renderVoicePanels();}
+function available(){return window.speechSynthesis?.getVoices?.().filter(v=>/^es(?:-|$)/i.test(v.lang))||[];}
+function voiceFor(pref){const voices=available();return voices.find(v=>v.voiceURI===pref.voiceURI)||(pref.profile==='female'?voices.find(v=>female.test(v.name)):voices.find(v=>male.test(v.name)))||voices[0];}
+function report(message){for(const panel of voicePanels)panel.querySelector('[data-voice-status]').textContent=message;}
+async function checkNeural(){if(neuralChecked)return;neuralChecked=true;try{const response=await fetch('/api/stickers/voices',{cache:'no-store',signal:AbortSignal.timeout(10000)});if(response.ok){const config=await response.json();neural=Boolean(config.neural_available);voiceProvider=config.provider||'';}}catch{}renderVoicePanels();}
+function renderVoicePanels(){const pref=preferences(),voices=available();for(const panel of voicePanels){const engine=panel.querySelector('[data-voice-engine]'),profile=panel.querySelector('[data-voice-profile]'),specific=panel.querySelector('[data-voice-device]');engine.value=pref.engine;engine.querySelector('[value=neural]').disabled=!neural;profile.value=pref.profile;specific.replaceChildren(new Option('Elegir según el perfil',''));for(const v of voices)specific.append(new Option(v.name+' · '+v.lang,v.voiceURI));specific.value=pref.voiceURI;specific.disabled=pref.engine==='neural';panel.querySelector('[data-voice-status]').textContent=neural?'Voces neuronales femeninas y masculinas disponibles · '+voiceProvider+'. Son voces sintéticas.':'Voz neuronal pendiente de conectar. Puedes usar voces instaladas en este dispositivo; su calidad y disponibilidad dependen del navegador.';}}
+export function mountStickerVoiceControls(parent){if(parent.querySelector('.sticker-voice-settings'))return;const panel=document.createElement('section');panel.className='sticker-voice-settings';panel.setAttribute('aria-label','Voz de los stickers');panel.innerHTML='<h3>La voz de tus stickers</h3><p>Elige una voz femenina o masculina. Solo suena cuando pulsas escuchar.</p><div class="sticker-voice-fields"><label>Herramienta vocal<select data-voice-engine><option value="device">Voces del dispositivo</option><option value="neural">Voz neuronal natural</option></select></label><label>Perfil de voz<select data-voice-profile><option value="female">Femenina</option><option value="male">Masculina</option></select></label><label>Voz instalada<select data-voice-device></select></label><button type="button" data-voice-preview>Probar voz</button></div><p data-voice-status role="status" aria-live="polite"></p><small>La voz neuronal envía únicamente la frase del sticker al proveedor vocal. El servicio de voz del navegador puede procesarla en su propio motor. No se activa el micrófono.</small>';
+parent.querySelector('.collection-filters')?.before(panel);if(!panel.parentElement)parent.append(panel);voicePanels.push(panel);panel.querySelector('[data-voice-engine]').addEventListener('change',e=>save({...preferences(),engine:e.target.value}));panel.querySelector('[data-voice-profile]').addEventListener('change',e=>save({...preferences(),profile:e.target.value,voiceURI:''}));panel.querySelector('[data-voice-device]').addEventListener('change',e=>save({...preferences(),voiceURI:e.target.value}));panel.querySelector('[data-voice-preview]').addEventListener('click',e=>playStickerSound('hello',e.currentTarget));renderVoicePanels();checkNeural();}
+async function neuralAudio(id,profile){let response;for(let attempt=0;attempt<4;attempt++){response=await window.MaggySession.fetch('/api/stickers/'+encodeURIComponent(id)+'/voice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({voice:profile}),signal:AbortSignal.timeout(20000)});if(response.status!==202)break;await new Promise(resolve=>setTimeout(resolve,700));}if(!response.ok||response.status===202){let message='La voz está preparándose. Vuelve a pulsar en unos segundos.';try{message=(await response.json()).error||message;}catch{}throw Error(message);}return response.blob();}
 export async function playStickerSound(id,button,knownPhrase){
- if(!/^[a-z0-9_-]{1,60}$/.test(id))return;
- const current=++revision;player?.pause();window.speechSynthesis?.cancel();
- if(button)button.disabled=true;
- try{
-  let phrase=knownPhrase;
-  if(!phrase){const response=await fetch('/api/stickers/'+encodeURIComponent(id)+'/phrase');if(!response.ok)throw Error();phrase=(await response.json()).phrase;}
-  if(current!==revision)return;
-  if('speechSynthesis' in window&&'SpeechSynthesisUtterance' in window){
-   const speech=new SpeechSynthesisUtterance(phrase);speech.lang='es-ES';speech.rate=.96;speech.volume=.7;
-   const voice=speechSynthesis.getVoices().find(v=>v.lang==='es-ES')||speechSynthesis.getVoices().find(v=>v.lang.startsWith('es'));
-   if(voice)speech.voice=voice;
-   speech.onerror=event=>{if(current!==revision||['canceled','interrupted'].includes(event.error))return;if(button){button.title='La voz no está disponible. Puedes leer: '+phrase;button.setAttribute('aria-label',phrase+' · voz no disponible');}};
-   speechSynthesis.speak(speech);
-   if(button){button.title=phrase;button.setAttribute('aria-label','Frase del sticker: '+phrase);}
-  }else{
-   if(!player){player=new Audio();player.preload='none';player.volume=.35;}
-   player.src='/api/stickers/'+encodeURIComponent(id)+'/sound.wav';await player.play();
-   if(button){button.title='Tu dispositivo no ofrece voz. '+phrase;button.setAttribute('aria-label',phrase+' · sonido alternativo');}
-  }
- }catch{if(button){button.title='No se pudo reproducir. Pulsa para reintentar.';button.setAttribute('aria-label','Reintentar frase del sticker');}}
+ if(!/^[a-z0-9_-]{1,60}$/.test(id))return;const current=++revision;player?.pause();window.speechSynthesis?.cancel();if(button)button.disabled=true;
+ try{let phrase=knownPhrase;if(!phrase){const response=await fetch('/api/stickers/'+encodeURIComponent(id)+'/phrase');if(!response.ok)throw Error('No se pudo cargar la frase.');phrase=(await response.json()).phrase;}if(current!==revision)return;
+ const pref=preferences();if(pref.engine==='neural'){
+  if(!neural)throw Error('La voz neuronal está pendiente de conectar. Selecciona voces del dispositivo mientras tanto.');report('Preparando la voz natural…');const blob=await neuralAudio(id,pref.profile);if(current!==revision)return;if(!player){player=new Audio();player.preload='none';player.volume=.7;}const previous=player.dataset.blob;if(previous)URL.revokeObjectURL(previous);player.src=URL.createObjectURL(blob);player.dataset.blob=player.src;await player.play();report('Voz neuronal '+(pref.profile==='female'?'femenina':'masculina')+' · '+voiceProvider+' · reproducción manual.');
+ }else if('speechSynthesis' in window&&'SpeechSynthesisUtterance' in window){const speech=new SpeechSynthesisUtterance(phrase);speech.lang='es-ES';speech.rate=.96;speech.volume=.7;speech.pitch=1;const voice=voiceFor(pref);if(voice)speech.voice=voice;const matched=voice&&(pref.voiceURI||(pref.profile==='female'?female:male).test(voice.name));report(voice?('Voz: '+voice.name+(matched?'':' · No se ha identificado el perfil solicitado; se usa la voz española disponible.')):'Voz predeterminada del dispositivo; instala voces españolas para elegir más opciones.');speech.onerror=event=>{if(current===revision&&!['canceled','interrupted'].includes(event.error))report('Esta voz no está disponible. Puedes leer: '+phrase);};speechSynthesis.speak(speech);
+ }else{throw Error('Este dispositivo no ofrece voz. Puedes leer la frase: '+phrase);}
+ if(button){button.title=phrase;button.setAttribute('aria-label','Frase del sticker: '+phrase);}
+ }catch(error){report(error.message);if(button){button.title=error.message;button.setAttribute('aria-label','Reintentar frase del sticker');}}
  finally{if(button)button.disabled=false;}
 }
-window.OlStickerAudio={play:playStickerSound};
-window.addEventListener('pagehide',()=>{revision++;player?.pause();window.speechSynthesis?.cancel();});
+window.speechSynthesis?.addEventListener?.('voiceschanged',renderVoicePanels);window.addEventListener('maggy:access-changed',()=>{renderVoicePanels();checkNeural();});window.OlStickerAudio={play:playStickerSound};
+window.addEventListener('pagehide',()=>{revision++;player?.pause();if(player?.dataset.blob)URL.revokeObjectURL(player.dataset.blob);window.speechSynthesis?.cancel();});

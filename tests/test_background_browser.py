@@ -34,14 +34,9 @@ def run():
   assert page.locator('iframe').count()==0
   page.evaluate('deviceMedia.handlers.stop()');assert page.locator('#player').is_hidden();assert page.evaluate('Object.values(deviceMedia.handlers).every(value=>value===null)')
   page.evaluate("window.olHidden=false;document.dispatchEvent(new Event('visibilitychange'))")
-  # A direct PNG download is a real file, not an unsupported OS-settings command.
-  link=page.locator('#fondos-ol a[download]');assert link.get_attribute('download')=='electronicama-fondo-hojas.png'
-  with page.expect_download() as downloaded:link.click()
-  assert downloaded.value.suggested_filename in {'electronicama-fondo-hojas.png','ol-wallpaper.png'}
-  assert Path(downloaded.value.path()).read_bytes()[:8]==b'\x89PNG\r\n\x1a\n'
-  assert page.request.get(BASE_URL+'/assets/ol-wallpaper.png').headers['content-type'].startswith('image/png')
+  assert page.locator('#fondos-ol,a[href*=fondos-ol]').count()==0
   page.goto(BASE_URL+'/?view=favorites');page.wait_for_function("document.querySelector('#main-nav [data-view=favorites]').getAttribute('aria-pressed')==='true'")
   assert page.locator('.track-card').count()==1
   assert not errors,errors;browser.close()
- print('OK: wallpaper PNG download, compact audio without stopping, star/home, media play/pause/stop/next, background visibility, launcher shortcut and four widths')
+ print('OK: retired wallpaper section removed, compact audio without stopping, star/home, media play/pause/stop/next, background visibility, launcher shortcut and four widths')
 if __name__=='__main__':run()
