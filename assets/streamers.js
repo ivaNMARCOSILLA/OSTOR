@@ -1,5 +1,5 @@
 import {openSubscription} from '/assets/subscriptions.js?v=9.13.0';
-import {founderBadge} from '/assets/badges.js?v=9.13.0';
+import {founderBadge} from '/assets/badges.js?v=9.15.0';
 'use strict';
 import {StreamCommunity} from '/assets/community.js?v=9.13.0';
 import {StudioTools} from '/assets/studio-tools.js?v=9.13.0';
@@ -17,6 +17,7 @@ async function api(path,data){
  }catch(error){if(error.name==='AbortError')throw new Error('El servidor tarda en responder. Vuelve a intentarlo.');throw error;}finally{clearTimeout(timer);}
 }
 function node(tag,text){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n;}
+function clearFounderStamp(){const stamp=$('live-founder-stamp');if(!stamp)return;stamp.querySelectorAll('audio').forEach(audio=>audio.pause());stamp.replaceChildren();}
 const attachedTracks=new Map();
 const tools=new StudioTools({setLayout:layout=>api('/api/streamers/me/layout',{layout}),getRoom:()=>publishing?room:null,getPreview:()=>previewStream,getChannel:()=>room&&selected?selected:info?.mine,restartPreview:()=>privatePreview(),canPreview:()=>!connecting&&!publishing&&Boolean(info?.mine&&info.streamer_active),report:message=>{status(message);$(room?'live-tools-status':'studio-status').textContent=message;}});
 async function sdk(){if(window.LivekitClient)return window.LivekitClient;if(!sdkPromise)sdkPromise=new Promise((resolve,reject)=>{const s=document.createElement('script');s.src='/assets/vendor/livekit-client-2.23.0.umd.js';s.onload=()=>resolve(window.LivekitClient);s.onerror=()=>reject(new Error('No se pudo cargar el reproductor de directos.'));document.head.append(s);});return sdkPromise;}
@@ -25,6 +26,7 @@ async function refresh(){
  const launch=await api('/api/status');
  const previewUser=(await api('/api/account/me')).user;
  if(room&&!previewUser?.active){await disconnect();status('El acceso a Ol Livis ha terminado. Inicia sesión o revisa tu cuenta.');}
+ document.body.classList.toggle('ol-livis-open',!launch.live_premiere);
  premiereOnly=launch.live_premiere&&previewUser?.role!=='admin'&&!previewUser?.full_service;
  document.body.classList.toggle('ol-private-preview',Boolean(launch.live_premiere&&previewUser?.full_service));
  if(premiereOnly){document.body.classList.add('ol-live-premiere-only');return;}
@@ -48,6 +50,7 @@ function renderCatalogue(){
  const active=window.MaggySession.premium;
  const directory=active?info:publicInfo;
  const channels=directory?.video_ready?directory.channels:[];
+ const rail=$('livis-channel-rail');if(rail){rail.replaceChildren();for(const channel of channels.slice(0,8)){const link=node('button');link.type='button';link.className='rail-channel';const avatar=node('span',channel.username.slice(0,2).toUpperCase());avatar.className='rail-channel-avatar';const label=node('span',channel.username),live=node('small','EN DIRECTO');link.append(avatar,label,live);link.addEventListener('click',()=>{if(window.MaggySession.premium)connect(channel,false);else navigateSection('#stream-access');});rail.append(link);}if(!channels.length)rail.append(node('p','Sin emisiones en este momento.'));}
  const query=$('channel-filter').value.trim().toLocaleLowerCase('es');
  const matches=channels.filter(channel=>(liveCategory==='all'||(liveCategory==='featured'?channel.featured:channel.category===liveCategory))&&[channel.title,channel.username,channel.bio].join(' ').toLocaleLowerCase('es').includes(query));
  document.querySelectorAll('[data-live-category]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.liveCategory===liveCategory)));
@@ -137,7 +140,7 @@ async function disconnect(){
  connectionGeneration+=1;heartbeatBusy=false;heartbeatVerified=false;community.stop();
  const wasPublisher=publishing;publishing=false;clearInterval(heartbeat);heartbeat=null;
  tools.liveEnded();const previous=room;room=null;selected=null;if(previous)await previous.disconnect();
- attachedTracks.clear();$('live-media').replaceChildren();$('live-stage').classList.add('hidden');
+ attachedTracks.clear();clearFounderStamp();$('live-media').replaceChildren();$('live-stage').classList.add('hidden');
  if(wasPublisher&&window.MaggySession.premium)try{await api('/api/streamers/me/live',{live:false});}catch{}
 }
 function attach(track,local=false){const key=track.sid||track;if(attachedTracks.has(key))return;const element=track.attach();attachedTracks.set(key,element);element.dataset.source=track.source||track.kind;if(track.source==='screen_share')element.classList.add('screen-track');element.autoplay=true;element.playbackRate=1;if(track.kind==='video'){element.playsInline=true;element.controls=false;}if(local)element.muted=true;if(track.kind==='audio'){element.controls=false;if(!local&&track.setPlayoutDelay)try{track.setPlayoutDelay(.1);}catch{}}$('live-media').append(element);}
@@ -152,13 +155,13 @@ async function connect(channel,publish){
   const LK=await sdk();if(generation!==connectionGeneration||!window.MaggySession.premium)return;room=new LK.Room({adaptiveStream:true,dynacast:true,...tools.roomOptions()});const current=room;
   room.on(LK.RoomEvent.TrackSubscribed,track=>{if(room===current)attach(track);});
   room.on(LK.RoomEvent.TrackUnsubscribed,track=>{attachedTracks.delete(track.sid||track);track.detach().forEach(element=>element.remove());});
-  room.on(LK.RoomEvent.Disconnected,()=>{if(room===current){publishing=false;clearInterval(heartbeat);tools.liveEnded();community.stop();room=null;selected=null;heartbeatBusy=false;$('live-stage').classList.add('hidden');renderStudio();status('La conexión con el directo ha terminado.');}});
+  room.on(LK.RoomEvent.Disconnected,()=>{if(room===current){publishing=false;clearInterval(heartbeat);tools.liveEnded();community.stop();room=null;selected=null;heartbeatBusy=false;clearFounderStamp();$('live-stage').classList.add('hidden');renderStudio();status('La conexión con el directo ha terminado.');}});
   room.on(LK.RoomEvent.ConnectionStateChanged,state=>{if(room===current)tools.connectionState(state);});
   for(const event of [LK.RoomEvent.ParticipantConnected,LK.RoomEvent.ParticipantDisconnected])room.on(event,()=>{if(room===current)tools.participants(current);});
   if(publish){room.on(LK.RoomEvent.LocalTrackPublished,pub=>{if(pub.track&&room===current){attach(pub.track,true);if(pub.source===LK.Track.Source.Camera&&pub.track.mediaStreamTrack)tools.nativeQuality(new MediaStream([pub.track.mediaStreamTrack]));if(pub.source===LK.Track.Source.Microphone&&pub.track.mediaStreamTrack)tools.monitor(new MediaStream([pub.track.mediaStreamTrack]));if(pub.source===LK.Track.Source.ScreenShare)tools.screenState(true);}});room.on(LK.RoomEvent.LocalTrackUnpublished,pub=>{pub.track?.detach().forEach(element=>element.remove());if(pub.source===LK.Track.Source.ScreenShare)tools.screenState(false);});}
   await current.connect(data.url,data.token);if(generation!==connectionGeneration||!window.MaggySession.premium){await current.disconnect();return;}selected=channel;publishing=publish;
   if(publish){await current.localParticipant.enableCameraAndMicrophone();if(generation!==connectionGeneration||!window.MaggySession.premium){for(const pub of current.localParticipant.trackPublications.values())pub.track?.stop();await current.disconnect();return;}heartbeatVerified=false;await sendPresence(current,generation);if(generation!==connectionGeneration||room!==current)return;heartbeat=setInterval(()=>sendPresence(current,generation),25000);}
-  $('stream-studio').before($('live-stage'));tools.liveConnected(current);community.start(channel,publish);$('leave-room').textContent=publish?'Finalizar directo':'Salir del directo';$('stage-title').textContent=channel.title;$('live-stage').classList.remove('hidden');
+  $('live-catalogue').before($('live-stage'));const stamp=$('live-founder-stamp');stamp.replaceChildren();if(channel.founder_number)stamp.append(founderBadge(channel.founder_number,channel.founder_signature||{}));tools.liveConnected(current);community.start(channel,publish);$('leave-room').textContent=publish?'Finalizar directo':'Salir del directo';$('stage-title').textContent=channel.title;$('live-stage').classList.remove('hidden');
   $('toggle-camera').classList.toggle('hidden',!publish);$('toggle-mic').classList.toggle('hidden',!publish);
   $('toggle-camera').textContent='Apagar cámara';$('toggle-mic').textContent='Silenciar micrófono';
   renderStudio();status(publish?(heartbeatVerified?'Estás en directo.':'Vídeo conectado. La verificación del listado se reintentará sin cortar la emisión.'):'Conectado al directo. Pulsa «Activar sonido» si no lo escuchas.');$('live-stage').scrollIntoView({behavior:'smooth'});
