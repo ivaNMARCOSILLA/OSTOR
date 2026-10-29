@@ -1,6 +1,19 @@
 /* Shared operational state; public status is never a payment confirmation. */
 const $=id=>document.getElementById(id);
-async function api(path,data){let options={cache:'no-store'};if(data!==undefined){const r=await fetch('/api/account/me',{cache:'no-store'}),a=await r.json();options={...options,method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':a.csrf},body:JSON.stringify(data)};}const r=await fetch(path,{...options,signal:AbortSignal.timeout(20000)}),d=await r.json();if(!r.ok)throw Error((d.error||'No se pudo completar la operación.')+(d.code?' (Referencia: '+d.code+')':'')+(d.diagnostic?' · Stripe: '+d.diagnostic:''));return d;}
+async function api(path,data){let options={cache:'no-store'};if(data!==undefined){const r=await fetch('/api/account/me',{cache:'no-store',signal:AbortSignal.timeout(20000)}),a=await r.json();options={...options,method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':a.csrf},body:JSON.stringify(data)};}const r=await fetch(path,{...options,signal:AbortSignal.timeout(20000)}),d=await r.json();if(!r.ok)throw Error((d.error||'No se pudo completar la operación.')+(d.code?' (Referencia: '+d.code+')':'')+(d.diagnostic?' · Stripe: '+d.diagnostic:''));return d;}
+
+// Creator linking must not wait for unrelated administrative diagnostics.
+async function refreshCreatorConnection(){
+ const button=$('creator-connect-stripe'),status=$('creator-processor-status');if(!button)return;
+ try{const manager=await api('/api/payments/status');
+ button.disabled=Boolean(manager.creator_connected);button.textContent=manager.creator_connected?'Stripe conectado':'Conectar Stripe de mi canal';
+ status.textContent=manager.creator_connected?'Cuenta Stripe conectada. La verificación bancaria y los acuerdos deben estar completos para cobrar.':manager.connect_available?'Conecta tu propia cuenta Stripe para cobrar las suscripciones del canal.':'Falta completar Stripe Connect en Production: STRIPE_CONNECT_CLIENT_ID (ca_…) y una clave secreta real. Puedes volver a comprobarlo con este botón.';
+ if(manager.play_distribution)button.hidden=true;
+ }catch(error){button.disabled=false;button.textContent='Reintentar conexión con Stripe';status.textContent='No se pudo comprobar Stripe. '+error.message;}
+}
+refreshCreatorConnection();
+window.addEventListener('ol:account-refreshed',refreshCreatorConnection);
+
 let inspecting=false;
 async function inspect(){if(inspecting)return;inspecting=true;try{await(window.OlAccountReady||window.MaggySession?.ready||Promise.resolve());
  const d=await api('/api/status');let banner=$('ol-maintenance-banner');if(!banner){banner=document.createElement('p');banner.id='ol-maintenance-banner';banner.setAttribute('role','status');document.body.prepend(banner);}banner.hidden=d.maintenance.scope==='off';banner.textContent=(d.maintenance.scope==='payments'?'Pagos de Ol Livis en preparación · ':d.maintenance.scope==='live'?'Ol Livis en preparación · ':'electronicama en mantenimiento · ')+d.maintenance.message;
@@ -17,12 +30,12 @@ async function inspect(){if(inspecting)return;inspecting=true;try{await(window.O
  if(admin&&$('launch-readiness-status')){const launch=await api('/api/admin/launch-readiness');$('launch-readiness-status').textContent=(launch.stripe_test_confirmed?'Stripe de prueba: pago confirmado. ':'Stripe de prueba: falta completar el recorrido. ')+(launch.video_configuration_complete?'Datos de vídeo presentes; falta comprobar la emisión. ':'Ol Livis pendiente de configurar en '+(launch.environment==='production'?'Production':'este entorno')+'. ')+(launch.live_payments_enabled?'Cobros reales habilitados.':'Cobros reales desactivados.');const list=$('launch-readiness-checks');list.replaceChildren();for(const [group,checks] of Object.entries(launch.checks)){if(group!=='video'&&manager.provider!=='stripe')continue;for(const [name,ok] of Object.entries(checks)){const row=document.createElement('li');row.textContent=(group==='video'?'Vídeo · ':'Pagos reales · ')+name+': '+(ok?'presente':'pendiente');list.append(row);}}}
  if($('trial-start')){$('trial-start').disabled=!account.user||!manager.enabled||Boolean(account.user?.complimentary||account.user?.live_lifetime||account.user?.role==='admin');}
  if($('payment-manager-status')&&admin)$('payment-manager-status').textContent=manager.enabled?'Stripe configurado; cobros disponibles cuando corresponda a cada cuenta.':manager.pending_reason;
- if($('creator-connect-stripe')){$('creator-connect-stripe').disabled=!manager.connect_available||manager.creator_connected;$('creator-processor-status').textContent=manager.creator_connected?'Cuenta Stripe conectada. La verificación bancaria y los acuerdos deben estar completos para cobrar.':manager.connect_available?'Conecta tu propia cuenta Stripe para cobrar las suscripciones del canal. Puedes preparar el precio mientras tanto.':'Administración debe completar Stripe Connect (STRIPE_CONNECT_CLIENT_ID) para conectar creadores. Tu borrador y la prueba de vídeo siguen disponibles.';}
+
  if(manager.play_distribution){$('pay-lifetime')?.setAttribute('hidden','');$('creator-connect-stripe')?.setAttribute('hidden','');}
  const receipts=$('creator-receipt-form');if(receipts)receipts.closest('details').hidden=manager.provider==='stripe';
  }catch(error){if($('operations-status'))$('operations-status').textContent=error.message;}finally{inspecting=false;}}
 $('maintenance-form')?.addEventListener('submit',async e=>{e.preventDefault();try{await api('/api/admin/maintenance',{scope:$('maintenance-scope').value,message:$('maintenance-message').value});$('operations-status').textContent='Estado guardado para web y aplicación.';await inspect();}catch(error){$('operations-status').textContent=error.message;}});
-$('creator-connect-stripe')?.addEventListener('click',async e=>{e.target.disabled=true;try{const d=await api('/api/payments/connect',{});location.assign(d.url);}catch(error){$('creator-processor-status').textContent=error.message;e.target.disabled=false;}});
+$('creator-connect-stripe')?.addEventListener('click',async e=>{const button=e.currentTarget;button.disabled=true;button.textContent='Conectando con Stripe…';$('creator-processor-status').textContent='Solicitando autorización segura a Stripe…';try{const d=await api('/api/payments/connect',{});if(!d.url)throw Error('No se recibió la dirección de autorización.');location.assign(d.url);}catch(error){$('creator-processor-status').textContent=error.name==='TimeoutError'?'Stripe está tardando demasiado. Vuelve a intentarlo.':error.message;button.disabled=false;button.textContent='Reintentar conexión con Stripe';}});
 // Decorative motion always has an explicit pause and respects OS reduced motion.
 let paused=false;try{paused=localStorage.getItem('ol_sticker_motion')==='off';}catch{}
 document.documentElement.dataset.stickerMotion=paused?'off':'on';
