@@ -43,6 +43,11 @@ def run():
    assert not issues,(path,issues)
   page.goto(BASE_URL+'/')
   hero=page.locator('#hero');assert hero.evaluate("e=>getComputedStyle(e).backgroundColor")=='rgb(0, 0, 0)'
+  annual=page.locator('#planes a[href="/account#pricing"]')
+  fixed=annual.evaluate("e=>{let s=getComputedStyle(e);return [s.color,s.backgroundColor,s.opacity,s.animationName,s.backgroundImage]}")
+  page.wait_for_timeout(500);assert fixed==annual.evaluate("e=>{let s=getComputedStyle(e);return [s.color,s.backgroundColor,s.opacity,s.animationName,s.backgroundImage]}")
+  assert fixed[2:] == ['1','none','none'],fixed
+  assert annual.evaluate("e=>getComputedStyle(e,'::before').content")=='none'
   first=hero.evaluate("e=>getComputedStyle(e).borderTopColor");page.wait_for_timeout(400);assert first!=hero.evaluate("e=>getComputedStyle(e).borderTopColor")
   page.emulate_media(reduced_motion='reduce');assert hero.evaluate("e=>getComputedStyle(e).animationName")=='none'
   page.screenshot(path='/tmp/electronicama-shared-theme-mobile.png',full_page=True);b.close()
