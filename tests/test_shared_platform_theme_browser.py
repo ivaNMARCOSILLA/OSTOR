@@ -18,7 +18,7 @@ def run():
    for width in [1440,390,320]:
     page.set_viewport_size({'width':width,'height':1000});assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+2'),(path,width)
   page.goto(BASE_URL+'/');styles=page.evaluate("()=>({fg:getComputedStyle(document.querySelector('#hero h1')).color,bg:getComputedStyle(document.querySelector('#hero')).backgroundImage})")
-  fg=list(map(int,re.findall(r'\d+',styles['fg'])[:3]));stops=re.findall(r'rgb\((\d+), (\d+), (\d+)\)',styles['bg']);assert stops
+  fg=list(map(int,re.findall(r'\d+',styles['fg'])[:3]));stops=re.findall(r'rgb\((\d+), (\d+), (\d+)\)',styles['bg']);assert stops or page.locator('#hero').evaluate("e=>getComputedStyle(e).backgroundColor")=='rgb(0, 0, 0)'
   for stop in stops:
    values=sorted([luminance(fg),luminance([int(x) for x in stop])]);assert (values[1]+.05)/(values[0]+.05)>=4.5,styles
   # Check actual computed foreground/background pairs for visible controls.
@@ -28,7 +28,23 @@ def run():
    for pair in pairs:
     fg=[int(x) for x in re.findall(r'\d+',pair['fg'])[:3]];bg=[int(x) for x in re.findall(r'\d+',pair['bg'])[:3]]
     values=sorted([luminance(fg),luminance(bg)]);assert (values[1]+.05)/(values[0]+.05)>=4.5,(path,pair)
+  for path in ['/','/account','/live','/legal/aviso-legal.html','/legal/privacidad.html','/legal/cookies.html']:
+   page.goto(BASE_URL+path)
+   issues=page.evaluate(r"""()=>{
+    const rgb=s=>(s.match(/[\d.]+/g)||[]).map(Number),lum=c=>c.slice(0,3).map(x=>{x/=255;return x<=.04045?x/12.92:((x+.055)/1.055)**2.4}).reduce((a,v,i)=>a+v*[.2126,.7152,.0722][i],0);
+    let out=[];for(const e of document.querySelectorAll('body *')){
+     if(![...e.childNodes].some(n=>n.nodeType===3&&n.textContent.trim())||!e.getClientRects().length||e.closest('[hidden],.hidden'))continue;
+     let s=getComputedStyle(e);if(s.visibility==='hidden'||s.opacity==='0')continue;
+     let bg=[0,0,0],n=e,gradient=false;while(n){let st=getComputedStyle(n),c=rgb(st.backgroundColor);if(st.backgroundImage!=='none'){gradient=true;break}if(c.length===3||c[3]===1){bg=c;break}n=n.parentElement}if(gradient)continue;
+     let fg=rgb(s.color);if(fg[3]===0)continue;let a=lum(fg),b=lum(bg),ratio=(Math.max(a,b)+.05)/(Math.min(a,b)+.05),large=parseFloat(s.fontSize)>=24||(parseFloat(s.fontSize)>=18.66&&parseInt(s.fontWeight)>=700);
+     if(ratio<(large?3:4.5))out.push({tag:e.tagName,id:e.id,cls:e.className,text:e.textContent.trim().slice(0,65),fg:s.color,bg,ratio});
+    }return out;
+   }""")
+   assert not issues,(path,issues)
   page.goto(BASE_URL+'/')
+  hero=page.locator('#hero');assert hero.evaluate("e=>getComputedStyle(e).backgroundColor")=='rgb(0, 0, 0)'
+  first=hero.evaluate("e=>getComputedStyle(e).borderTopColor");page.wait_for_timeout(400);assert first!=hero.evaluate("e=>getComputedStyle(e).borderTopColor")
+  page.emulate_media(reduced_motion='reduce');assert hero.evaluate("e=>getComputedStyle(e).animationName")=='none'
   page.screenshot(path='/tmp/electronicama-shared-theme-mobile.png',full_page=True);b.close()
- print('OK: shared style on six pages, no foliage or wallpaper UI, three widths, hero contrast above 4.5 across gradient stops')
+ print('OK: shared style on six pages, no foliage or wallpaper UI, three widths, text contrast on solid surfaces, animated LED borders and reduced-motion support')
 if __name__=='__main__':run()

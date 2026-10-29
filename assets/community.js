@@ -1,5 +1,5 @@
-import {decorateSticker} from '/assets/sticker-scenes.js?v=9.18.1';
-import {playStickerSound} from '/assets/sticker-audio.js?v=9.18.1';
+import {decorateSticker} from '/assets/sticker-scenes.js?v=9.18.2';
+import {playStickerSound} from '/assets/sticker-audio.js?v=9.18.2';
 /* Moderated live comments and explicitly reported browser speech recognition. */
 const safeSticker=sticker=>sticker&&/^[a-z0-9_-]{1,60}$/.test(sticker.id)&&typeof sticker.image==='string'&&(sticker.image.startsWith('/assets/stickers/')||sticker.image.startsWith('/api/stickers/'));
 export class StreamCommunity{

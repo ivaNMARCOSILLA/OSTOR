@@ -58,3 +58,24 @@ html:has(body.electronicama-theme),body.electronicama-theme,body.electronicama-t
 .electronicama-theme .founder-postage-stamp :is(h2,h3,h4,p){color:#493613!important;text-shadow:none}
 .electronicama-theme .collection-sticker :is(strong,small){text-shadow:none}
 @media(prefers-reduced-motion:reduce){.electronicama-theme *{scroll-behavior:auto!important}}
+/* LED colours dissolve around black surfaces; text colours stay stable. */
+@property --led-color{syntax:'<color>';inherits:false;initial-value:#8ce9df}
+@keyframes electronicama-led{0%,100%{--led-color:#8ce9df}25%{--led-color:#b8b0ff}50%{--led-color:#ffacd6}75%{--led-color:#f5d397}}
+body.electronicama-theme :is(#hero,#founders,.panel,.track-card,.channel-card,.plan,.discovery-card,.music-web-card,.external-catalog,.maggy-section,.mix-section,.collection-panel,.sticker-voice-settings,.statistics-grid article,.pricing-grid article,#live-catalogue,#live-stage,#hologramas,.account-shell>.intro,.platform-content>.intro,.founders-promo){background:#000!important;border-color:var(--led-color)!important;box-shadow:0 0 0 1px color-mix(in srgb,var(--led-color) 12%,transparent),0 0 18px color-mix(in srgb,var(--led-color) 18%,transparent);animation:electronicama-led 18s ease-in-out infinite}
+body.electronicama-theme :is(.panel,.track-card,.channel-card,.discovery-card,.music-web-card):nth-of-type(3n+2){animation-delay:-6s}
+body.electronicama-theme :is(.panel,.track-card,.channel-card,.discovery-card,.music-web-card):nth-of-type(3n){animation-delay:-12s}
+@media(prefers-reduced-motion:reduce){body.electronicama-theme *{animation:none!important}}
+/* Legacy light cards and inherited blue text corrected on the black skin. */
+body.electronicama-theme :is(details,.install-guide,.preview-banner,.unlock-plans strong){background:#080808;color:#e6e6ee;border-color:#74747f}
+body.electronicama-theme :is(.music-web-card a,.ghost-button,.plan a,.external-catalog a){background:#111!important;color:#bcefe7!important;border:1px solid #8abfb8}
+body.electronicama-theme :is(.directory-query,.mix-intro strong,.external-catalog strong){color:#bcefe7!important}
+body.electronicama-theme :is(.channels-list,.preview-banner p,.account-shell>.intro p,.account-shell>.intro span,#member-page){color:#d4d4df}
+body.electronicama-theme .consent-panel h3{color:#fafafa}
+body.electronicama-theme :is(.moment-grid button,.mobile-menu,.menu-toggle) :is(span,small,strong){color:inherit}
+body.electronicama-theme .brand-infinity{color:#bcefe7}
+body.electronicama-theme button .brand-infinity{color:inherit}
+body.electronicama-theme:has(>.back) a{color:#bcefe7!important}
+body.electronicama-theme details{background:#080808!important}
+body.electronicama-theme #mobile-menu span{color:inherit!important}
+body.electronicama-theme .account-shell>header>span{color:#d4d4df}
+body.electronicama-theme .ol-live-premiere>a{background:#111!important;color:#bcefe7!important;border-color:#8abfb8}
