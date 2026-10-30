@@ -192,6 +192,8 @@ def init_database():
           GROUP BY m.id ON CONFLICT(member_id) DO NOTHING''')
 
 
+    from notifications import init_database as init_notifications
+    init_notifications()
     from account_archives import init_database as init_archives
     init_archives()
     from operations import init_database as init_operations
@@ -394,7 +396,7 @@ def register():
         session.clear()
         session.update(member_id=ident, session_version=0,csrf=secrets.token_urlsafe(32))
         session.permanent = True
-        notify('registration','Nueva cuenta registrada','Se ha registrado una cuenta de cliente. El registro no activa acceso de pago.',event_key='registration:'+ident)
+        notify('registration','Nueva cuenta registrada','Se ha registrado una cuenta de cliente. El registro no activa acceso de pago.',event_key='registration:'+ident,member_ids=[ident])
         from email_security import send_security_mail
         return jsonify(ok=True,verification_sent=send_security_mail(ident,'verify') if email else False), 201
     except (ValueError,) + INTEGRITY_ERRORS as exc:
@@ -575,7 +577,7 @@ def accept_invite():
         session.clear()
         session.update(member_id=invitation['member_id'], session_version=0,csrf=secrets.token_urlsafe(32))
         session.permanent = True
-        notify('invitation','Invitación aceptada','Un invitado ha activado su cuenta. Revisa su acceso gratuito en administración.',event_key='invite:'+invitation['member_id'])
+        notify('invitation','Invitación aceptada','Un invitado ha activado su cuenta. Revisa su acceso gratuito en administración.',event_key='invite:'+invitation['member_id'],member_ids=[invitation['member_id']])
         return jsonify(ok=True)
     except ValueError as exc:
         return jsonify(error=str(exc)), 400
@@ -614,7 +616,7 @@ def confirm_payment():
             conn.execute('UPDATE members SET access_until=?,welcome_used=MAX(welcome_used,?) WHERE id=?',(stamp(access_end),1,user['id']))
             conn.execute('INSERT INTO live_entitlements(member_id,trial_until,paid_at) VALUES(?,?,?) ON CONFLICT(member_id) DO UPDATE SET paid_at=excluded.paid_at,revoked_at=NULL',(user['id'],entitlement.get('trial_until') or (slot or {}).get('trial_until'),stamp(now_utc())))
             conn.execute('INSERT INTO streamer_access(member_id,until_at) VALUES(?,?) ON CONFLICT(member_id) DO UPDATE SET until_at=excluded.until_at',(user['id'],stamp(end)))
-        notify('payment','Pago registrado',f'Se ha registrado un pago comprobado de {PLANS[plan]["cents"]/100:.2f} € para el plan {plan}. Consulta usuario, referencia y fechas en el panel privado.',event_key='payment:'+reference)
+        notify('payment','Pago registrado',f'Se ha registrado un pago comprobado de {PLANS[plan]["cents"]/100:.2f} € para el plan {plan}. Consulta usuario, referencia y fechas en el panel privado.',event_key='payment:'+reference,member_ids=[user['id']])
         return jsonify(ok=True, access_until=stamp(access_end))
     except INTEGRITY_ERRORS:
         return jsonify(error='Esta referencia de pago ya se ha utilizado.'), 409

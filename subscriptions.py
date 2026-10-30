@@ -205,7 +205,7 @@ def propose():
   version=conn.execute('SELECT COALESCE(MAX(version),0)+1 AS n FROM subscription_agreements WHERE channel_id=?',(channel['id'],)).fetchone()['n'];ident=secrets.token_hex(16)
   conn.execute('INSERT INTO subscription_agreements(id,channel_id,version,creator_id,moderator_id,price_cents,period,benefits_json,paypal_url,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)',(ident,channel['id'],version,user['id'],mod['member_id'],cents,period,json.dumps(sorted(set(benefits))),payout,stamp(now_utc())))
  from notifications import notify
- notify('creator_offer','Nueva propuesta de suscripción',f'Hay una nueva propuesta de precio y beneficios, versión {version}, pendiente de las tres aprobaciones. Revisa el acuerdo en tu panel.',event_key='creator-offer:'+ident)
+ notify('creator_offer','Nueva propuesta de suscripción',f'Hay una nueva propuesta de precio y beneficios, versión {version}, pendiente de las tres aprobaciones. Revisa el acuerdo en tu panel.',event_key='creator-offer:'+ident,member_ids=[user['id']])
  return jsonify(ok=True,agreement_id=ident,version=version,published=False)
 
 @bp.get('/api/channel-subscriptions/review')
@@ -298,7 +298,7 @@ def confirm_subscription(channel_id):
    conn.execute('INSERT INTO creator_subscriptions(id,channel_id,member_id,agreement_id,amount_cents,benefits_json,starts_at,ends_at,verified_at,verified_by,reference) VALUES(?,?,?,?,?,?,?,?,?,?,?)',(secrets.token_hex(16),channel_id,member['id'],row['id'],expected_price,row['benefits_json'],stamp(start),end,stamp(now_utc()),user['id'],reference))
   from notifications import notify
   import hashlib
-  notify('creator_payment','Ingreso de suscripción confirmado por un creador',f'Un creador ha confirmado un ingreso de {row["price_cents"]/100:.2f} € en su propio PayPal para una suscripción de canal. Este importe no es ingreso ni saldo de electronicama. Revisa los registros privados del canal.',event_key='creator-receipt:'+hashlib.sha256(reference.encode()).hexdigest())
+  notify('creator_payment','Ingreso de suscripción confirmado por un creador',f'Un creador ha confirmado un ingreso de {row["price_cents"]/100:.2f} € en su propio PayPal para una suscripción de canal. Este importe no es ingreso ni saldo de electronicama. Revisa los registros privados del canal.',event_key='creator-receipt:'+hashlib.sha256(reference.encode()).hexdigest(),member_ids=[user['id'],member['id']])
   return jsonify(ok=True,ends_at=end)
  except INTEGRITY_ERRORS:return jsonify(error='Esa referencia ya se utilizó; no se ha duplicado la suscripción.'),409
 

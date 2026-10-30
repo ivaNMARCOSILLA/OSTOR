@@ -50,7 +50,7 @@ def claim():
   if not user_public(user).get('full_service') and not user_public(user).get('live_annual') and not user_public(user).get('live_lifetime'):return jsonify(error='Primero contrata Ol Livis por 25 € al año. Las plazas requieren un pago confirmado.'),409
   number=reserve(conn,user['id'])
   if number is None:return jsonify(error='Las 100 plazas de fundador están ocupadas. Ol Livis sigue disponible con acceso anual ordinario, sin beneficios de fundador.'),409
- notify('founder','Nueva plaza Ol Livis fundadores',f'Se ha reservado la plaza {number} de 100. Acceso anual confirmado. Para conservarla se debe renovar el acceso de 25 € al año y mantener la actividad indicada. Consulta la cuenta en administración.',event_key='founder:'+user['id'])
+ notify('founder','Nueva plaza Ol Livis fundadores',f'Se ha reservado la plaza {number} de 100. Acceso anual confirmado. Para conservarla se debe renovar el acceso de 25 € al año y mantener la actividad indicada. Consulta la cuenta en administración.',event_key='founder:'+user['id'],member_ids=[user['id']])
  return jsonify(ok=True,number=number,already_claimed=False,lifetime=False,payment_required=True)
 
 @bp.post('/api/admin/founders/revoke')

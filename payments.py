@@ -254,6 +254,13 @@ def verified_event(raw,signature,secret):
  if not isinstance(event,dict) or not isinstance(event.get('id'),str):raise ValueError('event')
  return event
 
+def notification_members(order):
+ ids=[order['member_id']]
+ if order['channel_id']:
+  with database() as c:channel=c.execute('SELECT member_id FROM streamer_channels WHERE id=?',(order['channel_id'],)).fetchone()
+  if channel:ids.append(channel['member_id'])
+ return ids
+
 def assign_confirmed_founders(c):
  """Caller holds the payment/account transaction. Never infer a payment from a return URL."""
  from founder_slots import release_expired,reserve
@@ -302,7 +309,7 @@ def reconcile_member(user):
   if changed:
    send_annual_access_emails()
    from notifications import notify
-   notify('payment','Pago sincronizado con Stripe','Stripe ha confirmado un pago anual de 25 €. El acceso está activo y la plaza se asigna según disponibilidad.',event_key='stripe-order:'+order['id'])
+   notify('payment','Pago sincronizado con Stripe','Stripe ha confirmado un pago anual de 25 €. El acceso está activo y la plaza se asigna según disponibilidad.',event_key='stripe-order:'+order['id'],member_ids=notification_members(order))
  except (PaymentError,ValueError,TypeError):return jsonify(error='No se ha podido confirmar todavía el pago con Stripe. Tu pedido se conserva; no repitas el cobro.'),409
  return jsonify(ok=True,confirmed=confirmed,pending=False)
 
@@ -377,7 +384,7 @@ def webhook(scope):
  if changed:
   send_annual_access_emails()
   from notifications import notify
-  notify('payment' if order['kind'] in {'platform','platform_annual'} else 'creator_payment','Pago confirmado por Stripe','Stripe ha confirmado un pago de '+format(order['amount_cents']/100,'.2f')+' €. Consulta el detalle privado en electronicama y en el gestor.',event_key='stripe-order:'+order['id'])
+  notify('payment' if order['kind'] in {'platform','platform_annual'} else 'creator_payment','Pago confirmado por Stripe','Stripe ha confirmado un pago de '+format(order['amount_cents']/100,'.2f')+' €. Consulta el detalle privado en electronicama y en el gestor.',event_key='stripe-order:'+order['id'],member_ids=notification_members(order))
  return jsonify(ok=True)
 
 def send_annual_access_emails():

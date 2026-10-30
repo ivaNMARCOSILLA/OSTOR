@@ -122,8 +122,8 @@ def post_text(channel_id):
     mail_sent=False
     if report_snapshot:
         detail='Denuncia '+ident+'\n'+json.dumps(report_snapshot,ensure_ascii=False,indent=2)+'\n\nConsulta privada: https://electronicama.com/account#moderation-history\nGrabaciones: https://electronicama.com/account#live-recordings-admin\nNo se ha confirmado una infracción: requiere revisión administrativa.'
-        mail_sent=bool(notify('moderation','Nueva denuncia · '+ident[:8],detail,event_key='community-report:'+ident))
-    elif blocked:notify('moderation','Aviso de moderación','Hay un nuevo aviso en un directo. Revisa el contexto en administración.')
+        mail_sent=bool(notify('moderation','Nueva denuncia · '+ident[:8],detail,event_key='community-report:'+ident,member_ids=[user['id'],channel['member_id'],report_snapshot['reported']['id']]))
+    elif blocked:notify('moderation','Aviso de moderación','Hay un nuevo aviso en un directo. Revisa el contexto en administración.',member_ids=[user['id'],channel['member_id']])
     warning=('Aviso de moderación: se ha detectado una expresión no permitida. La reiteración puede dar lugar a suspensión tras revisión de administración.' if strikes<3 else 'Avisos reiterados: el caso queda señalado para revisión de una posible suspensión por administración.') if blocked else ''
     return jsonify(report_id=ident if report_snapshot else None,mail_sent=mail_sent,accepted=not blocked,blocked=blocked,warning=warning,warnings_24h=strikes,review_required=bool(blocked and (strikes>=3 or category in {'sexual_minors','threat','illicit_trade'})),reported=kind=='report')
 
