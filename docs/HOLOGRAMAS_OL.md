@@ -1,6 +1,6 @@
 # Hologramas
 
-Sección integrada después de la colección y disponible en el menú móvil y de escritorio. Nombre público: Hologramas. Incluye el mensaje en catalán proporcionado por el creador y su crédito textual. La foto nueva necesita el archivo original para publicarse; no se sustituye por una recreación.
+Sección integrada después de la colección y disponible en el menú móvil y de escritorio. Nombre público: Hologramas. Conserva el crédito textual del creador; la frase personal anterior se ha retirado a petición del autor. La foto nueva necesita el archivo original para publicarse; no se sustituye por una recreación.
 
 Adaptación del código aportado a JavaScript modular, sin añadir React ni un paso de compilación a Ol. Las 256 opciones son variantes generativas 3D y una transición final al cuadrado; sus rótulos no presentan las formas como pruebas científicas ni como proyecciones físicas de 180 dimensiones. Incluye globo, malla/sólido, pausa, velocidad, controles por ratón, tacto y teclado.
 

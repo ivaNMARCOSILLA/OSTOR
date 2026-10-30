@@ -159,7 +159,7 @@ def public_directory():
     from operations import premiere
     if premiere() and not private_preview_allowed():return jsonify(video_ready=False,channels=[],categories=LIVE_CATEGORIES,premiere=True)
     with database() as conn:
-        rows=conn.execute('SELECT c.*,ar.adult_content,ar.version AS adult_version,(SELECT COUNT(*) FROM live_channel_views v WHERE v.channel_id=c.id) AS view_count,m.username,o.category,o.featured,f.number AS founder_number,sg.mode AS badge_mode,sg.letter AS badge_letter,sg.caption AS badge_caption,sg.audio_json AS badge_audio FROM streamer_channels c JOIN members m ON m.id=c.member_id LEFT JOIN adult_channel_rules ar ON ar.channel_id=c.id LEFT JOIN live_channel_settings o ON o.channel_id=c.id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN founder_signatures sg ON sg.member_id=m.id WHERE c.live_until>? ORDER BY view_count DESC,COALESCE(o.featured,0) DESC,c.updated_at DESC LIMIT 100',(stamp(now_utc()),)).fetchall()
+        rows=conn.execute('SELECT c.*,ar.adult_content,ar.version AS adult_version,(SELECT COUNT(*) FROM live_channel_views v WHERE v.channel_id=c.id) AS view_count,m.username,o.category,o.featured,f.number AS founder_number,sg.mode AS badge_mode,sg.letter AS badge_letter,sg.caption AS badge_caption,sg.audio_json AS badge_audio FROM streamer_channels c JOIN members m ON m.id=c.member_id LEFT JOIN adult_channel_rules ar ON ar.channel_id=c.id LEFT JOIN live_channel_settings o ON o.channel_id=c.id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN founder_signatures sg ON sg.member_id=m.id WHERE c.live_until>? AND NOT EXISTS(SELECT 1 FROM member_archives a WHERE a.member_id=m.id AND a.restored_at IS NULL) ORDER BY view_count DESC,COALESCE(o.featured,0) DESC,c.updated_at DESC LIMIT 100',(stamp(now_utc()),)).fetchall()
     from subscriptions import decorate
     return jsonify(video_ready=live_ready(),channels=decorate([channel_public(row) for row in rows if not is_abusive(row['title']+' '+row['bio']+' '+row['username'])]),categories=LIVE_CATEGORIES)
 
@@ -199,7 +199,7 @@ def _feature_channel():
 def channels():
     user=get_user()
     with database() as conn:
-        rows=conn.execute('SELECT c.*,ar.adult_content,ar.version AS adult_version,(SELECT COUNT(*) FROM live_channel_views v WHERE v.channel_id=c.id) AS view_count,m.username,o.category,o.featured,f.number AS founder_number,sg.mode AS badge_mode,sg.letter AS badge_letter,sg.caption AS badge_caption,sg.audio_json AS badge_audio FROM streamer_channels c JOIN members m ON m.id=c.member_id LEFT JOIN adult_channel_rules ar ON ar.channel_id=c.id LEFT JOIN live_channel_settings o ON o.channel_id=c.id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN founder_signatures sg ON sg.member_id=m.id WHERE c.live_until>? ORDER BY view_count DESC,COALESCE(o.featured,0) DESC,c.updated_at DESC LIMIT 60',(stamp(now_utc()),)).fetchall()
+        rows=conn.execute('SELECT c.*,ar.adult_content,ar.version AS adult_version,(SELECT COUNT(*) FROM live_channel_views v WHERE v.channel_id=c.id) AS view_count,m.username,o.category,o.featured,f.number AS founder_number,sg.mode AS badge_mode,sg.letter AS badge_letter,sg.caption AS badge_caption,sg.audio_json AS badge_audio FROM streamer_channels c JOIN members m ON m.id=c.member_id LEFT JOIN adult_channel_rules ar ON ar.channel_id=c.id LEFT JOIN live_channel_settings o ON o.channel_id=c.id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN founder_signatures sg ON sg.member_id=m.id WHERE c.live_until>? AND NOT EXISTS(SELECT 1 FROM member_archives a WHERE a.member_id=m.id AND a.restored_at IS NULL) ORDER BY view_count DESC,COALESCE(o.featured,0) DESC,c.updated_at DESC LIMIT 60',(stamp(now_utc()),)).fetchall()
     own=own_channel()
     from subscriptions import decorate
     from recordings import configuration as recording_configuration
@@ -258,7 +258,7 @@ def room_access(channel_id):
     # Presence expiry is a directory hint, not an instruction to close WebRTC.
     user=get_user()
     with database() as conn:
-        channel=conn.execute('SELECT * FROM streamer_channels WHERE id=?',(channel_id,)).fetchone()
+        channel=conn.execute('SELECT * FROM streamer_channels WHERE id=? AND NOT EXISTS(SELECT 1 FROM member_archives a WHERE a.member_id=streamer_channels.member_id AND a.restored_at IS NULL)',(channel_id,)).fetchone()
         if not channel:return jsonify(error='El canal ya no existe.',code='channel_removed'),404
         from age_policy import gate
         restricted=gate(conn,channel_id,user)
@@ -285,7 +285,7 @@ def viewer_connected(channel,user):
 def count_view(channel_id):
     user=get_user();day=now_utc().date().isoformat()
     with database() as conn:
-        channel=conn.execute('SELECT * FROM streamer_channels WHERE id=?',(channel_id,)).fetchone()
+        channel=conn.execute('SELECT * FROM streamer_channels WHERE id=? AND NOT EXISTS(SELECT 1 FROM member_archives a WHERE a.member_id=streamer_channels.member_id AND a.restored_at IS NULL)',(channel_id,)).fetchone()
         if not channel or not channel['live_until'] or channel['live_until']<=stamp(now_utc()):return jsonify(error='Este canal no está en directo.'),404
         from age_policy import gate
         restricted=gate(conn,channel_id,user)
@@ -304,7 +304,7 @@ def token(channel_id):
     if not allow_attempt('live-room-token',limit=30):return jsonify(error='Demasiadas conexiones seguidas. Espera un minuto.'),429
     if not live_ready(): return jsonify(error='Las emisiones todavía no están activadas. No se ha cobrado ningún alta de Ol Livis Creador.',code='live_not_configured'),503
     with database() as conn:
-        channel=conn.execute('SELECT * FROM streamer_channels WHERE id=?',(channel_id,)).fetchone()
+        channel=conn.execute('SELECT * FROM streamer_channels WHERE id=? AND NOT EXISTS(SELECT 1 FROM member_archives a WHERE a.member_id=streamer_channels.member_id AND a.restored_at IS NULL)',(channel_id,)).fetchone()
     if channel and is_abusive(channel['title']+' '+channel['bio']): return jsonify(error='El canal debe corregir su título o presentación antes de emitir.'),409
     if not channel: return jsonify(error='Este canal no existe.'),404
     publish=(request.get_json(silent=True) or {}).get('publish') is True
@@ -325,7 +325,7 @@ def token(channel_id):
             if not watch_allowed(conn,channel,user):return jsonify(error='Este directo está reservado a suscriptores del creador.',code='creator_subscription_required'),403
     with database() as conn:
         conn.execute('BEGIN IMMEDIATE')
-        channel=conn.execute('SELECT * FROM streamer_channels WHERE id=?',(channel_id,)).fetchone()
+        channel=conn.execute('SELECT * FROM streamer_channels WHERE id=? AND NOT EXISTS(SELECT 1 FROM member_archives a WHERE a.member_id=streamer_channels.member_id AND a.restored_at IS NULL)',(channel_id,)).fetchone()
         # A new room invalidates all prior-session guest tokens without trusting clients.
         # A transient directory heartbeat expiry must keep the existing session.
         if publish and not guest and channel['live_until'] is None:
@@ -334,7 +334,7 @@ def token(channel_id):
             conn.execute('INSERT INTO live_broadcast_sessions(channel_id,started_at) VALUES(?,?) ON CONFLICT(channel_id) DO UPDATE SET started_at=excluded.started_at',(channel_id,started))
             conn.execute('DELETE FROM live_guest_invites WHERE channel_id=?',(channel_id,))
             conn.execute('DELETE FROM live_channel_thumbnails WHERE channel_id=?',(channel_id,))
-            channel=conn.execute('SELECT * FROM streamer_channels WHERE id=?',(channel_id,)).fetchone()
+            channel=conn.execute('SELECT * FROM streamer_channels WHERE id=? AND NOT EXISTS(SELECT 1 FROM member_archives a WHERE a.member_id=streamer_channels.member_id AND a.restored_at IS NULL)',(channel_id,)).fetchone()
         if guest and not guest_allowed(conn,channel,user):return jsonify(error='Esta invitación ya no está vigente.'),403
         broadcast=conn.execute('SELECT started_at FROM live_broadcast_sessions WHERE channel_id=?',(channel_id,)).fetchone()
     return jsonify(session_start=broadcast['started_at'] if broadcast else None,url=os.environ['LIVEKIT_URL'].strip(),token=mint_token(user,channel,publish))
@@ -363,6 +363,8 @@ def presence():
             return jsonify(error='La grabación obligatoria no está preparada o necesita revisión de administración. No se publicará el directo.',code='recording_required'),409
     with database() as conn:
         conn.execute('BEGIN IMMEDIATE')
+        from account_archives import is_archived
+        if is_archived(conn,get_user()['id']):return jsonify(error='Esta cuenta está dada de baja.'),403
         if live and channel:
             conn.execute('INSERT INTO live_broadcast_sessions(channel_id,started_at) VALUES(?,?) ON CONFLICT(channel_id) DO NOTHING',(channel['id'],stamp(now_utc())))
         if not live and channel:
@@ -437,7 +439,7 @@ def invite_guest():
     action=data.get('action','invite')
     with database() as conn:
         conn.execute('BEGIN IMMEDIATE')
-        current=conn.execute('SELECT * FROM streamer_channels WHERE id=?',(channel['id'],)).fetchone()
+        current=conn.execute('SELECT * FROM streamer_channels WHERE id=? AND NOT EXISTS(SELECT 1 FROM member_archives a WHERE a.member_id=streamer_channels.member_id AND a.restored_at IS NULL)',(channel['id'],)).fetchone()
         session=conn.execute('SELECT started_at FROM live_broadcast_sessions WHERE channel_id=?',(channel['id'],)).fetchone()
         if not session or current['live_until'] is None or (action=='invite' and current['live_until']<=stamp(now_utc())):return jsonify(error='Inicia el directo antes de gestionar invitados.'),409
         member=conn.execute('SELECT id FROM members WHERE LOWER(username)=LOWER(?)',(str(data.get('username','')).strip(),)).fetchone()

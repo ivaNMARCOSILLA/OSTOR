@@ -31,7 +31,7 @@ class PostgresMembershipTests(unittest.TestCase):
         ready=patch('streamers.streamer_sales_ready',return_value=True);ready.start();self.addCleanup(ready.stop)
         self.app=application.app
         with self.app.app_context(),m.database() as connection:
-            for table in ['visitor_sessions','visitor_devices','live_channel_thumbnails','community_likes','live_guest_invites','live_broadcast_sessions','live_recordings','community_report_details','interface_revisions','adult_age_declarations','adult_channel_rules','live_channel_views','community_retention_clock','stripe_order_names','annual_access_emails','fan_aliases','stripe_reversals','stripe_events','stripe_orders','stripe_connect_states','stripe_accounts','ol_supervisors','ol_operations','moderator_permissions','two_factor_recovery','member_two_factor','community_audiences','creator_subscriptions','channel_subscription_settings','subscription_approvals','subscription_agreements','pricing_moderators','founder_slot_history','live_launch','creator_daily_activity','founder_activity','live_entitlements','human_challenges','promotion_metrics','online_presence','founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:
+            for table in ['member_archive_events','member_archives','visitor_sessions','visitor_devices','live_channel_thumbnails','community_likes','live_guest_invites','live_broadcast_sessions','live_recordings','community_report_details','interface_revisions','adult_age_declarations','adult_channel_rules','live_channel_views','community_retention_clock','stripe_order_names','annual_access_emails','fan_aliases','stripe_reversals','stripe_events','stripe_orders','stripe_connect_states','stripe_accounts','ol_supervisors','ol_operations','moderator_permissions','two_factor_recovery','member_two_factor','community_audiences','creator_subscriptions','channel_subscription_settings','subscription_approvals','subscription_agreements','pricing_moderators','founder_slot_history','live_launch','creator_daily_activity','founder_activity','live_entitlements','human_challenges','promotion_metrics','online_presence','founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:
                 connection.execute('DELETE FROM '+table)
         with self.app.app_context():
             m.create_admin('pg-admin','postgres-admin-password-123')
@@ -277,7 +277,7 @@ class PostgresMembershipTests(unittest.TestCase):
                 legacy_payment(source,admin,ident,'welcome','SQLITE-MIGRATE-001')
                 expected=client.get('/api/account/me').json['user']['access_until']
             with self.app.app_context(),m.database() as connection:
-                for table in ['visitor_sessions','visitor_devices','live_channel_thumbnails','community_likes','live_guest_invites','live_broadcast_sessions','live_recordings','community_report_details','interface_revisions','adult_age_declarations','adult_channel_rules','live_channel_views','community_retention_clock','stripe_order_names','annual_access_emails','fan_aliases','stripe_reversals','stripe_events','stripe_orders','stripe_connect_states','stripe_accounts','ol_supervisors','ol_operations','moderator_permissions','two_factor_recovery','member_two_factor','community_audiences','creator_subscriptions','channel_subscription_settings','subscription_approvals','subscription_agreements','pricing_moderators','founder_slot_history','live_launch','creator_daily_activity','founder_activity','live_entitlements','human_challenges','promotion_metrics','founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:connection.execute('DELETE FROM '+table)
+                for table in ['member_archive_events','member_archives','visitor_sessions','visitor_devices','live_channel_thumbnails','community_likes','live_guest_invites','live_broadcast_sessions','live_recordings','community_report_details','interface_revisions','adult_age_declarations','adult_channel_rules','live_channel_views','community_retention_clock','stripe_order_names','annual_access_emails','fan_aliases','stripe_reversals','stripe_events','stripe_orders','stripe_connect_states','stripe_accounts','ol_supervisors','ol_operations','moderator_permissions','two_factor_recovery','member_two_factor','community_audiences','creator_subscriptions','channel_subscription_settings','subscription_approvals','subscription_agreements','pricing_moderators','founder_slot_history','live_launch','creator_daily_activity','founder_activity','live_entitlements','human_challenges','promotion_metrics','founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:connection.execute('DELETE FROM '+table)
             counts=migrate(Path(folder)/'members.sqlite3',self.app)
             self.assertEqual(counts['members'],2);self.assertEqual(counts['payments'],1)
             migrated=self.app.test_client()
@@ -361,5 +361,41 @@ class PostgresMembershipTests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/admin/visits').status_code,403)
         self.assertEqual(self.post(self.client,'/api/visits/consent',{'allowed':False}).status_code,200)
         self.assertEqual(self.admin.get('/api/admin/visits').json['total'],0)
+
+    def test_account_archive_is_persistent_reversible_and_retains_paid_history(self):
+        self.assertEqual(self.grant(self.admin,'monthly','PG-ARCHIVE-PAYMENT').status_code,200)
+        ident=self.member['id']
+        original_cookie=self.client.get_cookie('session').value
+        with self.app.app_context(),m.database() as conn:
+            before=dict(conn.execute('SELECT password_hash,access_until FROM members WHERE id=?',(ident,)).fetchone())
+            payment=dict(conn.execute('SELECT * FROM payments WHERE member_id=?',(ident,)).fetchone())
+        path='/api/admin/members/archive'
+        result=self.post(self.admin,path,{'member_id':ident,'archived':True})
+        self.assertEqual(result.status_code,200,result.json)
+        self.assertIsNone(self.client.get('/api/account/me').json['user'])
+        self.assertNotIn(ident,{row['id'] for row in self.admin.get('/api/admin/members').json['members']})
+        included={row['id']:row for row in self.admin.get('/api/admin/members?archived=1').json['members']}
+        self.assertTrue(included[ident]['archived'])
+        with self.app.app_context(),m.database() as conn:
+            self.assertEqual(dict(conn.execute('SELECT password_hash,access_until FROM members WHERE id=?',(ident,)).fetchone()),before)
+            self.assertEqual(dict(conn.execute('SELECT * FROM payments WHERE member_id=?',(ident,)).fetchone()),payment)
+        fresh=Flask('archive_persistence',static_folder=self.app.static_folder)
+        m.install(fresh)
+        old_device=fresh.test_client();old_device.set_cookie('session',original_cookie)
+        self.assertIsNone(old_device.get('/api/account/me').json['user'])
+        self.assertEqual(self.post(self.admin,path,{'member_id':ident,'archived':False}).status_code,200)
+        self.assertIsNone(old_device.get('/api/account/me').json['user'])
+        self.assertEqual(self.post(self.client,'/api/account/login',{'username':'pg-client','password':'postgres-client-password-123'}).status_code,200)
+        self.assertEqual(self.client.get('/api/account/me').json['user']['access_until'],before['access_until'])
+
+    def test_simultaneous_account_archives_record_one_closure(self):
+        second_admin=self.admin_client()
+        path='/api/admin/members/archive';body={'member_id':self.member['id'],'archived':True}
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            jobs=[pool.submit(self.post,client,path,body) for client in (self.admin,second_admin)]
+            self.assertEqual([job.result().status_code for job in jobs],[200,200])
+        with self.app.app_context(),m.database() as conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) AS n FROM member_archive_events WHERE member_id=? AND action='archive'",(self.member['id'],)).fetchone()['n'],1)
+            self.assertEqual(conn.execute('SELECT session_version FROM members WHERE id=?',(self.member['id'],)).fetchone()['session_version'],1)
 
 if __name__=='__main__':unittest.main(verbosity=2)

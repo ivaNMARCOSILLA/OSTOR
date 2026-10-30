@@ -37,7 +37,10 @@ def profile(c,member_id):
 def issue(member_id,purpose):
  if not mail_ready():return False
  with database() as c:
-  c.execute('BEGIN IMMEDIATE');c.execute('DELETE FROM email_tokens WHERE expires_at<=?',(stamp(now_utc()),));p=profile(c,member_id)
+  c.execute('BEGIN IMMEDIATE')
+  from account_archives import is_archived
+  if is_archived(c,member_id):return False
+  c.execute('DELETE FROM email_tokens WHERE expires_at<=?',(stamp(now_utc()),));p=profile(c,member_id)
   if not p['email'] or (purpose=='reset' and not p['email_verified']):return False
   recent=c.execute('SELECT token_hash FROM email_tokens WHERE member_id=? AND purpose=? AND created_at>?',(member_id,purpose,stamp(now_utc()-timedelta(seconds=60)))).fetchone()
   if recent:return True
@@ -64,6 +67,9 @@ def consume(c,token,purpose):
  hashed=hashlib.sha256(token.encode()).hexdigest()
  row=c.execute('SELECT t.*,m.session_version AS current_version,p.email AS current_email,p.email_verified FROM email_tokens t JOIN members m ON m.id=t.member_id JOIN member_profiles p ON p.member_id=t.member_id WHERE t.token_hash=? AND t.purpose=?',(hashed,purpose)).fetchone()
  if not row:return None
+ from account_archives import is_archived
+ if is_archived(c,row['member_id']):
+  c.execute('DELETE FROM email_tokens WHERE token_hash=?',(hashed,));return None
  c.execute('DELETE FROM email_tokens WHERE token_hash=?',(hashed,))
  if row['expires_at']<=stamp(now_utc()) or row['session_version']!=row['current_version'] or row['email']!=row['current_email']:return None
  return row

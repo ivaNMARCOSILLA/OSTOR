@@ -60,10 +60,15 @@ async function refresh() {
   }
   if (current.role === 'admin') await loadAdmin();
 }
+let adminLoadRevision=0;
 async function loadAdmin() {
-  const data = await api('/api/admin/members'); members = data.members; payments = data.payments;
+  const revision=++adminLoadRevision,showArchived=$('show-archived-members').checked;
+  const data = await api('/api/admin/members'+(showArchived?'?archived=1':''));
+  if(revision!==adminLoadRevision||current?.role!=='admin'||showArchived!==$('show-archived-members').checked)return;
+  members = data.members; payments = data.payments;
   renderMembers();
   if($('invitation-history').open)await loadInvitations();else{const summary=await api('/api/admin/invitations?summary=1');$('clients-invitation-count').textContent=`${summary.pending??0} invitaciones no aceptadas · ${summary.total} registros en el historial.`;}
+  if(revision!==adminLoadRevision||current?.role!=='admin')return;
   $('admin-payments').replaceChildren();
   for (const payment of payments) {
     const row=document.createElement('tr');
@@ -74,12 +79,55 @@ async function loadAdmin() {
   await loadStatistics();
 }
 const paymentSyncResults=new Map(),paymentSyncBusy=new Set();
+const accountArchiveBusy=new Set(),accountArchiveResults=new Map();
+function accountArchiveStatus(message,visible=false){
+ const node=$('clients-account-status');node.textContent=message;
+ if(visible)node.scrollIntoView({block:'nearest'});
+}
+function archiveAccountButton(member){
+ const archived=Boolean(member.archived),button=text('button',accountArchiveBusy.has(member.id)?'Actualizando cuenta…':archived?'Restaurar cuenta':'Dar de baja cuenta');
+ button.type='button';button.className='secondary';button.disabled=accountArchiveBusy.has(member.id);button.dataset.memberArchive=member.id;
+ button.addEventListener('click',async()=>{
+  if(accountArchiveBusy.has(member.id))return;
+  const question=archived?`¿Restaurar la cuenta ${member.username}? Sus permisos se comprobarán de nuevo al iniciar sesión.`:`¿Dar de baja la cuenta ${member.username}? Se cerrarán sus sesiones y se retirará del listado activo. Se conservarán los historiales de pagos e incidencias.`;
+  if(!confirm(question))return;
+  accountArchiveBusy.add(member.id);accountArchiveResults.set(member.id,'Actualizando la cuenta de '+member.username+'…');renderMembers();accountArchiveStatus(accountArchiveResults.get(member.id));
+  try{
+   const result=await api('/api/admin/members/archive',{member_id:member.id,archived:!archived});
+   const message=(archived?`Cuenta ${member.username} restaurada. Puede volver a iniciar sesión.`:`Cuenta ${member.username} dada de baja. Sus sesiones están cerradas y sus historiales se conservan.`)+(!archived&&result.live_disconnected===false?' La desconexión de la sala de vídeo está pendiente. Comprueba el directo.':'');
+   accountArchiveResults.set(member.id,message);
+   try{await loadAdmin();}catch(error){accountArchiveResults.set(member.id,message+' No se pudo actualizar la lista: '+error.message);}
+   accountArchiveStatus(accountArchiveResults.get(member.id),true);
+  }catch(error){accountArchiveResults.set(member.id,'No se pudo actualizar '+member.username+': '+error.message);accountArchiveStatus(accountArchiveResults.get(member.id),true);}
+  finally{accountArchiveBusy.delete(member.id);renderMembers();}
+ });
+ return button;
+}
+function deleteAccountButton(member){
+ const button=text('button',accountArchiveBusy.has(member.id)?'Actualizando cuenta…':'Eliminar cuenta sin pagos');
+ button.type='button';button.className='secondary';button.disabled=accountArchiveBusy.has(member.id);button.dataset.memberDelete=member.id;
+ button.addEventListener('click',async()=>{
+  if(accountArchiveBusy.has(member.id))return;
+  if(!confirm(`¿Eliminar definitivamente la cuenta ${member.username}? Se borrarán su usuario y sus datos asociados. Esta acción no se puede deshacer.`))return;
+  accountArchiveBusy.add(member.id);accountArchiveResults.set(member.id,'Eliminando la cuenta de '+member.username+'…');renderMembers();accountArchiveStatus(accountArchiveResults.get(member.id));
+  try{
+   const result=await api('/api/admin/members/delete',{member_id:member.id});
+   const message=`Cuenta ${member.username} eliminada definitivamente.`+(result.live_disconnected===false?' La desconexión de la sala de vídeo está pendiente. Comprueba el directo.':'');
+   accountArchiveResults.set(member.id,message);members=members.filter(item=>item.id!==member.id);renderMembers();
+   try{await loadAdmin();}catch(error){accountArchiveResults.set(member.id,message+' No se pudo actualizar la lista: '+error.message);}
+   accountArchiveStatus(accountArchiveResults.get(member.id),true);
+  }catch(error){accountArchiveResults.set(member.id,'No se pudo eliminar '+member.username+': '+error.message);accountArchiveStatus(accountArchiveResults.get(member.id),true);}
+  finally{accountArchiveBusy.delete(member.id);renderMembers();}
+ });
+ return button;
+}
 function renderMembers(){
-  const clients=members.filter(member=>member.role!=='admin'&&member.account_activated!==false);
+  const clients=members.filter(member=>!member.archived&&member.role!=='admin'&&member.account_activated!==false);
   $('admin-counters').textContent=`${clients.length} clientes · ${clients.filter(member=>member.active).length} con Ol Livis · ${clients.filter(member=>member.complimentary).length} amigos con Ol Livis gratuito`;
   const query=$('admin-member-search').value.trim().toLowerCase(),filter=$('admin-client-filter').value;
   const matches=members.filter(member=>{
-   if(member.account_activated===false&&!$('show-unactivated-members').checked)return false;
+   if(member.archived&&!$('show-archived-members').checked)return false;
+   if(!member.archived&&member.account_activated===false&&!$('show-unactivated-members').checked)return false;
    if(![member.username,member.nickname,member.legal_name].filter(Boolean).join(' ').toLowerCase().includes(query))return false;
    return filter==='all'||filter==='paid'&&member.live_annual||filter==='founder'&&member.founder_active||filter==='participant'&&member.live_annual&&!member.founder_active||filter==='free'&&member.complimentary||filter==='unpaid'&&!member.last_payment||filter==='expired'&&!member.active&&member.access_until&&new Date(member.access_until)<new Date();
   });
@@ -91,8 +139,14 @@ function renderMembers(){
   $('admin-members').replaceChildren();
   for (const member of matches.slice((memberPage-1)*25,memberPage*25)) {
     const row = document.createElement('tr');
-    for (const value of [member.username+(member.nickname&&member.nickname!==member.username?' · '+member.nickname:''), member.legal_name||'Pendiente de indicar', member.account_activated===false?'Sin activar':member.role === 'admin' ? 'Administrador' : member.founder_active ? 'Fundador n.º '+member.founder_number : member.complimentary ? 'Amigo · gratuito' : member.live_annual ? 'Participante Ol Livis' : member.streamer_active ? 'Ol Livis Creador' : 'Cliente', member.account_activated===false?'Cuenta sin activar':member.active ? 'Ol Livis activo' : 'Cuenta gratuita', member.account_activated===false?'Pendiente de activar':member.full_service?'Acceso completo gratuito · sin vencimiento':member.live_annual?date(member.access_until):member.founder_active ? 'Fundador · actividad requerida' : member.live_lifetime ? 'Sin vencimiento · pago único' : member.trial_active ? 'Prueba hasta '+date(member.live_trial_until) : member.complimentary ? 'Sin vencimiento · invitación gratuita' : member.streamer_until ? `electronicama: ${date(member.access_until)} · Ol Livis Creador: ${date(member.streamer_until)}` : date(member.access_until), member.last_payment?`${(member.last_payment.amount_cents/100).toFixed(2)} € · ${date(member.last_payment.verified_at)}`:'Sin pago registrado']) row.append(text('td', value));
+    row.dataset.memberId=member.id;
+    for (const value of [member.username+(member.nickname&&member.nickname!==member.username?' · '+member.nickname:''), member.legal_name||'Pendiente de indicar', member.account_activated===false?'Sin activar':member.role === 'admin' ? 'Administrador' : member.founder_active ? 'Fundador n.º '+member.founder_number : member.complimentary ? 'Amigo · gratuito' : member.live_annual ? 'Participante Ol Livis' : member.streamer_active ? 'Ol Livis Creador' : 'Cliente', member.archived?'Cuenta dada de baja':member.account_activated===false?'Cuenta sin activar':member.active ? 'Ol Livis activo' : 'Cuenta gratuita', member.archived?'Baja: '+date(member.archived_at):member.account_activated===false?'Pendiente de activar':member.full_service?'Acceso completo gratuito · sin vencimiento':member.live_annual?date(member.access_until):member.founder_active ? 'Fundador · actividad requerida' : member.live_lifetime ? 'Sin vencimiento · pago único' : member.trial_active ? 'Prueba hasta '+date(member.live_trial_until) : member.complimentary ? 'Sin vencimiento · invitación gratuita' : member.streamer_until ? `electronicama: ${date(member.access_until)} · Ol Livis Creador: ${date(member.streamer_until)}` : date(member.access_until), member.last_payment?`${(member.last_payment.amount_cents/100).toFixed(2)} € · ${date(member.last_payment.verified_at)}`:'Sin pago registrado']) row.append(text('td', value));
     const actions = document.createElement('td');
+    const archiveFeedback=text('p',accountArchiveResults.get(member.id)||'');archiveFeedback.className='client-payment-sync-status';archiveFeedback.setAttribute('role','status');archiveFeedback.setAttribute('aria-live','polite');
+    if(member.archived){
+      if(member.role!=='admin'&&member.id!==current?.id){actions.append(archiveAccountButton(member));if(!member.last_payment)actions.append(deleteAccountButton(member));}
+      actions.append(archiveFeedback);row.append(actions);$('admin-members').append(row);continue;
+    }
     if(member.role!=='admin'){
       const sync=text('button',paymentSyncBusy.has(member.id)?'Comprobando Stripe…':'Sincronizar pago con Stripe');sync.className='secondary';sync.type='button';sync.disabled=paymentSyncBusy.has(member.id);
       const syncStatus=text('p',paymentSyncResults.get(member.id)||'');syncStatus.className='client-payment-sync-status';syncStatus.dataset.memberId=member.id;syncStatus.setAttribute('role','status');syncStatus.setAttribute('aria-live','polite');
@@ -115,6 +169,7 @@ function renderMembers(){
       friend.addEventListener('click',async()=>{friend.disabled=true;try{await api('/api/admin/friend-access',{member_id:member.id,active:!member.complimentary});await refresh();status(member.complimentary?'Acceso gratuito retirado. Se conserva cualquier periodo ya pagado.':'Acceso gratuito concedido sin registrar ningún pago.');}catch(error){status(error.message);}finally{friend.disabled=false;}});actions.append(friend);
       const revoke = text('button', 'Revocar Ol Livis'); revoke.type='button';
       revoke.addEventListener('click', async () => { if (!confirm(`¿Revocar Ol Livis de ${member.username}?`)) return; try { await api('/api/admin/revoke', {member_id:member.id}); await refresh(); status('Ol Livis revocado y sesiones cerradas. La música sigue siendo gratuita.'); } catch(error){status(error.message);} }); actions.append(revoke);
+      if(member.id!==current?.id){actions.append(archiveAccountButton(member));if(!member.last_payment)actions.append(deleteAccountButton(member));actions.append(archiveFeedback);}
     }
     row.append(actions); $('admin-members').append(row);
   }
@@ -148,6 +203,7 @@ $('clients-clear-pending').addEventListener('click',()=>clearInvitations(true));
 $('clients-clear-history').addEventListener('click',()=>clearInvitations(false));
 $('clients-show-history').addEventListener('click',()=>{const panel=$('invitation-history');panel.open=true;panel.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});panel.querySelector('summary').focus();});
 $('show-unactivated-members').addEventListener('change',()=>{memberPage=1;renderMembers();});
+$('show-archived-members').addEventListener('change',()=>{memberPage=1;loadAdmin().catch(error=>accountArchiveStatus('No se pudo actualizar la lista: '+error.message,true));});
 let moderationPage=1;
 async function loadModeration(){const data=await api('/api/admin/moderation?page='+moderationPage+'&flagged='+$('moderation-filter').value);moderationPage=data.page;$('moderation-count').textContent=`${data.total} registros · conservación: ${data.retention_days} días`;$('moderation-page').textContent=`Página ${data.page} de ${data.pages}`;$('moderation-prev').disabled=data.page===1;$('moderation-next').disabled=data.page===data.pages;$('admin-moderation').replaceChildren();const categories={insult:'Insulto',threat:'Amenaza',sexual_minors:'Menores / contenido sexual',illicit_trade:'Oferta ilegal',report:'Denuncia'};for(const record of data.records){const row=document.createElement('tr');for(const value of [date(record.created_at),record.username+' / '+record.channel,record.kind==='sticker'?'Sticker':record.kind==='transcript'?'Voz transcrita':record.kind==='report'?'Denuncia':'Comentario',categories[record.category]||'Sin detección',record.body])row.append(text('td',value));if(record.report){const details=document.createElement('details');details.append(text('summary','Datos completos de la denuncia'));const context=text('pre',JSON.stringify(record.report,null,2));context.className='moderation-report-context';details.append(context);row.lastElementChild.append(details);}$('admin-moderation').append(row);}}
 $('moderation-history').addEventListener('toggle',()=>{if($('moderation-history').open)loadModeration().catch(error=>status(error.message));});

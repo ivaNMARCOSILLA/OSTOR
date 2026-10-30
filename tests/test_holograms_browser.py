@@ -16,7 +16,8 @@ def run():
   page.goto(BASE_URL+'/');page.locator('#consent-decline').click()
   assert page.locator('#holograms-title').inner_text().startswith('Hologramas')
   assert page.locator('#holograms-title .holograms-label').inner_text()=='Geometría viva'
-  assert page.locator('.hologram-message').inner_text()==MESSAGE
+  assert page.locator('.hologram-message').count()==0
+  assert MESSAGE not in page.locator('#hologramas').inner_text()
   assert 'memory' not in page.locator('#hologramas').inner_text().lower()
   assert not any('/vendor/three/' in url or '/vendor/hands/' in url for url in requests)
   assert page.evaluate('holoStreams.length')==0
@@ -51,5 +52,5 @@ def run():
   page.keyboard.press('Escape');assert page.locator('#hologram-viewer').get_attribute('open') is None
   assert not page.locator('audio').evaluate('element=>element.paused')
   assert not errors,errors;browser.close()
- print('OK: lazy real WebGL, 256 controls, square/globe, bounded local OBJ/STL, real local hand model, explicit camera/no microphone, cleanup/reopen, reduced motion, keyboard, exact Catalan message, uninterrupted music and four widths')
+ print('OK: lazy real WebGL, 256 controls, square/globe, bounded local OBJ/STL, real local hand model, explicit camera/no microphone, cleanup/reopen, reduced motion, keyboard, personal quote removed, uninterrupted music and four widths')
 if __name__=='__main__':run()

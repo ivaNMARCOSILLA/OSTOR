@@ -192,6 +192,8 @@ def init_database():
           GROUP BY m.id ON CONFLICT(member_id) DO NOTHING''')
 
 
+    from account_archives import init_database as init_archives
+    init_archives()
     from operations import init_database as init_operations
     init_operations()
     from visitor_registry import init_database as init_visitor_registry
@@ -237,6 +239,7 @@ def validate_password(value):
 
 
 def user_public(user,founder_state=None):
+    archived=bool('archived_at' in user.keys() and user['archived_at'] and not user['restored_at'])
     full_service=bool('service_granted_at' in user.keys() and user['service_granted_at'] and not user['service_revoked_at'])
     complimentary = full_service or bool('friend_granted_at' in user.keys() and user['friend_granted_at'] and not user['friend_revoked_at'])
     founder_number=user['founder_number'] if 'founder_number' in user.keys() else None
@@ -255,14 +258,15 @@ def user_public(user,founder_state=None):
     active = user['role'] == 'admin' or complimentary or founder_active or paid_current or trial_active or bool(user['access_until'] and datetime.fromisoformat(user['access_until']) > now_utc())
     streamer_until=user['streamer_until'] if 'streamer_until' in user.keys() else None
     streamer_active=active and (full_service or user['role']=='admin' or founder_active or paid_current or trial_active or bool(streamer_until and datetime.fromisoformat(streamer_until)>now_utc()))
-    return {key: user[key] for key in ('id', 'username', 'role', 'access_until', 'welcome_used')} | {'nickname':user['nickname'] if 'nickname' in user.keys() and user['nickname'] else user['username'],'active': active, 'complimentary':complimentary,'full_service':full_service,'founder_number':founder_number,'founder_active':founder_active,'live_lifetime':live_lifetime,'live_annual':paid_current and not live_lifetime,'community_role':user['community_role'] if 'community_role' in user.keys() and user['community_role'] else 'activo','annual_cancelled_at':user['annual_cancelled_at'] if 'annual_cancelled_at' in user.keys() else None,'live_trial_until':trial_until,'trial_active':trial_active, 'streamer_until':streamer_until, 'streamer_active':streamer_active}
+    if archived:active=streamer_active=complimentary=full_service=founder_active=paid_current=live_lifetime=False
+    return {key: user[key] for key in ('id', 'username', 'role', 'access_until', 'welcome_used')} | {'archived':archived,'archived_at':user['archived_at'] if archived else None,'nickname':user['nickname'] if 'nickname' in user.keys() and user['nickname'] else user['username'],'active': active, 'complimentary':complimentary,'full_service':full_service,'founder_number':founder_number,'founder_active':founder_active,'live_lifetime':live_lifetime,'live_annual':paid_current and not live_lifetime,'community_role':user['community_role'] if 'community_role' in user.keys() and user['community_role'] else 'activo','annual_cancelled_at':user['annual_cancelled_at'] if 'annual_cancelled_at' in user.keys() else None,'live_trial_until':trial_until,'trial_active':trial_active, 'streamer_until':streamer_until, 'streamer_active':streamer_active}
 
 
 def get_user():
     if hasattr(g, 'member'):
         return g.member
     with database() as conn:
-        row = conn.execute('SELECT m.*,p.nickname AS nickname,p.email AS profile_email,p.email_verified AS profile_email_verified,s.until_at AS streamer_until,f.granted_at AS friend_granted_at,f.revoked_at AS friend_revoked_at,l.number AS founder_number,l.revoked_at AS founder_revoked_at,e.trial_until AS live_trial_until,e.paid_at AS live_paid_at,e.revoked_at AS live_revoked_at,cr.community_role AS community_role,ap.cancelled_at AS annual_cancelled_at,sg.granted_at AS service_granted_at,sg.revoked_at AS service_revoked_at FROM members m LEFT JOIN member_profiles p ON p.member_id=m.id LEFT JOIN streamer_access s ON s.member_id=m.id LEFT JOIN friend_access f ON f.member_id=m.id LEFT JOIN live_founders l ON l.member_id=m.id LEFT JOIN live_entitlements e ON e.member_id=m.id LEFT JOIN community_roles cr ON cr.member_id=m.id LEFT JOIN annual_preferences ap ON ap.member_id=m.id LEFT JOIN service_grants sg ON sg.member_id=m.id WHERE m.id=?', (session.get('member_id', ''),)).fetchone()
+        row = conn.execute('SELECT m.*,p.nickname AS nickname,p.email AS profile_email,p.email_verified AS profile_email_verified,s.until_at AS streamer_until,f.granted_at AS friend_granted_at,f.revoked_at AS friend_revoked_at,l.number AS founder_number,l.revoked_at AS founder_revoked_at,e.trial_until AS live_trial_until,e.paid_at AS live_paid_at,e.revoked_at AS live_revoked_at,cr.community_role AS community_role,ap.cancelled_at AS annual_cancelled_at,sg.granted_at AS service_granted_at,sg.revoked_at AS service_revoked_at FROM members m LEFT JOIN member_profiles p ON p.member_id=m.id LEFT JOIN streamer_access s ON s.member_id=m.id LEFT JOIN friend_access f ON f.member_id=m.id LEFT JOIN live_founders l ON l.member_id=m.id LEFT JOIN live_entitlements e ON e.member_id=m.id LEFT JOIN community_roles cr ON cr.member_id=m.id LEFT JOIN annual_preferences ap ON ap.member_id=m.id LEFT JOIN service_grants sg ON sg.member_id=m.id WHERE m.id=? AND NOT EXISTS(SELECT 1 FROM member_archives a WHERE a.member_id=m.id AND a.restored_at IS NULL)', (session.get('member_id', ''),)).fetchone()
     g.member = row if row and row['session_version'] == session.get('session_version') else None
     return g.member
 
@@ -404,7 +408,7 @@ def login():
     data = payload()
     with database() as conn:
         identity=str(data.get('username', '')).strip().lower()
-        user=conn.execute('SELECT m.* FROM members m LEFT JOIN member_profiles p ON p.member_id=m.id WHERE m.username=? OR (p.email=? AND p.email_verified=1)',(identity,identity)).fetchone()
+        user=conn.execute('SELECT m.* FROM members m LEFT JOIN member_profiles p ON p.member_id=m.id WHERE (m.username=? OR (p.email=? AND p.email_verified=1)) AND NOT EXISTS(SELECT 1 FROM member_archives a WHERE a.member_id=m.id AND a.restored_at IS NULL)',(identity,identity)).fetchone()
     password = data.get('password')
     valid_password = password if isinstance(password, str) and len(password) <= 256 else ''
     # Verify a dummy hash too, avoiding a fast response for unknown accounts.
@@ -430,7 +434,7 @@ def logout():
 def list_members():
     with database() as conn:
         from live_access import founder_activity
-        users = [user_public(row,founder_state=founder_activity(row['id'],conn) if row['founder_number'] else None)|{'account_activated':bool(row['password_hash'])} for row in conn.execute('SELECT m.*,p.nickname AS nickname,p.email AS profile_email,p.email_verified AS profile_email_verified,s.until_at AS streamer_until,f.granted_at AS friend_granted_at,f.revoked_at AS friend_revoked_at,l.number AS founder_number,l.revoked_at AS founder_revoked_at,e.trial_until AS live_trial_until,e.paid_at AS live_paid_at,e.revoked_at AS live_revoked_at,cr.community_role AS community_role,ap.cancelled_at AS annual_cancelled_at,sg.granted_at AS service_granted_at,sg.revoked_at AS service_revoked_at FROM members m LEFT JOIN member_profiles p ON p.member_id=m.id LEFT JOIN streamer_access s ON s.member_id=m.id LEFT JOIN friend_access f ON f.member_id=m.id LEFT JOIN live_founders l ON l.member_id=m.id LEFT JOIN live_entitlements e ON e.member_id=m.id LEFT JOIN community_roles cr ON cr.member_id=m.id LEFT JOIN annual_preferences ap ON ap.member_id=m.id LEFT JOIN service_grants sg ON sg.member_id=m.id ORDER BY m.created_at DESC')]
+        users = [user_public(row,founder_state=founder_activity(row['id'],conn) if row['founder_number'] else None)|{'account_activated':bool(row['password_hash'])} for row in conn.execute('SELECT m.*,a.archived_at,a.restored_at,p.nickname AS nickname,p.email AS profile_email,p.email_verified AS profile_email_verified,s.until_at AS streamer_until,f.granted_at AS friend_granted_at,f.revoked_at AS friend_revoked_at,l.number AS founder_number,l.revoked_at AS founder_revoked_at,e.trial_until AS live_trial_until,e.paid_at AS live_paid_at,e.revoked_at AS live_revoked_at,cr.community_role AS community_role,ap.cancelled_at AS annual_cancelled_at,sg.granted_at AS service_granted_at,sg.revoked_at AS service_revoked_at FROM members m LEFT JOIN member_archives a ON a.member_id=m.id LEFT JOIN member_profiles p ON p.member_id=m.id LEFT JOIN streamer_access s ON s.member_id=m.id LEFT JOIN friend_access f ON f.member_id=m.id LEFT JOIN live_founders l ON l.member_id=m.id LEFT JOIN live_entitlements e ON e.member_id=m.id LEFT JOIN community_roles cr ON cr.member_id=m.id LEFT JOIN annual_preferences ap ON ap.member_id=m.id LEFT JOIN service_grants sg ON sg.member_id=m.id WHERE (?=1 OR a.member_id IS NULL OR a.restored_at IS NOT NULL) ORDER BY m.created_at DESC',(1 if request.args.get('archived')=='1' else 0,))]
         payments = [dict(row) for row in conn.execute('SELECT p.*,m.username FROM payments p JOIN members m ON m.id=p.member_id ORDER BY verified_at DESC LIMIT 300')]
         legal_names={r['member_id']:r['legal_name'] for r in conn.execute('SELECT member_id,legal_name FROM member_legal_names').fetchall()}
         for member in users:
@@ -544,7 +548,7 @@ def apply_owner_access_migration():
         for name in ('prueba','prueba2'):
             ident='owner-'+name+'-full-service-2026-10-29'
             if conn.execute('SELECT id FROM owner_access_migrations WHERE id=?',(ident,)).fetchone():continue
-            target=conn.execute("SELECT id FROM members WHERE username=? AND role='member' AND password_hash IS NOT NULL AND password_hash<>''",(name,)).fetchone()
+            target=conn.execute("SELECT id FROM members WHERE username=? AND role='member' AND password_hash IS NOT NULL AND password_hash<>'' AND NOT EXISTS(SELECT 1 FROM member_archives a WHERE a.member_id=members.id AND a.restored_at IS NULL)",(name,)).fetchone()
             owner=conn.execute("SELECT id FROM members WHERE role='admin' ORDER BY created_at,id LIMIT 1").fetchone()
             if target and owner:
                 conn.execute('INSERT INTO service_grants VALUES(?,?,?,NULL) ON CONFLICT(member_id) DO UPDATE SET granted_at=excluded.granted_at,granted_by=excluded.granted_by,revoked_at=NULL',(target['id'],stamp(now_utc()),owner['id']))

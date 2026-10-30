@@ -175,6 +175,8 @@ def validate_order(c,user,channel_id=None):
   import subscriptions as sub
   channel=c.execute('SELECT * FROM streamer_channels WHERE id=?',(channel_id,)).fetchone()
   if not channel or channel['member_id']==user['id'] or not user_public(user)['active']:raise PaymentError('Necesitas acceso a Ol Livis y una cuenta distinta del creador.')
+  from account_archives import is_archived
+  if is_archived(c,channel['member_id']):raise PaymentError('El creador ha dado de baja su cuenta. No se admiten nuevas suscripciones.',code='creator_unavailable')
   mode=sub.settings(c,channel_id);agreement=c.execute('SELECT * FROM subscription_agreements WHERE id=?',(mode['agreement_id'] or '',)).fetchone();account=account_for(c,channel['member_id'])
   if not agreement or not sub.approvals_valid(c,agreement) or not account or agreement['paypal_url']!='stripe:'+account:raise PaymentError('El precio, los beneficios y el destinatario Stripe deben estar aprobados por las tres partes.')
   if not 300<=sub.channel_price(c,channel_id,agreement['price_cents'])<=400 or agreement['period']!='month':raise PaymentError('El precio del canal debe estar entre 3 y 4 € al mes y volver a aprobarse.')
@@ -260,7 +262,7 @@ def assign_confirmed_founders(c):
  if not exists:return
  release_expired(c)
  if c.execute('SELECT COUNT(*) AS n FROM live_founders').fetchone()['n']>=100:return
- rows=c.execute("SELECT m.id,MIN(o.paid_at) AS paid FROM members m JOIN stripe_orders o ON o.member_id=m.id JOIN live_entitlements e ON e.member_id=m.id WHERE o.kind='platform_annual' AND o.paid_at IS NOT NULL AND o.reversed_at IS NULL AND e.paid_at IS NOT NULL AND e.revoked_at IS NULL AND m.role!='admin' AND m.access_until>? AND NOT EXISTS(SELECT 1 FROM live_founders f WHERE f.member_id=m.id) GROUP BY m.id ORDER BY paid,m.id LIMIT 100",(stamp(now_utc()),)).fetchall()
+ rows=c.execute("SELECT m.id,MIN(o.paid_at) AS paid FROM members m JOIN stripe_orders o ON o.member_id=m.id JOIN live_entitlements e ON e.member_id=m.id WHERE o.kind='platform_annual' AND o.paid_at IS NOT NULL AND o.reversed_at IS NULL AND e.paid_at IS NOT NULL AND e.revoked_at IS NULL AND m.role!='admin' AND m.access_until>? AND NOT EXISTS(SELECT 1 FROM member_archives a WHERE a.member_id=m.id AND a.restored_at IS NULL) AND NOT EXISTS(SELECT 1 FROM live_founders f WHERE f.member_id=m.id) GROUP BY m.id ORDER BY paid,m.id LIMIT 100",(stamp(now_utc()),)).fetchall()
  for member in rows:
   if reserve(c,member['id']) is None:break
 

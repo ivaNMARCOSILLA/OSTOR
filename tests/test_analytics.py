@@ -63,3 +63,30 @@ class AnalyticsTests(unittest.TestCase):
   self.post(guest,'/api/presence')
   result=guest.post('/api/presence',json={'consent':True},headers={'X-CSRF-Token':token,'Sec-GPC':'1'})
   self.assertFalse(result.json['recorded']);self.assertEqual(self.admin.get('/api/admin/statistics').json['online']['total'],0)
+
+ def test_archived_accounts_are_excluded_from_active_statistics_but_keep_payment_history(self):
+  identities=[]
+  for name in ['active-stat-client','archived-stat-client']:
+   client=app.app.test_client()
+   self.assertEqual(self.post(client,'/api/account/register',{'username':name,'password':'statistics-archive-password-123'}).status_code,201)
+   identities.append(client.get('/api/account/me').json['user']['id'])
+  owner=self.admin.get('/api/account/me').json['user']['id'];instant=m.now_utc();now=m.stamp(instant);future=m.stamp(instant+timedelta(days=365))
+  with app.app.app_context(),m.database() as conn:
+   for index,member_id in enumerate(identities):
+    conn.execute('UPDATE members SET access_until=? WHERE id=?',(future,member_id))
+    conn.execute('INSERT INTO friend_access(member_id,granted_at,granted_by) VALUES(?,?,?)',(member_id,now,owner))
+    conn.execute('INSERT INTO streamer_channels(id,member_id,title,room_name,live_until,updated_at) VALUES(?,?,?,?,?,?)',('stats-channel-'+str(index),member_id,'Statistics fixture','stats-room-'+str(index),future,now))
+   conn.execute('INSERT INTO payments VALUES(?,?,?,?,?,?,?,?,?)',('archive-stats-payment',identities[1],'annual',2500,now,future,now,owner,'ARCHIVED-STATISTICS-RECEIPT'))
+   conn.execute('INSERT INTO member_archives(member_id,archived_at,archived_by,reason) VALUES(?,?,?,?)',(identities[1],now,owner,'Isolated statistics fixture'))
+  summary=self.admin.get('/api/admin/statistics');self.assertEqual(summary.status_code,200);data=summary.json
+  self.assertEqual(data['accounts'],{'registered':1,'new_week':1,'paid_active':1})
+  self.assertEqual((data['friends'],data['channels'],data['live']),(1,1,1))
+  self.assertEqual(data['payments'],{'count':1,'total_cents':2500,'month_cents':2500})
+  self.assertEqual(sum(day['payments'] for day in data['days']),1)
+  self.assertEqual(sum(day['cents'] for day in data['days']),2500)
+  self.assertEqual(sum(day['registrations'] for day in data['days']),1)
+  with app.app.app_context(),m.database() as conn:conn.execute('UPDATE member_archives SET restored_at=? WHERE member_id=?',(now,identities[1]))
+  restored=self.admin.get('/api/admin/statistics').json
+  self.assertEqual(restored['accounts'],{'registered':2,'new_week':2,'paid_active':2})
+  self.assertEqual((restored['friends'],restored['channels'],restored['live']),(2,2,2))
+  self.assertEqual(restored['payments'],data['payments'])

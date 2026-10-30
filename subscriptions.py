@@ -108,6 +108,8 @@ def public_agreement(conn,row,private=False):
  return result
 
 def approvals_valid(conn,row):
+ from account_archives import is_archived
+ if is_archived(conn,row['creator_id']) or is_archived(conn,row['moderator_id']):return False
  if not 300<=channel_price(conn,row['channel_id'],row['price_cents'])<=400 or row['period']!='month':return False
  approvals={a['party']:a['member_id'] for a in conn.execute('SELECT party,member_id FROM subscription_approvals WHERE agreement_id=?',(row['id'],)).fetchall()}
  if set(approvals)!={'creator','admin','moderator'} or len(set(approvals.values()))!=3:return False
@@ -283,7 +285,7 @@ def confirm_subscription(channel_id):
    if not channel or user['id']!=channel['member_id'] or not user_public(user)['streamer_active']:return jsonify(error='Solo el creador activo puede confirmar un ingreso en su propio PayPal.'),403
    mode=settings(conn,channel_id);row=conn.execute('SELECT * FROM subscription_agreements WHERE id=?',(mode['agreement_id'] or '',)).fetchone()
    if not row or not approvals_valid(conn,row) or row['paypal_url']!=channel['paypal_url']:return jsonify(error='No hay un acuerdo vigente aprobado por las tres partes.'),409
-   member=conn.execute("SELECT id FROM members WHERE LOWER(username)=LOWER(?) AND password_hash IS NOT NULL",(str(data.get('username','')).strip(),)).fetchone()
+   member=conn.execute("SELECT id FROM members m WHERE LOWER(username)=LOWER(?) AND password_hash IS NOT NULL AND NOT EXISTS(SELECT 1 FROM member_archives a WHERE a.member_id=m.id AND a.restored_at IS NULL)",(str(data.get('username','')).strip(),)).fetchone()
    if not member or member['id']==user['id']:return jsonify(error='Indica la cuenta activada del suscriptor, distinta del creador.'),400
    from age_policy import gate
    restricted=gate(conn,channel_id,member)
