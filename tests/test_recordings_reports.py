@@ -55,3 +55,10 @@ class RecordingReportTests(unittest.TestCase):
   self.assertEqual(report['report']['reporter']['username'],'report-author')
   self.assertEqual(report['report']['message']['body'],'Comentario que debe revisarse')
   self.assertEqual(reporter.get('/api/admin/recordings').status_code,403)
+
+ def test_old_room_recording_cannot_verify_a_new_broadcast(self):
+  with app.app.app_context(),patch.dict(os.environ,CFG),patch.object(recordings,'rpc',return_value={'egress_id':'eg-old','status':1}) as rpc:
+   recordings.ensure_started(self.channel,self.owner)
+   changed=dict(self.channel,room_name='another-broadcast')
+   with self.assertRaisesRegex(RuntimeError,'recording_needs_review'):recordings.ensure_started(changed,self.owner)
+   self.assertEqual(rpc.call_count,1)

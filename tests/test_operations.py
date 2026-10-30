@@ -54,11 +54,17 @@ class OperationsTests(unittest.TestCase):
   self.assertEqual(response.headers['Cache-Control'],'no-store')
   report=response.json
   self.assertTrue(report['configuration_only'])
+  self.assertEqual(report['automation']['mode'],'admin_visible_page')
+  self.assertFalse(report['automation']['server_scheduler'])
+  self.assertTrue(report['automation']['read_only'])
+  self.assertEqual(report['automation']['default_interval_minutes'],30)
   rows={row['name']:row for row in report['checks']}
   self.assertEqual(rows['Base de datos']['status'],'ok')
   self.assertEqual(rows['Archivos esenciales']['status'],'ok')
   self.assertEqual(rows['Comprobaciones exclusivas de administración']['status'],'ok')
   self.assertEqual(rows['Sincronización entre dispositivos']['status'],'ok')
+  for label in ['Sesiones independientes de emisión','Invitados del directo','Me gusta reales de comentarios','Límite de siete participantes','Invitaciones vinculadas a su emisión','Un Me gusta por cuenta y comentario']:
+   self.assertEqual(rows[label]['status'],'ok',label)
   self.assertEqual(rows['Clasificación de contenido adulto']['status'],'ok')
   self.assertEqual(rows['Ubicación y VPN para contenido adulto']['status'],'pending')
   self.assertEqual(rows['Verificación de edad']['status'],'pending')
@@ -67,3 +73,19 @@ class OperationsTests(unittest.TestCase):
   self.assertNotIn('SECRET',response.get_data(as_text=True))
   with app.app.app_context(),m.database() as c:
    self.assertEqual(c.execute('SELECT COUNT(*) AS n FROM members').fetchone()['n'],before)
+
+ def test_bot_detects_guest_overbooking_without_repairing_accounts(self):
+  self.assertEqual(self.post(self.admin,'/api/streamers/me',{'title':'Revisión de invitados'}).status_code,200)
+  channel=self.admin.get('/api/streamers').json['mine']['id']
+  with app.app.app_context(),m.database() as conn:
+   conn.execute('INSERT INTO live_broadcast_sessions(channel_id,started_at) VALUES(?,?)',(channel,'current-session'))
+   for index in range(7):
+    ident='review-guest-'+str(index)
+    conn.execute("INSERT INTO members(id,username,password_hash,role,created_at) VALUES(?,?,?,'member',?)",(ident,ident,'not-a-login',m.stamp(m.now_utc())))
+    conn.execute('INSERT INTO live_guest_invites(channel_id,member_id,session_start) VALUES(?,?,?)',(channel,ident,'previous-session' if index==0 else 'current-session'))
+  response=self.admin.get('/api/admin/maintenance-report');self.assertEqual(response.status_code,200)
+  rows={row['name']:row for row in response.json['checks']}
+  self.assertEqual(rows['Límite de siete participantes']['status'],'error')
+  self.assertEqual(rows['Invitaciones vinculadas a su emisión']['status'],'pending')
+  self.assertFalse(response.json['ok'])
+  with app.app.app_context(),m.database() as conn:self.assertEqual(conn.execute('SELECT COUNT(*) AS n FROM live_guest_invites WHERE channel_id=?',(channel,)).fetchone()['n'],7)

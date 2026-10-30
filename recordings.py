@@ -44,6 +44,7 @@ def ensure_started(channel,user):
    ident=secrets.token_hex(16);key='directos/'+now_utc().strftime('%Y/%m/%d')+'/'+ident+'.mp4';instant=stamp(now_utc())
    conn.execute('INSERT INTO live_recordings(id,channel_id,owner_id,room_name,object_key,state,started_at,expires_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)',(ident,channel['id'],user['id'],channel['room_name'],key,'starting',instant,stamp(now_utc()+timedelta(days=RETENTION_DAYS)),instant))
  if current:
+  if current['room_name']!=channel['room_name']:raise RuntimeError('recording_needs_review')
   if current['state'] in {'uncertain','stopping'} or not current['egress_id']:raise RuntimeError('recording_needs_review')
   try:items=rpc('ListEgress',{'egress_id':current['egress_id']}).get('items',[])
   except Exception:raise RuntimeError('recording_status_unconfirmed') from None

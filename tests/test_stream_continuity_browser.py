@@ -8,13 +8,13 @@ def run():
  with sync_playwright() as p:
   b=p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox']);ctx=b.new_context();login_context(ctx)
   mine={'id':'a'*32,'title':'Mi prueba estable','username':'browser-admin','bio':'','category':'musica'};channel={'id':'b'*32,'title':'Otro directo','username':'otro','bio':'','live':True,'category':'musica'}
-  page=ctx.new_page();page.clock.install();page.add_init_script(SDK);state={'beats':0,'listed':True,'deny':False,'session_failure':False};errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+  page=ctx.new_page();page.clock.install();page.add_init_script(SDK);state={'beats':0,'listed':True,'deny':False,'session_failure':False,'broadcast_session':'one'};errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
   account=ctx.request.get(BASE_URL+'/api/account/me').json()
   page.route('**/api/account/me',lambda r:r.fulfill(status=503,json={'error':'Temporal'}) if state['session_failure'] else r.fulfill(json=account))
   page.route('**/api/streamers',lambda r:r.fulfill(json={'video_ready':True,'streamer_active':True,'mine':mine,'channels':[channel] if state['listed'] else [],'setup_checks':None}))
   page.route('**/api/status',lambda r:r.fulfill(json={'live_premiere':False,'maintenance':{'scope':'off','message':''}}))
-  page.route('**/api/streamers/*/token',lambda r:r.fulfill(json={'url':'wss://fixture.invalid','token':'local-fixture'}))
-  page.route('**/api/streamers/*/access',lambda r:r.fulfill(status=403,json={'error':'Acceso retirado'}) if state['deny'] else r.fulfill(json={'allowed':True,'ended':False,'listed':state['listed']}))
+  page.route('**/api/streamers/*/token',lambda r:r.fulfill(json={'url':'wss://fixture.invalid','token':'local-fixture','session_start':state['broadcast_session']}))
+  page.route('**/api/streamers/*/access',lambda r:r.fulfill(status=403,json={'error':'Acceso retirado'}) if state['deny'] else r.fulfill(json={'allowed':True,'ended':False,'listed':state['listed'],'session_start':state['broadcast_session']}))
   page.route('**/assets/community.js*',lambda r:r.fulfill(content_type='text/javascript',body='export class StreamCommunity {start(){} stop(){} syncMicrophone(){}}'))
   def presence(r):
    if not r.request.post_data_json.get('live'):r.fulfill(json={'ok':True});return
@@ -26,6 +26,7 @@ def run():
   page.route('**/api/streamers/me/layout',lambda r:(layouts.append(r.request.post_data_json),r.fulfill(json={'ok':True})))
   page.route('**/api/streamers/me/live',presence)
   page.goto(BASE_URL+'/live#stream-studio');page.locator('#start-camera').click();page.locator('#live-stage').wait_for()
+  page.locator('#mobile-live-controls').click()
   assert page.locator('#live-player #enable-sound').is_visible();assert page.locator('#live-player #fullscreen-live').is_visible();assert page.locator('#live-player #share-screen-live').is_visible()
   page.evaluate("document.querySelector('#live-player').requestFullscreen=async()=>{window.fullscreenTarget='live-player'}")
   page.locator('#fullscreen-live').click();assert page.evaluate('fullscreenTarget')=='live-player'
@@ -52,6 +53,7 @@ def run():
   page.locator('#leave-room').click();page.wait_for_function('fakeRooms.at(-1).disconnects===1')
   page.locator('.live-channel button').first.click();page.locator('#live-stage').wait_for();state['listed']=False
   page.clock.run_for(31000);page.wait_for_timeout(30);assert page.evaluate('fakeRooms.at(-1).disconnects')==0
+  state['broadcast_session']='two';page.clock.run_for(31000);page.wait_for_function('fakeRooms.length===3');assert page.evaluate('fakeRooms[1].disconnects')==1;assert page.evaluate('fakeRooms.at(-1).disconnects')==0
   state['deny']=True;page.clock.run_for(31000);page.wait_for_function('fakeRooms.at(-1).disconnects===1')
   assert not errors,errors;b.close()
  print('OK: 25/30/60-second transient failures preserve the room; explicit leave and revoked access still disconnect')

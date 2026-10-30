@@ -12,7 +12,7 @@ import time
 import requests
 from datetime import timedelta
 from urllib.parse import urlparse
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, current_app, jsonify, request, Response
 from membership import database, get_user, now_utc, stamp, user_public,allow_attempt,require_admin
 
 bp=Blueprint('streamers',__name__)
@@ -49,7 +49,7 @@ def init_database():
             id TEXT PRIMARY KEY, member_id TEXT NOT NULL UNIQUE REFERENCES members(id),
             title TEXT NOT NULL, bio TEXT NOT NULL DEFAULT '', paypal_url TEXT NOT NULL DEFAULT '',
             room_name TEXT NOT NULL UNIQUE, live_until TEXT, updated_at TEXT NOT NULL
-        ); CREATE TABLE IF NOT EXISTS live_broadcast_sessions (channel_id TEXT PRIMARY KEY REFERENCES streamer_channels(id) ON DELETE CASCADE,started_at TEXT NOT NULL); CREATE TABLE IF NOT EXISTS live_guest_invites (channel_id TEXT NOT NULL REFERENCES streamer_channels(id) ON DELETE CASCADE,member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,session_start TEXT NOT NULL,PRIMARY KEY(channel_id,member_id)); CREATE TABLE IF NOT EXISTS live_channel_settings (
+        ); CREATE TABLE IF NOT EXISTS live_channel_thumbnails (channel_id TEXT PRIMARY KEY REFERENCES streamer_channels(id) ON DELETE CASCADE,session_start TEXT NOT NULL,image_base64 TEXT NOT NULL,updated_at TEXT NOT NULL); CREATE TABLE IF NOT EXISTS live_broadcast_sessions (channel_id TEXT PRIMARY KEY REFERENCES streamer_channels(id) ON DELETE CASCADE,started_at TEXT NOT NULL); CREATE TABLE IF NOT EXISTS live_guest_invites (channel_id TEXT NOT NULL REFERENCES streamer_channels(id) ON DELETE CASCADE,member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,session_start TEXT NOT NULL,PRIMARY KEY(channel_id,member_id)); CREATE TABLE IF NOT EXISTS live_channel_settings (
             channel_id TEXT PRIMARY KEY REFERENCES streamer_channels(id) ON DELETE CASCADE,
             category TEXT NOT NULL DEFAULT 'entretenimiento',featured INTEGER NOT NULL DEFAULT 0
         ); CREATE TABLE IF NOT EXISTS live_channel_views (channel_id TEXT NOT NULL REFERENCES streamer_channels(id) ON DELETE CASCADE,member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,day TEXT NOT NULL,PRIMARY KEY(channel_id,member_id,day)); CREATE INDEX IF NOT EXISTS live_views_channel ON live_channel_views(channel_id)''')
@@ -74,7 +74,7 @@ def paypal_link(value):
 
 def channel_public(row):
     from founders import signature_from_row
-    return {key:row[key] for key in ['id','title','bio','username']} | {'paypal_url':'' if os.getenv('VERCEL_ENV') in {'production','preview'} or os.getenv('OL_PAYMENT_PROVIDER','stripe')=='stripe' else row['paypal_url']} | {'live':bool(row['live_until'] and row['live_until']>stamp(now_utc())),'adult_content':bool(row['adult_content']) if 'adult_content' in row.keys() else False,'view_count':row['view_count'] if 'view_count' in row.keys() else 0,'category':row['category'] if 'category' in row.keys() and row['category'] else 'entretenimiento','featured':bool(row['featured']) if 'featured' in row.keys() else False,'founder_number':row['founder_number'] if 'founder_number' in row.keys() else None,'founder_signature':signature_from_row(row) if 'founder_number' in row.keys() and row['founder_number'] else None}
+    return {key:row[key] for key in ['id','title','bio','username']} | {'paypal_url':'' if os.getenv('VERCEL_ENV') in {'production','preview'} or os.getenv('OL_PAYMENT_PROVIDER','stripe')=='stripe' else row['paypal_url']} | {'thumbnail_url':'/api/streamers/'+row['id']+'/thumbnail','live':bool(row['live_until'] and row['live_until']>stamp(now_utc())),'adult_content':bool(row['adult_content']) if 'adult_content' in row.keys() else False,'view_count':row['view_count'] if 'view_count' in row.keys() else 0,'category':row['category'] if 'category' in row.keys() and row['category'] else 'entretenimiento','featured':bool(row['featured']) if 'featured' in row.keys() else False,'founder_number':row['founder_number'] if 'founder_number' in row.keys() else None,'founder_signature':signature_from_row(row) if 'founder_number' in row.keys() and row['founder_number'] else None}
 
 
 def own_channel():
@@ -264,10 +264,11 @@ def room_access(channel_id):
         restricted=gate(conn,channel_id,user)
         if restricted:return restricted
         from subscriptions import watch_allowed
-        if not watch_allowed(conn,channel,user):return jsonify(error='Ya no tienes acceso a este directo.',code='creator_subscription_required'),403
+        invited=guest_allowed(conn,channel,user) and publisher_allowed()
+        if not invited and not watch_allowed(conn,channel,user):return jsonify(error='Ya no tienes acceso a este directo.',code='creator_subscription_required'),403
         layout=conn.execute('SELECT layout FROM live_stage_layouts WHERE channel_id=?',(channel_id,)).fetchone()
-    with database() as conn:invited=guest_allowed(conn,channel,user)
-    return jsonify(guest_allowed=invited,allowed=True,layout=layout['layout'] if layout else 'auto',ended=channel['live_until'] is None,listed=bool(channel['live_until'] and channel['live_until']>stamp(now_utc())))
+        broadcast=conn.execute('SELECT started_at FROM live_broadcast_sessions WHERE channel_id=?',(channel_id,)).fetchone()
+    return jsonify(session_start=broadcast['started_at'] if broadcast else None,guest_allowed=invited,allowed=True,layout=layout['layout'] if layout else 'auto',ended=channel['live_until'] is None,listed=bool(channel['live_until'] and channel['live_until']>stamp(now_utc())))
 
 
 def viewer_connected(channel,user):
@@ -322,7 +323,21 @@ def token(channel_id):
         from subscriptions import watch_allowed
         with database() as conn:
             if not watch_allowed(conn,channel,user):return jsonify(error='Este directo está reservado a suscriptores del creador.',code='creator_subscription_required'),403
-    return jsonify(url=os.environ['LIVEKIT_URL'].strip(),token=mint_token(user,channel,publish))
+    with database() as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        channel=conn.execute('SELECT * FROM streamer_channels WHERE id=?',(channel_id,)).fetchone()
+        # A new room invalidates all prior-session guest tokens without trusting clients.
+        # A transient directory heartbeat expiry must keep the existing session.
+        if publish and not guest and channel['live_until'] is None:
+            started=stamp(now_utc());room='electronicama-'+secrets.token_hex(16)
+            conn.execute('UPDATE streamer_channels SET room_name=? WHERE id=?',(room,channel_id))
+            conn.execute('INSERT INTO live_broadcast_sessions(channel_id,started_at) VALUES(?,?) ON CONFLICT(channel_id) DO UPDATE SET started_at=excluded.started_at',(channel_id,started))
+            conn.execute('DELETE FROM live_guest_invites WHERE channel_id=?',(channel_id,))
+            conn.execute('DELETE FROM live_channel_thumbnails WHERE channel_id=?',(channel_id,))
+            channel=conn.execute('SELECT * FROM streamer_channels WHERE id=?',(channel_id,)).fetchone()
+        if guest and not guest_allowed(conn,channel,user):return jsonify(error='Esta invitación ya no está vigente.'),403
+        broadcast=conn.execute('SELECT started_at FROM live_broadcast_sessions WHERE channel_id=?',(channel_id,)).fetchone()
+    return jsonify(session_start=broadcast['started_at'] if broadcast else None,url=os.environ['LIVEKIT_URL'].strip(),token=mint_token(user,channel,publish))
 
 
 @bp.post('/api/streamers/me/live')
@@ -347,9 +362,12 @@ def presence():
             if str(exc)=='recording_start_pending':return jsonify(error='La grabación se está iniciando. El directo aún no se publica.',code='recording_pending'),409
             return jsonify(error='La grabación obligatoria no está preparada o necesita revisión de administración. No se publicará el directo.',code='recording_required'),409
     with database() as conn:
-        if live and channel and not (channel['live_until'] and channel['live_until']>stamp(now_utc())):
-            conn.execute('INSERT INTO live_broadcast_sessions(channel_id,started_at) VALUES(?,?) ON CONFLICT(channel_id) DO UPDATE SET started_at=excluded.started_at',(channel['id'],stamp(now_utc())))
+        conn.execute('BEGIN IMMEDIATE')
+        if live and channel:
+            conn.execute('INSERT INTO live_broadcast_sessions(channel_id,started_at) VALUES(?,?) ON CONFLICT(channel_id) DO NOTHING',(channel['id'],stamp(now_utc())))
+        if not live and channel:
             conn.execute('DELETE FROM live_guest_invites WHERE channel_id=?',(channel['id'],))
+            conn.execute('DELETE FROM live_channel_thumbnails WHERE channel_id=?',(channel['id'],))
         conn.execute('UPDATE streamer_channels SET live_until=?,updated_at=? WHERE member_id=?',
                      (stamp(now_utc()+timedelta(seconds=75)) if live else None,stamp(now_utc()),get_user()['id']))
         if live:
@@ -388,22 +406,101 @@ def install(app,rate_limiter=None):
 
 
 def guest_allowed(conn,channel,user):
-    if not user or not channel['live_until'] or channel['live_until']<=stamp(now_utc()):return False
+    if not user or channel['live_until'] is None:return False
     return bool(conn.execute('SELECT 1 FROM live_guest_invites i JOIN live_broadcast_sessions s ON s.channel_id=i.channel_id AND s.started_at=i.session_start WHERE i.channel_id=? AND i.member_id=?',(channel['id'],user['id'])).fetchone())
+
+@bp.get('/api/streamers/me/guests')
+def invited_guests():
+    channel=own_channel()
+    if not channel or not publisher_allowed():return jsonify(error='Solo el anfitrión puede gestionar sus invitados.'),403
+    with database() as conn:
+        guests=conn.execute('SELECT m.username FROM live_guest_invites i JOIN members m ON m.id=i.member_id JOIN live_broadcast_sessions s ON s.channel_id=i.channel_id AND s.started_at=i.session_start WHERE i.channel_id=? ORDER BY m.username LIMIT 6',(channel['id'],)).fetchall() if channel['live_until'] is not None else []
+    return jsonify(guests=[{'username':row['username']} for row in guests],count=len(guests),limit=7)
+
+
+def disconnect_guest(channel,member_id):
+    if not live_ready():return False
+    instant=int(time.time())
+    token=sign_token({'iss':os.environ['LIVEKIT_API_KEY'].strip(),'iat':instant,'nbf':instant-5,'exp':instant+45,'video':{'roomAdmin':True,'room':channel['room_name']}})
+    url='https://'+urlparse(os.environ['LIVEKIT_URL']).netloc+'/twirp/livekit.RoomService/RemoveParticipant'
+    try:
+        with requests.post(url,json={'room':channel['room_name'],'identity':'maggy-'+member_id+'-publisher'},headers={'Authorization':'Bearer '+token},timeout=(2,3),allow_redirects=False) as response:
+            return response.status_code in {200,404}
+    except requests.RequestException:return False
+
 
 @bp.post('/api/streamers/me/guests')
 def invite_guest():
     channel=own_channel();data=request.get_json(silent=True) or {}
     if not channel or not publisher_allowed():return jsonify(error='Solo el anfitrión activo puede invitar.'),403
+    if not isinstance(data,dict) or not isinstance(data.get('action','invite'),str) or data.get('action','invite') not in {'invite','remove'}:return jsonify(error='Acción de invitados no válida.'),400
+    action=data.get('action','invite')
     with database() as conn:
         conn.execute('BEGIN IMMEDIATE')
         current=conn.execute('SELECT * FROM streamer_channels WHERE id=?',(channel['id'],)).fetchone()
         session=conn.execute('SELECT started_at FROM live_broadcast_sessions WHERE channel_id=?',(channel['id'],)).fetchone()
-        if not session or not current['live_until'] or current['live_until']<=stamp(now_utc()):return jsonify(error='Inicia el directo antes de invitar.'),409
-        member=conn.execute('SELECT id FROM members WHERE username=?',(str(data.get('username','')).strip(),)).fetchone()
+        if not session or current['live_until'] is None or (action=='invite' and current['live_until']<=stamp(now_utc())):return jsonify(error='Inicia el directo antes de gestionar invitados.'),409
+        member=conn.execute('SELECT id FROM members WHERE LOWER(username)=LOWER(?)',(str(data.get('username','')).strip(),)).fetchone()
         if not member or member['id']==get_user()['id']:return jsonify(error='Introduce el usuario de otro creador registrado.'),400
-        count=conn.execute('SELECT COUNT(*) AS n FROM live_guest_invites WHERE channel_id=?',(channel['id'],)).fetchone()['n']
-        exists=conn.execute('SELECT 1 FROM live_guest_invites WHERE channel_id=? AND member_id=?',(channel['id'],member['id'])).fetchone()
-        if count>=6 and not exists:return jsonify(error='Máximo siete participantes contando al anfitrión.'),409
-        conn.execute('INSERT INTO live_guest_invites(channel_id,member_id,session_start) VALUES(?,?,?) ON CONFLICT(channel_id,member_id) DO UPDATE SET session_start=excluded.session_start',(channel['id'],member['id'],session['started_at']))
+        if action=='remove':
+            conn.execute('DELETE FROM live_guest_invites WHERE channel_id=? AND member_id=?',(channel['id'],member['id']))
+        else:
+            count=conn.execute('SELECT COUNT(*) AS n FROM live_guest_invites WHERE channel_id=?',(channel['id'],)).fetchone()['n']
+            exists=conn.execute('SELECT 1 FROM live_guest_invites WHERE channel_id=? AND member_id=?',(channel['id'],member['id'])).fetchone()
+            if count>=6 and not exists:return jsonify(error='Máximo siete participantes contando al anfitrión.'),409
+            conn.execute('INSERT INTO live_guest_invites(channel_id,member_id,session_start) VALUES(?,?,?) ON CONFLICT(channel_id,member_id) DO UPDATE SET session_start=excluded.session_start',(channel['id'],member['id'],session['started_at']))
+    # Revoke the invitation before remote removal, even if LiveKit is unavailable.
+    if action=='remove':return jsonify(ok=True,disconnected=disconnect_guest(current,member['id']))
     return jsonify(ok=True)
+
+
+@bp.post('/api/streamers/me/thumbnail')
+def upload_thumbnail():
+    # Tiny current-session previews, never arbitrary files or private pre-flight camera frames.
+    user=get_user()
+    if not user or not publisher_allowed():return jsonify(error='Solo el creador activo puede actualizar la miniatura.'),403
+    if request.content_length and request.content_length>95000:return jsonify(error='La miniatura es demasiado grande.'),413
+    data=request.get_json(silent=True) or {}
+    if not isinstance(data,dict):return jsonify(error='Miniatura no válida.'),400
+    image=data.get('image');session_start=data.get('session_start')
+    if not isinstance(image,str) or not image.startswith('data:image/jpeg;base64,') or len(image)>88000:return jsonify(error='Envía una miniatura JPEG pequeña.'),400
+    if not isinstance(session_start,str) or len(session_start)>60:return jsonify(error='Emisión no válida.'),400
+    try:
+        from io import BytesIO
+        from PIL import Image,UnidentifiedImageError
+        raw=base64.b64decode(image.split(',',1)[1],validate=True)
+        if len(raw)>65536 or not raw:raise ValueError('size')
+        with Image.open(BytesIO(raw)) as original:
+            if original.format!='JPEG' or original.width>1280 or original.height>720:raise ValueError('format')
+            original.load();frame=original.convert('RGB');frame.thumbnail((640,360));output=BytesIO();frame.save(output,format='JPEG',quality=70,optimize=True);clean=output.getvalue()
+            if len(clean)>65536:raise ValueError('size')
+    except (ValueError,TypeError,OSError,UnidentifiedImageError):return jsonify(error='La imagen debe ser JPEG válida de hasta 64 KB y 1280×720.'),400
+    with database() as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        channel=conn.execute('SELECT c.id,s.started_at FROM streamer_channels c JOIN live_broadcast_sessions s ON s.channel_id=c.id WHERE c.member_id=? AND c.live_until>?',(user['id'],stamp(now_utc()))).fetchone()
+        if not channel or channel['started_at']!=session_start:return jsonify(error='La miniatura no pertenece al directo actual.',code='thumbnail_session_changed'),409
+        bucket=hashlib.sha256(('live-thumbnail:'+user['id']).encode()).hexdigest()
+        count=conn.execute('SELECT COUNT(*) AS n FROM login_attempts WHERE bucket=? AND attempted_at>?',(bucket,stamp(now_utc()-timedelta(minutes=1)))).fetchone()['n']
+        if count>=4:return jsonify(error='Espera antes de actualizar la miniatura.'),429
+        conn.execute('INSERT INTO login_attempts(bucket,attempted_at) VALUES(?,?)',(bucket,stamp(now_utc())))
+        conn.execute('INSERT INTO live_channel_thumbnails(channel_id,session_start,image_base64,updated_at) VALUES(?,?,?,?) ON CONFLICT(channel_id) DO UPDATE SET session_start=excluded.session_start,image_base64=excluded.image_base64,updated_at=excluded.updated_at',(channel['id'],session_start,base64.b64encode(clean).decode('ascii'),stamp(now_utc())))
+    return jsonify(ok=True)
+
+
+@bp.get('/api/streamers/<channel_id>/thumbnail')
+def channel_thumbnail(channel_id):
+    with database() as conn:
+        channel=conn.execute('SELECT c.*,ar.adult_content FROM streamer_channels c LEFT JOIN adult_channel_rules ar ON ar.channel_id=c.id WHERE c.id=? AND c.live_until>?',(channel_id,stamp(now_utc()))).fetchone()
+        if not channel:return jsonify(error='Miniatura no disponible.'),404
+        user=get_user()
+        from subscriptions import settings,watch_allowed
+        if not user and (channel['adult_content'] or settings(conn,channel_id)['exclusive_live']):return jsonify(error='Inicia sesión para acceder a esta miniatura.'),401
+        from age_policy import gate
+        restricted=gate(conn,channel_id,user)
+        if restricted:return restricted
+        if not watch_allowed(conn,channel,user):return jsonify(error='Este canal es exclusivo.'),403
+        thumbnail=conn.execute('SELECT t.image_base64 FROM live_channel_thumbnails t JOIN live_broadcast_sessions s ON s.channel_id=t.channel_id AND s.started_at=t.session_start WHERE t.channel_id=? AND t.updated_at>?',(channel_id,stamp(now_utc()-timedelta(seconds=90)))).fetchone()
+        if not thumbnail:return jsonify(error='Miniatura no disponible.'),404
+    response=Response(base64.b64decode(thumbnail['image_base64']),mimetype='image/jpeg')
+    response.headers['Cache-Control']='private, no-store';response.headers['X-Content-Type-Options']='nosniff'
+    return response

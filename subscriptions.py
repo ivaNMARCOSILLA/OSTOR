@@ -71,10 +71,14 @@ def settings(conn,channel_id):
 
 def watch_allowed(conn,channel,user):
  mode=settings(conn,channel['id'])
- return not mode['exclusive_live'] or privileged(channel,user) or 'exclusive_live' in active_benefits(conn,channel['id'],user['id'] if user else None)
+ from streamers import guest_allowed
+ collaborator=bool(user and user_public(user)['streamer_active'] and guest_allowed(conn,channel,user))
+ return collaborator or not mode['exclusive_live'] or privileged(channel,user) or 'exclusive_live' in active_benefits(conn,channel['id'],user['id'] if user else None)
 
 def chat_allowed(conn,channel,user):
- return privileged(channel,user) or 'subscriber_chat' in active_benefits(conn,channel['id'],user['id'] if user else None)
+ from streamers import guest_allowed
+ collaborator=bool(user and user_public(user)['streamer_active'] and guest_allowed(conn,channel,user))
+ return collaborator or privileged(channel,user) or 'subscriber_chat' in active_benefits(conn,channel['id'],user['id'] if user else None)
 
 def count(conn,channel_id):
  return conn.execute('SELECT COUNT(DISTINCT member_id) AS n FROM creator_subscriptions WHERE channel_id=? AND revoked_at IS NULL AND starts_at<=? AND (ends_at IS NULL OR ends_at>?)',(channel_id,stamp(now_utc()),stamp(now_utc()))).fetchone()['n']
@@ -317,10 +321,13 @@ def enforce_room_subscribers(channel,participants,url,headers):
  with database() as conn:
   if not settings(conn,channel['id'])['exclusive_live']:return True
   allowed={channel['member_id']}|{r['id'] for r in conn.execute("SELECT id FROM members WHERE role='admin'").fetchall()}
+  allowed|={r['member_id'] for r in conn.execute('SELECT i.member_id FROM live_guest_invites i JOIN live_broadcast_sessions s ON s.channel_id=i.channel_id AND s.started_at=i.session_start WHERE i.channel_id=?',(channel['id'],)).fetchall()}
   allowed|={r['member_id'] for r in conn.execute('SELECT DISTINCT member_id FROM creator_subscriptions WHERE channel_id=? AND revoked_at IS NULL AND starts_at<=? AND (ends_at IS NULL OR ends_at>?) AND benefits_json LIKE ?',(channel['id'],stamp(now_utc()),stamp(now_utc()),'%"exclusive_live"%')).fetchall()}
  unauthorized=[]
  for p in participants:
-  identity=str(p.get('identity',''));matched=re.fullmatch(r'maggy-([a-f0-9]{32})-[a-f0-9]{10}',identity)
+  # Egress participants are classified by the server, not by a spoofable identity prefix.
+  if p.get('kind') in {2,'EGRESS'}:continue
+  identity=str(p.get('identity',''));matched=re.fullmatch(r'maggy-([a-f0-9]{32})-(?:[a-f0-9]{10}|publisher)',identity)
   if not matched or matched.group(1) not in allowed:unauthorized.append(identity)
  if len(unauthorized)>5:return False  # Pause the publisher rather than continue an unprotected feed.
  try:

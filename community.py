@@ -52,6 +52,7 @@ def comments(channel_id):
         private_access=chat_allowed(conn,channel,user);mode=settings(conn,channel_id)
         broadcast=conn.execute('SELECT started_at FROM live_broadcast_sessions WHERE channel_id=?',(channel_id,)).fetchone()
         since=broadcast['started_at'] if broadcast else stamp(now_utc()-timedelta(days=RETENTION_DAYS))
+        if request.args.get('session_start') not in {None,since}:cursor='';after_time='';after_id=''
         rows=conn.execute("SELECT (SELECT COUNT(*) FROM community_likes l WHERE l.message_id=c.id) AS likes,(SELECT COUNT(*) FROM community_likes l WHERE l.message_id=c.id AND l.member_id=?) AS liked,c.id,c.member_id,c.body,c.kind,c.created_at,m.username,COALESCE(NULLIF(p.nickname,''),m.username) AS display_name,fa.alias AS fan_alias,f.number AS founder_number,sg.mode AS badge_mode,sg.letter AS badge_letter,sg.caption AS badge_caption FROM community_messages c JOIN members m ON m.id=c.member_id LEFT JOIN member_profiles p ON p.member_id=m.id LEFT JOIN fan_aliases fa ON fa.member_id=m.id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN founder_signatures sg ON sg.member_id=m.id WHERE c.channel_id=? AND c.created_at>=? AND (c.created_at>? OR (c.created_at=? AND c.id>?)) AND c.kind IN ('comment','sticker') AND c.blocked=0 AND (?=1 OR NOT EXISTS(SELECT 1 FROM community_audiences a WHERE a.message_id=c.id AND a.audience='subscribers')) ORDER BY c.created_at DESC,c.id DESC LIMIT 101",(user['id'],channel_id,since,after_time,after_time,after_id,int(private_access))).fetchall()
         reactions=[dict(r) for r in conn.execute("SELECT c.id,(SELECT COUNT(*) FROM community_likes l WHERE l.message_id=c.id) AS likes,(SELECT COUNT(*) FROM community_likes l WHERE l.message_id=c.id AND l.member_id=?) AS liked FROM community_messages c WHERE c.channel_id=? AND c.created_at>=? AND c.blocked=0 AND c.kind IN ('comment','sticker') AND (?=1 OR NOT EXISTS(SELECT 1 FROM community_audiences a WHERE a.message_id=c.id AND a.audience='subscribers')) ORDER BY c.created_at DESC,c.id DESC LIMIT 100",(user['id'],channel_id,since,int(private_access))).fetchall()]
         truncated=len(rows)>100;rows=rows[:100]
@@ -173,6 +174,8 @@ def install(app):app.register_blueprint(bp)
 @bp.post('/api/streamers/<channel_id>/comments/<message_id>/like')
 def like_comment(channel_id,message_id):
     user=get_user();data=request.get_json(silent=True) or {}
+    from membership import allow_attempt
+    if not allow_attempt('community-like',limit=120):return jsonify(error='Demasiadas reacciones seguidas. Espera un momento.'),429
     if not isinstance(data.get('liked'),bool):return jsonify(error='Indica si deseas dar o retirar Me gusta.'),400
     with database() as conn:
         conn.execute('BEGIN IMMEDIATE');channel=live_channel(conn,channel_id)

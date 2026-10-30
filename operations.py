@@ -119,12 +119,28 @@ def maintenance_report():
  missing=[name for name in required if not (root/name).is_file()]
  add('Archivos esenciales','error' if missing else 'ok','Faltan: '+', '.join(missing) if missing else 'Páginas, acceso, decoración y recursos de la aplicación presentes.')
  # Read-only checks for features added after the original maintenance panel.
- for table,columns,label in [('interface_revisions','topic,version','Sincronización entre dispositivos'),('adult_channel_rules','channel_id,adult_content,version,locked','Clasificación de contenido adulto'),('adult_age_declarations','member_id,context,minimum_age,expires_at','Declaraciones de edad'),('community_messages','id,channel_id,created_at,blocked','Comentarios incrementales'),('live_channel_views','channel_id,member_id,day','Visitas verificadas de canales')]:
+ for table,columns,label in [('interface_revisions','topic,version','Sincronización entre dispositivos'),('adult_channel_rules','channel_id,adult_content,version,locked','Clasificación de contenido adulto'),('adult_age_declarations','member_id,context,minimum_age,expires_at','Declaraciones de edad'),('community_messages','id,channel_id,created_at,blocked','Comentarios incrementales'),('live_channel_views','channel_id,member_id,day','Visitas verificadas de canales'),('live_broadcast_sessions','channel_id,started_at','Sesiones independientes de emisión'),('live_guest_invites','channel_id,member_id,session_start','Invitados del directo'),('community_likes','message_id,member_id','Me gusta reales de comentarios'),('live_channel_thumbnails','channel_id,session_start,updated_at','Miniaturas actuales del directo')]:
   try:
    with database() as c:c.execute('SELECT '+columns+' FROM '+table+' LIMIT 0').fetchall()
    add(label,'ok','Estructura de datos presente; no verifica contenidos ni realiza conexiones externas.')
   except Exception:add(label,'error','No se pudo comprobar la estructura de este módulo.')
- protected=['streamers.check_video','operations.maintenance_report','operations.launch_readiness','age_policy.moderate_classification']
+ try:
+  with database() as c:
+   excess=c.execute('SELECT COUNT(*) AS n FROM (SELECT channel_id FROM live_guest_invites GROUP BY channel_id HAVING COUNT(*)>6) AS overbooked').fetchone()['n']
+   owner_invites=c.execute('SELECT COUNT(*) AS n FROM live_guest_invites i JOIN streamer_channels c ON c.id=i.channel_id WHERE i.member_id=c.member_id').fetchone()['n']
+   stale=c.execute('SELECT COUNT(*) AS n FROM live_guest_invites i LEFT JOIN live_broadcast_sessions s ON s.channel_id=i.channel_id WHERE s.channel_id IS NULL OR s.started_at<>i.session_start').fetchone()['n']
+   duplicate_likes=c.execute('SELECT COUNT(*) AS n FROM (SELECT message_id,member_id FROM community_likes GROUP BY message_id,member_id HAVING COUNT(*)>1) AS repeated').fetchone()['n']
+  add('Límite de siete participantes','error' if excess or owner_invites else 'ok',f'{excess} canales con más de seis invitados; {owner_invites} invitaciones al propio anfitrión. No se han cambiado plazas ni permisos.')
+  add('Invitaciones vinculadas a su emisión','pending' if stale else 'ok',f'{stale} invitaciones con sesión anterior o ausente. No se eliminan automáticamente; el acceso debe comprobar la sesión vigente.')
+  add('Un Me gusta por cuenta y comentario','error' if duplicate_likes else 'ok',f'{duplicate_likes} votos duplicados detectados. Esta lectura no añade votos ni altera contadores.')
+ except Exception:
+  add('Integridad del directo compartido','error','No se pudo comprobar sesiones, invitados y reacciones. Revisa la migración y vuelve a ejecutar el diagnóstico.')
+ try:
+  from datetime import timedelta
+  with database() as c:stale_previews=c.execute('SELECT COUNT(*) AS n FROM live_channel_thumbnails t LEFT JOIN live_broadcast_sessions s ON s.channel_id=t.channel_id JOIN streamer_channels c ON c.id=t.channel_id WHERE s.channel_id IS NULL OR s.started_at<>t.session_start OR t.updated_at<? OR c.live_until IS NULL',(stamp(now_utc()-timedelta(seconds=90)),)).fetchone()['n']
+  add('Vigencia de miniaturas','pending' if stale_previews else 'ok',f'{stale_previews} miniaturas antiguas o de otra sesión; el servidor las excluye del acceso público. No se han capturado imágenes ni abierto cámaras.')
+ except Exception:add('Vigencia de miniaturas','error','No se pudo comprobar la caducidad de las miniaturas.')
+ protected=['streamers.check_video','operations.maintenance_report','operations.launch_readiness','age_policy.moderate_classification','recordings.listing','recordings.private_link']
  secured=all(getattr(current_app.view_functions.get(endpoint),'requires_admin',False) for endpoint in protected)
  add('Comprobaciones exclusivas de administración','ok' if secured else 'error','Protección de rol presente en diagnósticos de vídeo, mantenimiento y moderación.' if secured else 'Hay una ruta de diagnóstico sin la marca de protección administrativa.')
  add('Ubicación y VPN para contenido adulto','pending' if not current_app.extensions.get('adult_region_assessor') else 'ok','Sin proveedor de evaluación fiable: se aplica mínimo interno de 21 años; la IP no demuestra edad ni ausencia de VPN.' if not current_app.extensions.get('adult_region_assessor') else 'Evaluador regional instalado; comprueba su precisión y privacidad antes de confiar en sus resultados.')
@@ -140,7 +156,7 @@ def maintenance_report():
   scope=state()['scope']
   add('Aviso de mantenimiento','ok' if scope=='off' else 'pending','Sin cierre de mantenimiento.' if scope=='off' else 'Aviso activo: '+scope+'. Puedes gestionarlo desde el formulario de mantenimiento.')
  except Exception:add('Aviso de mantenimiento','error','No se pudo leer el estado de mantenimiento.')
- response=jsonify(at=stamp(now_utc()),version=VERSION,checks=rows,ok=not any(row['status']=='error' for row in rows),configuration_only=True)
+ response=jsonify(at=stamp(now_utc()),version=VERSION,checks=rows,ok=not any(row['status']=='error' for row in rows),configuration_only=True,automation={'mode':'admin_visible_page','default_interval_minutes':30,'server_scheduler':False,'public_monitor':{'provider':'github_actions','configured_schedule':'7,37 * * * *','observed_active':None},'read_only':True,'description':'Revisión periódica mientras el panel administrativo permanece abierto y visible. No es un monitor permanente del servidor ni repara datos automáticamente.'})
  response.headers['Cache-Control']='no-store'
  return response
 

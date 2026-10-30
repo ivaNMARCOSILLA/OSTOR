@@ -295,6 +295,7 @@ def restrict_music():
     path=request.path
     if not path.startswith('/api/') or path.startswith(('/api/account/','/api/admin/','/api/streamers/admin/','/api/play/','/api/resolve/','/api/channel-subscriptions/','/api/payments/')) or path in {'/api/navigation/events','/api/navigation/consent','/api/status','/api/sync','/api/search','/api/trending','/api/proxy','/api/promotion/event','/api/presence','/api/live/catalogue','/api/live/founders','/api/live/founders/claim'}:
         return None
+    if re.fullmatch(r'/api/streamers/[a-f0-9]{32}/thumbnail',path) and request.method=='GET':return None
     if path.startswith('/api/stickers/') and path.endswith('/phrase'):return None
     if path.endswith('/sound.wav') and path.startswith(('/api/stickers/','/api/live/founders/')):return None
     user=get_user()

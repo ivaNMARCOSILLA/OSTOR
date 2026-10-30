@@ -48,10 +48,24 @@ $('fan-alias-form')?.addEventListener('submit',async e=>{e.preventDefault();try{
 $('stripe-test-checkout')?.addEventListener('click',async e=>{e.target.disabled=true;try{const d=await api('/api/admin/payments/test-checkout',{});location.assign(d.url);}catch(error){$('stripe-test-status').textContent=error.message;e.target.disabled=false;}});
 
 // Read-only administrative diagnostics. No background work for public visitors.
-let maintenanceBusy=false,maintenanceLast=null,maintenanceTimer=null,maintenanceConfigured=false,maintenancePreferencesKey=null;
+let maintenanceBusy=false,maintenanceLast=null,maintenanceTimer=null,maintenanceConfigured=false,maintenancePreferencesKey=null,maintenanceNextAt=0,maintenanceLastAt=0;
 const maintenanceHistory=[];
 const maintenanceLabels={ok:'Correcto',pending:'Pendiente',error:'Error'};
 const maintenanceTrace=[];
+function maintenanceScheduleStatus(){
+ if(!$('maintenance-check-now'))return;
+ let note=$('maintenance-bot-schedule');if(!note){note=document.createElement('p');note.id='maintenance-bot-schedule';note.setAttribute('role','status');$('maintenance-check-now').after(note);}
+ const last=maintenanceLastAt?'Última revisión: '+new Date(maintenanceLastAt).toLocaleString('es-ES')+'. ':'Aún no hay revisión completada en esta página. ';
+ note.textContent='Bot de revisión · '+last+(maintenanceNextAt?'Próxima revisión: '+new Date(maintenanceNextAt).toLocaleString('es-ES')+'. ':'Solo revisión manual. ')+'Funciona con este panel abierto y visible; al volver, revisa si hay una comprobación pendiente. No hay vigilancia permanente del servidor ni reparaciones de datos automáticas.';
+}
+function scheduleMaintenance(){
+ clearTimeout(maintenanceTimer);maintenanceTimer=null;
+ const minutes=Number($('maintenance-frequency')?.value||0);
+ if(!maintenanceConfigured||!minutes){maintenanceNextAt=0;maintenanceScheduleStatus();return;}
+ maintenanceNextAt=Date.now()+minutes*60000;maintenanceScheduleStatus();
+ maintenanceTimer=setTimeout(()=>{maintenanceTimer=null;if(!document.hidden)reviewMaintenance('automática');},minutes*60000);
+}
+
 function traceMaintenance(message){
  const terminal=$('maintenance-terminal');if(!terminal)return;
  const line='['+new Date().toLocaleTimeString('es-ES')+'] '+message;
@@ -91,8 +105,15 @@ async function reviewMaintenance(source='manual'){
   const sync=window.OlInterfaceSync;report.checks.push({name:'Actualización automática de esta página',status:sync?.lastCheck&&Date.now()-sync.lastCheck<45000?'ok':'pending',detail:sync?.lastCheck?'Última comprobación: '+new Date(sync.lastCheck).toLocaleTimeString('es-ES')+'. Fallos consecutivos: '+sync.failures+'.':'Aún no hay una comprobación de sincronización reciente.'});
   const activeVideo=[...document.querySelectorAll('#live-media video,#studio-screen video')].filter(e=>e.getClientRects().length&&e.srcObject);
   report.checks.push({name:'Controles nativos del vídeo',status:activeVideo.some(e=>e.controls)?'error':activeVideo.length?'ok':'pending',detail:activeVideo.length?'Vídeos activos revisados; el directo no debe mostrar pausa/reproducción nativos.':'No hay vídeo activo en esta página. Comprueba un directo en web y móvil.'});
+  const player=$('live-player'),chat=$('community-panel'),controls=$('publisher-screen-controls');
+  if(player&&chat&&player.getClientRects().length){
+   const p=player.getBoundingClientRect(),c=chat.getBoundingClientRect();let blocked=false;
+   if(controls&&controls.getClientRects().length){const b=controls.getBoundingClientRect();blocked=c.left<b.right&&c.right>b.left&&c.top<b.bottom&&c.bottom>b.top;}
+   const inside=c.left>=p.left-1&&c.right<=p.right+1&&c.height<=p.height*.75+1;
+   report.checks.push({name:'Chat y controles de esta pantalla',status:inside&&!blocked?'ok':'error',detail:inside&&!blocked?'Chat dentro del reproductor, con altura máxima del 75%, sin invadir los controles visibles.':'El chat puede superar sus límites o cruzar los controles visibles. Revisa el tamaño y la posición; el bot no cierra el directo.'});
+  }else report.checks.push({name:'Chat y controles de esta pantalla',status:'pending',detail:'No hay reproductor visible. La geometría se comprueba únicamente en una pantalla de emisión activa; no se valida una cámara remota desde aquí.'});
   report.ok=!report.checks.some(row=>row.status==='error');
-  maintenanceLast=report;
+  maintenanceLast=report;maintenanceLastAt=Date.now();
   const date=new Date(report.at).toLocaleString('es-ES');
   const errors=report.checks.filter(row=>row.status==='error').length,pending=report.checks.filter(row=>row.status==='pending').length;
   const summary=date+' · '+errors+' errores · '+pending+' pendientes.';
@@ -104,16 +125,18 @@ async function reviewMaintenance(source='manual'){
   $('maintenance-check-history').replaceChildren(...maintenanceHistory.map(text=>{const li=document.createElement('li');li.textContent=text;return li;}));
   $('maintenance-download').disabled=false;
  }catch(error){$('maintenance-check-status').textContent='No se pudo completar la revisión: '+error.message;traceMaintenance('ERROR · '+error.message);traceMaintenance('FIN · Revisión incompleta. Puedes volver a intentarlo.');}
- finally{maintenanceBusy=false;$('maintenance-check-now').disabled=false;}
+ finally{maintenanceBusy=false;$('maintenance-check-now').disabled=false;scheduleMaintenance();}
 }
 $('maintenance-check-now')?.addEventListener('click',()=>reviewMaintenance('manual'));
+if($('maintenance-check-now')){const link=document.createElement('a');link.href='https://github.com/ivaNMARCOSILLA/OSTOR/actions/workflows/navigation-health.yml';link.target='_blank';link.rel='noopener noreferrer';link.textContent='Ver resultados del bot de rutas públicas · GitHub Actions';$('maintenance-check-now').after(link);}
+
 $('maintenance-download')?.addEventListener('click',()=>{if(!maintenanceLast)return;const url=URL.createObjectURL(new Blob([JSON.stringify(maintenanceLast,null,2)],{type:'application/json'}));const link=document.createElement('a');link.href=url;link.download='ol-mantenimiento.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
 async function startMaintenanceReviews(){
  if(!$('maintenance-check-now'))return;
- try{await(window.OlAccountReady||Promise.resolve());const account=await api('/api/account/me');if(account.user?.role!=='admin'){clearInterval(maintenanceTimer);maintenanceTimer=null;maintenanceConfigured=false;return;}if(maintenanceConfigured)return;maintenanceConfigured=true;
+ try{await(window.OlAccountReady||Promise.resolve());const account=await api('/api/account/me');if(account.user?.role!=='admin'){clearTimeout(maintenanceTimer);maintenanceTimer=null;maintenanceNextAt=0;maintenanceConfigured=false;maintenanceScheduleStatus();return;}if(maintenanceConfigured)return;maintenanceConfigured=true;
  const key='ol_admin_maintenance_v1_'+account.user.id;
  if(maintenancePreferencesKey!==key){maintenancePreferencesKey=key;try{const saved=JSON.parse(localStorage.getItem(key)||'null');if(saved){if([0,15,30,60].includes(saved.minutes))$('maintenance-frequency').value=String(saved.minutes);$('maintenance-check-colors').checked=saved.colors!==false;$('maintenance-check-links').checked=saved.links!==false;}}catch{}}
- const minutes=Number($('maintenance-frequency').value);traceMaintenance(minutes?'PROGRAMACIÓN · Diagnóstico cada '+minutes+' minutos con el panel visible.':'PROGRAMACIÓN · Solo revisión manual.');await reviewMaintenance('inicial');if(minutes)maintenanceTimer=setInterval(()=>{if(!document.hidden)reviewMaintenance('automática');},minutes*60000);}catch{}
+ const minutes=Number($('maintenance-frequency').value);traceMaintenance(minutes?'PROGRAMACIÓN · Diagnóstico cada '+minutes+' minutos con el panel visible.':'PROGRAMACIÓN · Solo revisión manual.');maintenanceScheduleStatus();await reviewMaintenance('inicial');}catch{}
 }
 window.addEventListener('ol:account-refreshed',startMaintenanceReviews);
 startMaintenanceReviews();
@@ -130,4 +153,7 @@ $('stripe-account-health')?.addEventListener('click',async()=>{const button=$('s
 
 window.addEventListener('ol:interface-update',event=>{if(event.detail.public&&!document.hidden)inspect();});
 
-for(const id of ['maintenance-frequency','maintenance-check-colors','maintenance-check-links'])$(id)?.addEventListener('change',()=>{if(maintenancePreferencesKey)try{localStorage.setItem(maintenancePreferencesKey,JSON.stringify({minutes:Number($('maintenance-frequency').value),colors:$('maintenance-check-colors').checked,links:$('maintenance-check-links').checked}));}catch{}clearInterval(maintenanceTimer);maintenanceTimer=null;maintenanceConfigured=false;startMaintenanceReviews();});
+for(const id of ['maintenance-frequency','maintenance-check-colors','maintenance-check-links'])$(id)?.addEventListener('change',()=>{if(maintenancePreferencesKey)try{localStorage.setItem(maintenancePreferencesKey,JSON.stringify({minutes:Number($('maintenance-frequency').value),colors:$('maintenance-check-colors').checked,links:$('maintenance-check-links').checked}));}catch{}clearTimeout(maintenanceTimer);maintenanceTimer=null;maintenanceConfigured=false;startMaintenanceReviews();});
+
+// A suspended tab catches up once, rather than replaying every missed interval.
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&maintenanceConfigured&&!maintenanceBusy&&maintenanceNextAt&&Date.now()>=maintenanceNextAt)reviewMaintenance('automática al volver al panel');});

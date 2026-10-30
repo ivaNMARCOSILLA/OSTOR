@@ -1,5 +1,5 @@
-import {playStickerSound,mountStickerVoiceControls} from '/assets/sticker-audio.js?v=9.26.0';
-import {decorateSticker} from '/assets/sticker-scenes.js?v=9.26.0';
+import {playStickerSound,mountStickerVoiceControls} from '/assets/sticker-audio.js?v=9.27.0';
+import {decorateSticker} from '/assets/sticker-scenes.js?v=9.27.0';
 /* Account collection: paginated artwork, bounded active-time rewards. */
 const panel=document.getElementById('ol-collection');
 if(panel){
