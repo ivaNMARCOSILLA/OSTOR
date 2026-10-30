@@ -16,8 +16,19 @@ def online(conn):
     return dict(total=row['members']+row['guests'], members=row['members'], guests=row['guests'], window_seconds=WINDOW)
 
 
+def forget_presence():
+    try:
+        ident=URLSafeSerializer(current_app.secret_key,salt='ol-presence').loads(request.cookies.get(COOKIE,''))
+        if isinstance(ident,str) and len(ident)==32:
+            with database() as conn:conn.execute('DELETE FROM online_presence WHERE visitor_id=?',(ident,))
+    except BadSignature:pass
+
+
 @bp.post('/api/presence')
 def heartbeat():
+    data=request.get_json(silent=True) or {}
+    if not isinstance(data,dict) or data.get('consent') is not True or request.headers.get('Sec-GPC')=='1' or request.headers.get('DNT')=='1':
+        forget_presence();response=jsonify(recorded=False,reason='consent_required');response.delete_cookie(COOKIE);return response
     limiter = current_app.extensions.get('streamer_rate_limiter')
     if limiter and not limiter('presence', 120):
         return jsonify(error='Espera un momento para actualizar el contador.'), 429

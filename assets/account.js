@@ -230,7 +230,7 @@ async function loadStatistics(){
   const cards=[['En línea ahora',d.online.total],['Con cuenta en línea',d.online.members],['Visitantes en línea',d.online.guests],['Clientes registrados',d.accounts.registered],['Registros · últimos 7 días',d.accounts.new_week],['Periodos pagados vigentes',d.accounts.paid_active],['Amigos con acceso gratuito',d.friends],['Fundadores activos',d.founders],['Canales creados',d.channels],['Emisiones activas',d.live],['Pagos confirmados',d.payments.count],['Importe confirmado · total',money(d.payments.total_cents)],['Importe confirmado · mes UTC',money(d.payments.month_cents)],['Correos pendientes o fallidos',d.pending_notifications],['Presentación · mostrada',d.promotion?.shown||0],['Presentación · siguiente',d.promotion?.next||0],['Presentación · omitida',d.promotion?.skip||0],['Presentación · completada',d.promotion?.complete||0]];
   $('statistics-cards').replaceChildren(...cards.map(([label,value])=>{const card=text('article','');card.append(text('strong',String(value)),text('span',label));return card;}));
   $('statistics-days').replaceChildren(...d.days.map(day=>{const row=text('tr','');for(const value of [day.day,day.registrations,day.payments,money(day.cents)])row.append(text('td',String(value)));return row;}));
-  $('statistics-status').textContent='Actualizado: '+date(d.updated_at)+'. En línea: actividad reciente de 90 segundos; cuentas únicas y visitantes por navegador. Las categorías de acceso pueden coincidir.';
+  $('statistics-status').textContent='Actualizado: '+date(d.updated_at)+'. En línea: actividad reciente de 90 segundos; cuentas y navegadores que permiten las métricas opcionales. Las categorías de acceso pueden coincidir.';
  }catch(error){$('statistics-status').textContent='No se pudieron actualizar las estadísticas. '+error.message;}finally{button.disabled=false;}
 }
 $('refresh-statistics').addEventListener('click',loadStatistics);
@@ -286,3 +286,64 @@ document.addEventListener('focusout',()=>{if(interfaceRefreshPending)setTimeout(
 
 async function loadRecordings(){if(current?.role!=='admin')return;try{const data=await api('/api/admin/recordings'),cfg=data.configuration;$('recordings-status').textContent=cfg.enabled&&cfg.storage_configured&&cfg.retention_confirmed?'Grabación configurada. Comprueba un archivo real antes de darla por validada.':'Grabación pendiente: configura el depósito privado, el borrado a los 30 días y LiveKit. No se están archivando vídeos.';const list=$('recordings-list');list.replaceChildren();for(const item of data.recordings){const row=text('article','');row.append(text('strong',item.title),text('p',item.state+' · '+date(item.started_at)+' · caduca '+date(item.expires_at)));const check=text('button','Comprobar estado');check.type='button';check.className='secondary';check.addEventListener('click',async()=>{try{await api('/api/admin/recordings/reconcile',{id:item.id});await loadRecordings();}catch(error){$('recordings-status').textContent=error.message;}});row.append(check);if(item.state==='completed'&&new Date(item.expires_at)>new Date()){const open=text('button','Abrir grabación privada');open.type='button';open.addEventListener('click',async()=>{try{const result=await api('/api/admin/recordings/'+item.id+'/link');const link=document.createElement('a');link.href=result.url;link.target='_blank';link.rel='noopener noreferrer';link.click();}catch(error){$('recordings-status').textContent=error.message;}});row.append(open);}list.append(row);}if(!data.recordings.length)list.append(text('p','Todavía no hay grabaciones registradas.'));}catch(error){$('recordings-status').textContent=error.message;}}
 $('live-recordings-admin')?.addEventListener('toggle',()=>{if($('live-recordings-admin').open)loadRecordings();});$('recordings-refresh')?.addEventListener('click',loadRecordings);$('recordings-cleanup')?.addEventListener('click',async()=>{try{const result=await api('/api/admin/recordings/cleanup',{});await loadRecordings();$('recordings-status').textContent=result.deleted+' archivos caducados borrados; '+result.pending+' pendientes.';}catch(error){$('recordings-status').textContent=error.message;}});
+
+
+// Consented visit sessions. Browser and network labels are estimates, never people counts.
+let visitorRegistryPage=1,visitorRegistryPages=1,visitorRegistryBusy=false,visitorRegistryPending=false,visitorRegistryRevision=0;
+const visitorDate=value=>{const instant=new Date(value);return value&&Number.isFinite(instant.getTime())?instant.toLocaleString('es-ES',{timeZone:'Europe/Madrid',dateStyle:'medium',timeStyle:'short'}):'Sin dato';};
+const visitorPageNames={'/':'Inicio · música','/live':'Ol Livis','/account':'Mi cuenta','/legal/privacidad.html':'Privacidad','/legal/cookies.html':'Cookies','/legal/aviso-legal.html':'Aviso legal'};
+function visitorRegistryButtons(){
+ $('visitor-registry-refresh').disabled=visitorRegistryBusy;
+ $('visitor-registry-prev').disabled=visitorRegistryBusy||visitorRegistryPage<=1;
+ $('visitor-registry-next').disabled=visitorRegistryBusy||visitorRegistryPage>=visitorRegistryPages;
+}
+function visitorField(container,label,value){container.append(text('dt',label),text('dd',value));}
+async function loadVisitorRegistry(){
+ if(current?.role!=='admin'||!$('visitor-registry').open||document.hidden)return;
+ if(visitorRegistryBusy){visitorRegistryPending=true;return;}
+ visitorRegistryBusy=true;visitorRegistryButtons();
+ const revision=visitorRegistryRevision,query=new URLSearchParams({page:String(visitorRegistryPage),kind:$('visitor-registry-filter').value});
+ $('visitor-registry-status').textContent='Consultando las visitas consentidas…';
+ try{
+  const data=await api('/api/admin/visits?'+query);
+  if(revision!==visitorRegistryRevision||current?.role!=='admin'||!$('visitor-registry').open)return;
+  visitorRegistryPage=data.page;visitorRegistryPages=data.pages;
+  $('visitor-registry-page').textContent=`Página ${data.page} de ${data.pages} · ${data.total} sesiones`;
+  $('visitor-registry-status').textContent=`Actualizado: ${visitorDate(new Date().toISOString())} · conservación de ${data.retention_days} días · actualización cada 30 segundos mientras este registro esté abierto.`;
+  const summary=$('visitor-registry-summary');summary.replaceChildren();
+  for(const [label,value] of [['Sesiones',data.summary.sessions],['Navegadores estimados',data.summary.browsers],['Sesiones con cuenta',data.summary.registered],['Sesiones sin cuenta',data.summary.guests]]){
+   const card=text('article','');card.append(text('strong',Number(value||0).toLocaleString('es-ES')),text('span',label));summary.append(card);
+  }
+  const list=$('visitor-registry-list');list.replaceChildren();
+  for(const visit of data.visits){
+   const card=text('article','');card.className='visitor-session';
+   card.append(text('h4','Navegador D-'+String(visit.device_id).slice(0,16)),text('p',visit.username?'Cuenta: '+visit.username:'Visitante sin cuenta'));
+   const fields=document.createElement('dl');
+   visitorField(fields,'Dispositivo / sistema / navegador',[visit.device,visit.os,visit.browser].filter(Boolean).join(' · ')||'Sin clasificar');
+   visitorField(fields,'Sesión','S-'+String(visit.id).slice(0,12));
+   visitorField(fields,'Red protegida',visit.network_id?'R-'+String(visit.network_id).slice(0,16)+' · '+(visit.network_day||'Sin fecha'):'No disponible');
+   visitorField(fields,'Entrada',visitorDate(visit.started_at));visitorField(fields,'Última actividad',visitorDate(visit.last_seen));
+   visitorField(fields,'Última página',visitorPageNames[visit.last_page]||'Página de electronicama');
+   visitorField(fields,'Páginas registradas',Number(visit.pageviews||0).toLocaleString('es-ES'));
+   card.append(fields);list.append(card);
+  }
+  if(!data.visits.length)list.append(text('p','Todavía no hay visitas consentidas para este filtro. Rechazar las métricas no impide usar electronicama.'));
+ }catch(error){if(revision===visitorRegistryRevision&&current?.role==='admin')$('visitor-registry-status').textContent='No se pudo actualizar el registro: '+error.message;}
+ finally{
+  visitorRegistryBusy=false;visitorRegistryButtons();
+  if(visitorRegistryPending){visitorRegistryPending=false;loadVisitorRegistry();}
+ }
+}
+function invalidateVisitorRegistry(){visitorRegistryRevision+=1;loadVisitorRegistry();}
+$('visitor-registry').addEventListener('toggle',()=>{visitorRegistryRevision+=1;if($('visitor-registry').open)loadVisitorRegistry();});
+$('visitor-registry-refresh').addEventListener('click',invalidateVisitorRegistry);
+$('visitor-registry-filter').addEventListener('change',()=>{visitorRegistryPage=1;invalidateVisitorRegistry();});
+$('visitor-registry-prev').addEventListener('click',()=>{visitorRegistryPage=Math.max(1,visitorRegistryPage-1);invalidateVisitorRegistry();});
+$('visitor-registry-next').addEventListener('click',()=>{visitorRegistryPage=Math.min(visitorRegistryPages,visitorRegistryPage+1);invalidateVisitorRegistry();});
+window.addEventListener('ol:account-refreshed',()=>{
+ if(current?.role!=='admin'){
+  visitorRegistryRevision+=1;visitorRegistryPending=false;$('visitor-registry-list').replaceChildren();$('visitor-registry-summary').replaceChildren();$('visitor-registry-status').textContent='Este registro es exclusivo de administración.';
+ }
+});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&$('visitor-registry').open)loadVisitorRegistry();});
+setInterval(loadVisitorRegistry,30000);

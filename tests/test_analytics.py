@@ -17,7 +17,7 @@ class AnalyticsTests(unittest.TestCase):
    from registration_support import registration_data
    data=registration_data(client,data)
   token=client.get('/api/account/me').json['csrf']
-  return client.post(path,json=data or {},headers={'X-CSRF-Token':token})
+  return client.post(path,json=(data or {})|({'consent':True} if path=='/api/presence' else {}),headers={'X-CSRF-Token':token})
  def test_guests_members_deduplication_expiry_and_private_statistics(self):
   guest=app.app.test_client()
   self.assertEqual(guest.get('/api/admin/statistics').status_code,403)
@@ -54,3 +54,12 @@ class AnalyticsTests(unittest.TestCase):
   self.assertEqual(self.post(friend,'/api/account/accept-invite',{'token':token,'password':'accepted-stats-password-123'}).status_code,200)
   activated=self.admin.get('/api/admin/statistics').json
   self.assertEqual(activated['accounts']['registered'],1);self.assertEqual(activated['friends'],1)
+
+ def test_presence_without_optional_consent_is_not_recorded(self):
+  guest=app.app.test_client();token=guest.get('/api/account/me').json['csrf']
+  response=guest.post('/api/presence',json={},headers={'X-CSRF-Token':token})
+  self.assertFalse(response.json['recorded']);self.assertIsNone(guest.get_cookie('ol_presence'))
+  self.assertEqual(self.admin.get('/api/admin/statistics').json['online']['total'],0)
+  self.post(guest,'/api/presence')
+  result=guest.post('/api/presence',json={'consent':True},headers={'X-CSRF-Token':token,'Sec-GPC':'1'})
+  self.assertFalse(result.json['recorded']);self.assertEqual(self.admin.get('/api/admin/statistics').json['online']['total'],0)

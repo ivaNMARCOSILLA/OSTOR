@@ -194,6 +194,8 @@ def init_database():
 
     from operations import init_database as init_operations
     init_operations()
+    from visitor_registry import init_database as init_visitor_registry
+    init_visitor_registry()
 
 def create_admin(username, password):
     username = clean_username(username)
@@ -293,7 +295,7 @@ def verify_csrf():
 def restrict_music():
     # Music is free. Account collections require login; Ol Livis requires premium.
     path=request.path
-    if not path.startswith('/api/') or path.startswith(('/api/account/','/api/admin/','/api/streamers/admin/','/api/play/','/api/resolve/','/api/channel-subscriptions/','/api/payments/')) or path in {'/api/navigation/events','/api/navigation/consent','/api/status','/api/sync','/api/search','/api/trending','/api/proxy','/api/promotion/event','/api/presence','/api/live/catalogue','/api/live/founders','/api/live/founders/claim'}:
+    if not path.startswith('/api/') or path.startswith(('/api/account/','/api/admin/','/api/streamers/admin/','/api/play/','/api/resolve/','/api/channel-subscriptions/','/api/payments/')) or path in {'/api/visits','/api/visits/public','/api/visits/consent','/api/navigation/events','/api/navigation/consent','/api/status','/api/locale','/api/sync','/api/search','/api/trending','/api/proxy','/api/promotion/event','/api/presence','/api/live/catalogue','/api/live/founders','/api/live/founders/claim'}:
         return None
     if re.fullmatch(r'/api/streamers/[a-f0-9]{32}/thumbnail',path) and request.method=='GET':return None
     if path.startswith('/api/stickers/') and path.endswith('/phrase'):return None

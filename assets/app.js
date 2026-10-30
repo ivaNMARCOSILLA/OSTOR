@@ -512,8 +512,8 @@ function closePlayer() {
   sleepDeadline = 0; byId('sleep-timer').value = '0'; byId('sleep-status').textContent = '';
 }
 
-function advertisingConsent(allowed=false){try{localStorage.setItem(KEY.ads,'rejected');localStorage.setItem('electronicama_navigation_consent_v1',allowed?'accepted':'rejected');}catch{}window.dispatchEvent(new CustomEvent('electronicama:navigation-consent',{detail:{allowed}}));byId('consent-dialog').classList.add('hidden');}
-function consentInit(){let stored=null;try{stored=localStorage.getItem('electronicama_navigation_consent_v1');}catch{}if(!stored)byId('consent-dialog').classList.remove('hidden');}
+function advertisingConsent(allowed=false){try{localStorage.setItem(KEY.ads,'rejected');localStorage.setItem('electronicama_navigation_consent_v1',allowed?'accepted':'rejected');localStorage.setItem('electronicama_visit_registry_consent_v1',allowed?'accepted':'rejected');}catch{}window.dispatchEvent(new CustomEvent('electronicama:navigation-consent',{detail:{allowed}}));byId('consent-dialog').classList.add('hidden');}
+function consentInit(){let stored=null;try{stored=localStorage.getItem('electronicama_visit_registry_consent_v1');}catch{}if(!stored)byId('consent-dialog').classList.remove('hidden');}
 
 
 function init() {

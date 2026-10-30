@@ -31,7 +31,7 @@ class PostgresMembershipTests(unittest.TestCase):
         ready=patch('streamers.streamer_sales_ready',return_value=True);ready.start();self.addCleanup(ready.stop)
         self.app=application.app
         with self.app.app_context(),m.database() as connection:
-            for table in ['live_channel_thumbnails','community_likes','live_guest_invites','live_broadcast_sessions','live_recordings','community_report_details','interface_revisions','adult_age_declarations','adult_channel_rules','live_channel_views','community_retention_clock','stripe_order_names','annual_access_emails','fan_aliases','stripe_reversals','stripe_events','stripe_orders','stripe_connect_states','stripe_accounts','ol_supervisors','ol_operations','moderator_permissions','two_factor_recovery','member_two_factor','community_audiences','creator_subscriptions','channel_subscription_settings','subscription_approvals','subscription_agreements','pricing_moderators','founder_slot_history','live_launch','creator_daily_activity','founder_activity','live_entitlements','human_challenges','promotion_metrics','online_presence','founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:
+            for table in ['visitor_sessions','visitor_devices','live_channel_thumbnails','community_likes','live_guest_invites','live_broadcast_sessions','live_recordings','community_report_details','interface_revisions','adult_age_declarations','adult_channel_rules','live_channel_views','community_retention_clock','stripe_order_names','annual_access_emails','fan_aliases','stripe_reversals','stripe_events','stripe_orders','stripe_connect_states','stripe_accounts','ol_supervisors','ol_operations','moderator_permissions','two_factor_recovery','member_two_factor','community_audiences','creator_subscriptions','channel_subscription_settings','subscription_approvals','subscription_agreements','pricing_moderators','founder_slot_history','live_launch','creator_daily_activity','founder_activity','live_entitlements','human_challenges','promotion_metrics','online_presence','founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:
                 connection.execute('DELETE FROM '+table)
         with self.app.app_context():
             m.create_admin('pg-admin','postgres-admin-password-123')
@@ -147,11 +147,11 @@ class PostgresMembershipTests(unittest.TestCase):
 
     def test_statistics_and_presence_use_persistent_postgresql(self):
         visitor=self.app.test_client()
-        result=self.post(visitor,'/api/presence',{})
+        result=self.post(visitor,'/api/presence',{'consent':True})
         self.assertEqual(result.status_code,200)
         self.assertEqual(result.json,{'recorded':True});self.assertEqual(self.admin.get('/api/admin/statistics').json['online']['guests'],1)
-        self.post(visitor,'/api/presence',{});self.assertEqual(self.admin.get('/api/admin/statistics').json['online']['guests'],1)
-        self.post(self.client,'/api/presence',{});self.assertEqual(self.admin.get('/api/admin/statistics').json['online']['members'],1)
+        self.post(visitor,'/api/presence',{'consent':True});self.assertEqual(self.admin.get('/api/admin/statistics').json['online']['guests'],1)
+        self.post(self.client,'/api/presence',{'consent':True});self.assertEqual(self.admin.get('/api/admin/statistics').json['online']['members'],1)
         self.assertEqual(self.grant(self.admin,'monthly','PG-STATISTICS-001').status_code,200)
         data=self.admin.get('/api/admin/statistics').json
         self.assertEqual(data['accounts']['registered'],1)
@@ -277,7 +277,7 @@ class PostgresMembershipTests(unittest.TestCase):
                 legacy_payment(source,admin,ident,'welcome','SQLITE-MIGRATE-001')
                 expected=client.get('/api/account/me').json['user']['access_until']
             with self.app.app_context(),m.database() as connection:
-                for table in ['live_channel_thumbnails','community_likes','live_guest_invites','live_broadcast_sessions','live_recordings','community_report_details','interface_revisions','adult_age_declarations','adult_channel_rules','live_channel_views','community_retention_clock','stripe_order_names','annual_access_emails','fan_aliases','stripe_reversals','stripe_events','stripe_orders','stripe_connect_states','stripe_accounts','ol_supervisors','ol_operations','moderator_permissions','two_factor_recovery','member_two_factor','community_audiences','creator_subscriptions','channel_subscription_settings','subscription_approvals','subscription_agreements','pricing_moderators','founder_slot_history','live_launch','creator_daily_activity','founder_activity','live_entitlements','human_challenges','promotion_metrics','founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:connection.execute('DELETE FROM '+table)
+                for table in ['visitor_sessions','visitor_devices','live_channel_thumbnails','community_likes','live_guest_invites','live_broadcast_sessions','live_recordings','community_report_details','interface_revisions','adult_age_declarations','adult_channel_rules','live_channel_views','community_retention_clock','stripe_order_names','annual_access_emails','fan_aliases','stripe_reversals','stripe_events','stripe_orders','stripe_connect_states','stripe_accounts','ol_supervisors','ol_operations','moderator_permissions','two_factor_recovery','member_two_factor','community_audiences','creator_subscriptions','channel_subscription_settings','subscription_approvals','subscription_agreements','pricing_moderators','founder_slot_history','live_launch','creator_daily_activity','founder_activity','live_entitlements','human_challenges','promotion_metrics','founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:connection.execute('DELETE FROM '+table)
             counts=migrate(Path(folder)/'members.sqlite3',self.app)
             self.assertEqual(counts['members'],2);self.assertEqual(counts['payments'],1)
             migrated=self.app.test_client()
@@ -347,5 +347,19 @@ class PostgresMembershipTests(unittest.TestCase):
         album=device.get('/api/rewards').json
         self.assertTrue(any(item['id']==ident for item in album['stickers']))
         self.assertEqual(album['stickers'][0]['id'],'hello');self.assertEqual(album['stickers'][0]['points'],0)
+
+    def test_consented_visits_are_private_cascade_and_public_anonymous(self):
+        result=self.post(self.client,'/api/visits',{'consent':True,'event':'page','page':'/'})
+        self.assertEqual(result.status_code,200);self.assertTrue(result.json['recorded'])
+        private=self.admin.get('/api/admin/visits').json
+        self.assertEqual(private['summary']['sessions'],1)
+        self.assertEqual(private['summary']['registered'],1)
+        public=self.app.test_client().get('/api/visits/public').json
+        self.assertEqual(public['summary']['sessions'],1)
+        self.assertEqual(set(public['visits'][0]),{'at','device','page'})
+        self.assertNotIn('pg-client',str(public))
+        self.assertEqual(self.client.get('/api/admin/visits').status_code,403)
+        self.assertEqual(self.post(self.client,'/api/visits/consent',{'allowed':False}).status_code,200)
+        self.assertEqual(self.admin.get('/api/admin/visits').json['total'],0)
 
 if __name__=='__main__':unittest.main(verbosity=2)

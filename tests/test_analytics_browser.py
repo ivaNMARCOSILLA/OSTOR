@@ -4,12 +4,12 @@ from browser_support import BASE_URL,login_context
 def run():
  with sync_playwright() as p:
   browser=p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox'])
-  visitor=browser.new_context();guest=visitor.new_page();errors=[]
+  visitor=browser.new_context();visitor.add_init_script("localStorage.setItem('electronicama_visit_registry_consent_v1','accepted')");guest=visitor.new_page();errors=[]
   guest.on('pageerror',lambda e:errors.append(str(e)))
   guest.goto(BASE_URL+'/live')
   assert guest.locator('[data-online-counter]').is_hidden()
   assert visitor.request.get(BASE_URL+'/api/admin/statistics').status==403
-  context=browser.new_context();login_context(context);page=context.new_page()
+  context=browser.new_context();context.add_init_script("localStorage.setItem('electronicama_visit_registry_consent_v1','accepted')");login_context(context);page=context.new_page()
   page.on('pageerror',lambda e:errors.append(str(e)))
   page.goto(BASE_URL+'/account')
   page.locator('#statistics-cards article').first.wait_for()

@@ -31,6 +31,11 @@ def run():
         sys.path.insert(0,str(ROOT))
         code=patch('human_check.new_code',return_value='OL234');code.start()
         from app import app
+        # Existing regression suites deliberately exercise the Spanish interface.
+        # Locale-specific browser tests supply their own language fixtures.
+        if selected!=['test_site_language_browser.py'] and 'locale_preferences.preference' in app.view_functions:
+            from flask import jsonify
+            app.view_functions['locale_preferences.preference']=lambda:jsonify(language='es',source='isolated_test',supported=['es','ca','en','fr','pt','de','it'])
         import email_security
         mail_directory=Path(directory)/'mail';mail_directory.mkdir()
         def capture_mail(recipient,title,body):

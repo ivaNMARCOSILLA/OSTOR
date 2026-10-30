@@ -18,6 +18,7 @@ import threading
 import time
 import unicodedata
 from collections import OrderedDict, deque
+from functools import lru_cache
 from urllib.parse import quote, urljoin, urlparse
 
 import requests
@@ -30,7 +31,7 @@ app = Flask(__name__, static_folder=os.path.join(ROOT, "assets"), static_url_pat
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 app.logger.setLevel(logging.INFO)
 
-VERSION = "9.27.0"
+VERSION = "9.28.0"
 AUDIUS_APP_NAME = os.getenv("AUDIUS_APP_NAME", "electronicama")
 SEARCH_CACHE_SECONDS = max(15, min(int(os.getenv("SEARCH_CACHE_SECONDS", "300")), 3600))
 ARCHIVE_CACHE_SECONDS = max(60, min(int(os.getenv("ARCHIVE_CACHE_SECONDS", "3600")), 86400))
@@ -440,8 +441,26 @@ def multi_search(query: str, page: int = 1, source: str = "ALL") -> list:
     return result
 
 
+@lru_cache(maxsize=1)
+def content_security_policy():
+    """Only reviewed code may execute; user-selected media keeps its providers."""
+    import base64,hashlib
+    with open(os.path.join(ROOT,'index.html'),encoding='utf-8') as source:
+        markup=source.read()
+    # Structured SEO data is static repository content, not a general inline-script escape.
+    hashes=["'sha256-"+base64.b64encode(hashlib.sha256(body.encode()).digest()).decode()+"'" for body in re.findall(r'<script\b[^>]*type=[\"\']application/ld\+json[\"\'][^>]*>(.*?)</script\s*>',markup,re.S|re.I)]
+    return "; ".join([
+        "script-src 'self' https://www.youtube.com https://s.ytimg.com 'wasm-unsafe-eval'"+(" "+" ".join(hashes) if hashes else ''),
+        "script-src-attr 'none'", "object-src 'none'", "base-uri 'self'",
+        "form-action 'self'", "frame-ancestors 'self'",
+        "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com",
+        "worker-src 'self' blob:"
+    ])
+
+
 @app.after_request
 def response_headers(response):
+    response.headers["Content-Security-Policy"] = content_security_policy()
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "camera=(self), microphone=(self), display-capture=(self), geolocation=()" if request.path in {"/streamers","/live"} else "camera=(self), microphone=(), display-capture=(), geolocation=()" if request.path=="/" else "camera=(), microphone=(), display-capture=(), geolocation=()"
@@ -780,6 +799,12 @@ install_sounds(app)
 
 from analytics import install as install_analytics
 install_analytics(app)
+from visitor_registry import install as install_visitor_registry
+install_visitor_registry(app)
+
+
+from locale_preferences import install as install_locale_preferences
+install_locale_preferences(app)
 
 
 from operations import install as install_operations

@@ -38,6 +38,13 @@ def inspect_source(root=ROOT,pages=PAGES):
    if not (root/asset.lstrip('/')).is_file():errors.append(f'{relative}: recurso inexistente {asset}')
  return {'pages':len(docs),'links':links,'errors':errors}
 
+def inspect_browser_security(markup,headers):
+ errors=[];policy=headers.get('Content-Security-Policy','')
+ if "script-src 'self'" not in policy or "object-src 'none'" not in policy:errors.append('Falta la protección esperada de scripts u objetos del navegador.')
+ if "'unsafe-inline'" in policy or "'unsafe-eval'" in policy:errors.append('La política permite código arbitrario en línea o eval.')
+ if re.search(r'<link\b[^>]*https://fonts\.(?:googleapis|gstatic)\.com',markup,re.I) or '/_vercel/insights/script.js' in markup:errors.append('Hay una carga automática de fuentes o métricas externas que revisar.')
+ return errors
+
 class NoRedirect(HTTPRedirectHandler):
  def redirect_request(self,*args,**kwargs):return None
 
@@ -66,10 +73,10 @@ def production(base):
  docs={};skipped=[]
  for route in PAGES:
   try:
-   code,raw,_=get(route)
+   code,raw,headers=get(route)
    if code==503 and (scope=='all' or scope=='live' and route in {'/live','/streamers'}):skipped.append(route);continue
    if code!=200:errors.append(f'{route}: HTTP {code}');continue
-   docs[route]=Document(raw.decode('utf-8'))
+   markup=raw.decode('utf-8');errors.extend(route+': '+error for error in inspect_browser_security(markup,headers));docs[route]=Document(markup)
   except (URLError,ValueError,TimeoutError) as e:errors.append(f'{route}: {type(e).__name__}')
  assets=set()
  for route,doc in docs.items():
