@@ -1,13 +1,14 @@
 import {openSubscription} from '/assets/subscriptions.js?v=9.13.0';
 import {founderBadge} from '/assets/badges.js?v=9.15.0';
 'use strict';
-import {StreamCommunity} from '/assets/community.js?v=9.25.0';
-import {StudioTools} from '/assets/studio-tools.js?v=9.25.0';
+import {StreamCommunity} from '/assets/community.js?v=9.26.0';
+import {StudioTools} from '/assets/studio-tools.js?v=9.26.0';
 const $=id=>document.getElementById(id);
 $('live-player').append($('community-panel'));
 let premiereOnly=false;
 let publicInfo=null,liveCategory='all';
 const categoryNames={videojuegos:'Videojuegos',musica:'Música',entretenimiento:'Entretenimiento',actualidad:'Actualidad'};
+let guestMode=false;
 let info=null,room=null,selected=null,publishing=false,heartbeat=null,sdkPromise=null,connecting=false,connectionGeneration=0,giftRevision=0,refreshing=false,heartbeatBusy=false,heartbeatVerified=false;
 const status=text=>{$('stream-status').textContent=text;};
 async function api(path,data){
@@ -42,7 +43,7 @@ async function refresh(){
  $('creator-panel').classList.toggle('hidden',!info.streamer_active);$('studio-flow').classList.toggle('hidden',!info.streamer_active);
  renderCatalogue();
  renderStudio();
- if(room&&!publishing&&selected){const current=room,generation=connectionGeneration;try{const access=await api(`/api/streamers/${encodeURIComponent(selected.id)}/access`);if(room===current&&generation===connectionGeneration&&access.layout)$('live-media').dataset.layout=access.layout;if(room===current&&generation===connectionGeneration&&access.ended){await disconnect();status('El creador ha finalizado el directo.');}}catch(error){if(room===current&&generation===connectionGeneration){if([401,402,403,404].includes(error.status)||error.code==='ol_maintenance'){await disconnect();status(error.message);}else status('El vídeo sigue conectado. Estamos reintentando la comprobación de acceso.');}}}
+ if(room&&(!publishing||guestMode)&&selected){const current=room,generation=connectionGeneration;try{const access=await api(`/api/streamers/${encodeURIComponent(selected.id)}/access`);if(room===current&&generation===connectionGeneration){$('join-guest').classList.toggle('hidden',publishing||!access.guest_allowed);if(guestMode&&!access.guest_allowed){await disconnect();return;}}if(room===current&&generation===connectionGeneration&&access.layout)$('live-media').dataset.layout=access.layout;if(room===current&&generation===connectionGeneration&&access.ended){await disconnect();status('El creador ha finalizado el directo.');}}catch(error){if(room===current&&generation===connectionGeneration){if([401,402,403,404].includes(error.status)||error.code==='ol_maintenance'){await disconnect();status(error.message);}else status('El vídeo sigue conectado. Estamos reintentando la comprobación de acceso.');}}}
  if(info.mine&&!$('creator-form').contains(document.activeElement)){
   $('creator-category').value=info.mine.category||'entretenimiento';$('channel-title').value=info.mine.title;$('channel-bio').value=info.mine.bio;$('creator-adult-content').checked=Boolean(info.mine.adult_content);
  }
@@ -150,8 +151,8 @@ async function sendPresence(current,generation){
  finally{if(generation===connectionGeneration)heartbeatBusy=false;}
 }
 async function disconnect(){
- connectionGeneration+=1;heartbeatBusy=false;heartbeatVerified=false;community.stop();
- const wasPublisher=publishing;publishing=false;clearInterval(heartbeat);heartbeat=null;
+ connectionGeneration+=1;heartbeatBusy=false;heartbeatVerified=false;community.stop();$('join-guest')?.classList.add('hidden');
+ const wasPublisher=publishing&&!guestMode;guestMode=false;publishing=false;clearInterval(heartbeat);heartbeat=null;
  tools.liveEnded();const previous=room;room=null;selected=null;if(previous)await previous.disconnect();
  attachedTracks.clear();clearFounderStamp();$('live-media').replaceChildren();$('live-stage').classList.add('hidden');
  if(wasPublisher&&window.MaggySession.premium)try{await api('/api/streamers/me/live',{live:false});}catch{}
@@ -171,7 +172,7 @@ async function confirmAdultAccess(channel){
 $('adult-age-form').addEventListener('submit',async event=>{event.preventDefault();try{await api(`/api/streamers/${$('adult-age-dialog').dataset.channel}/age-confirm`,{birth_date:$('adult-birth-date').value,context:$('adult-age-dialog').dataset.context,accept_rules:$('adult-accept-rules').checked});const resolve=ageDialogResolve;ageDialogResolve=null;$('adult-age-dialog').close();$('adult-birth-date').value='';resolve?.(true);}catch(error){$('adult-age-error').textContent=error.message;}});
 function cancelAdultDialog(){const resolve=ageDialogResolve;ageDialogResolve=null;$('adult-age-dialog').close();$('adult-birth-date').value='';resolve?.(false);}
 $('adult-age-cancel').addEventListener('click',cancelAdultDialog);$('adult-age-dialog').addEventListener('cancel',event=>{event.preventDefault();cancelAdultDialog();});
-async function connect(channel,publish){
+async function connect(channel,publish,guest=false){
  if(!publish)rememberChannel(channel.id);
  if(connecting)return;connecting=true;renderStudio();let generation;
  try{
@@ -179,7 +180,7 @@ async function connect(channel,publish){
   if(!await confirmAdultAccess(channel))return;
   if(!info?.video_ready)throw new Error('Las emisiones todavía no están disponibles.');
   stopPreview('',true);await disconnect();generation=connectionGeneration;if(!(publish?window.MaggySession.premium:window.MaggySession.authenticated))return;status('Conectando al directo…');$('studio-status').textContent='Conectando al directo…';$('start-camera').textContent='Conectando…';
-  const data=await api(`/api/streamers/${encodeURIComponent(channel.id)}/token`,{publish});
+  const data=await api(`/api/streamers/${encodeURIComponent(channel.id)}/token`,{publish,guest,recording_notice_accepted:guest||$('recording-accept').checked});
   if(generation!==connectionGeneration||!(publish?window.MaggySession.premium:window.MaggySession.authenticated))return;
   const LK=await sdk();if(generation!==connectionGeneration||!(publish?window.MaggySession.premium:window.MaggySession.authenticated))return;room=new LK.Room({adaptiveStream:true,dynacast:true,...tools.roomOptions()});const current=room;
   room.on(LK.RoomEvent.TrackSubscribed,track=>{if(room===current)attach(track);});
@@ -188,9 +189,9 @@ async function connect(channel,publish){
   room.on(LK.RoomEvent.ConnectionStateChanged,state=>{if(room===current)tools.connectionState(state);});
   for(const event of [LK.RoomEvent.ParticipantConnected,LK.RoomEvent.ParticipantDisconnected])room.on(event,()=>{if(room===current)tools.participants(current);});
   if(publish){room.on(LK.RoomEvent.LocalTrackPublished,pub=>{if(pub.track&&room===current){attach(pub.track,true);if(pub.source===LK.Track.Source.Camera&&pub.track.mediaStreamTrack)tools.nativeQuality(new MediaStream([pub.track.mediaStreamTrack]));if(pub.source===LK.Track.Source.Microphone&&pub.track.mediaStreamTrack)tools.monitor(new MediaStream([pub.track.mediaStreamTrack]));if(pub.source===LK.Track.Source.ScreenShare)tools.screenState(true);}});room.on(LK.RoomEvent.LocalTrackUnpublished,pub=>{pub.track?.detach().forEach(element=>element.remove());if(pub.source===LK.Track.Source.ScreenShare)tools.screenState(false);});}
-  await current.connect(data.url,data.token);if(generation!==connectionGeneration||!(publish?window.MaggySession.premium:window.MaggySession.authenticated)){await current.disconnect();return;}selected=channel;publishing=publish;
-  if(publish){await current.localParticipant.enableCameraAndMicrophone();if(generation!==connectionGeneration||!(publish?window.MaggySession.premium:window.MaggySession.authenticated)){for(const pub of current.localParticipant.trackPublications.values())pub.track?.stop();await current.disconnect();return;}heartbeatVerified=false;await sendPresence(current,generation);if(generation!==connectionGeneration||room!==current)return;heartbeat=setInterval(()=>sendPresence(current,generation),25000);}
-  $('live-stage').dataset.publisher=String(publish);$('live-stage').classList.remove('mobile-controls-open','mobile-chat-hidden');$('mobile-live-controls').setAttribute('aria-expanded','false');$('live-catalogue').before($('live-stage'));const stamp=$('live-founder-stamp');stamp.replaceChildren();if(channel.founder_number)stamp.append(founderBadge(channel.founder_number,channel.founder_signature||{}));tools.liveConnected(current);community.start(channel,publish);if(!publish)setTimeout(()=>{if(room===current&&!publishing)api(`/api/streamers/${encodeURIComponent(channel.id)}/view`,{}).catch(()=>{});},2000);$('leave-room').textContent=publish?'Finalizar directo':'Salir del directo';$('stage-title').textContent=channel.title;$('live-stage').classList.remove('hidden');
+  await current.connect(data.url,data.token);if(generation!==connectionGeneration||!(publish?window.MaggySession.premium:window.MaggySession.authenticated)){await current.disconnect();return;}selected=channel;publishing=publish;guestMode=guest;
+  if(publish){await current.localParticipant.enableCameraAndMicrophone();if(generation!==connectionGeneration||!(publish?window.MaggySession.premium:window.MaggySession.authenticated)){for(const pub of current.localParticipant.trackPublications.values())pub.track?.stop();await current.disconnect();return;}heartbeatVerified=false;if(!guest)await sendPresence(current,generation);if(generation!==connectionGeneration||room!==current)return;if(!guest)heartbeat=setInterval(()=>sendPresence(current,generation),25000);}
+  $('live-stage').dataset.publisher=String(publish);$('live-stage').classList.remove('mobile-controls-open','mobile-chat-hidden');$('mobile-live-controls').setAttribute('aria-expanded','false');$('live-catalogue').before($('live-stage'));const stamp=$('live-founder-stamp');stamp.replaceChildren();if(channel.founder_number)stamp.append(founderBadge(channel.founder_number,channel.founder_signature||{}));tools.liveConnected(current);community.start(channel,publish&&!guest);if(!publish)api(`/api/streamers/${channel.id}/access`).then(access=>{if(room===current)$('join-guest').classList.toggle('hidden',!access.guest_allowed);}).catch(()=>{});if(!publish)setTimeout(()=>{if(room===current&&!publishing)api(`/api/streamers/${encodeURIComponent(channel.id)}/view`,{}).catch(()=>{});},2000);$('leave-room').textContent=publish?'Finalizar directo':'Salir del directo';$('stage-title').textContent=channel.title;$('live-stage').classList.remove('hidden');
   $('toggle-camera').classList.toggle('hidden',!publish);$('toggle-mic').classList.toggle('hidden',!publish);
   $('toggle-camera').textContent='Apagar cámara';$('toggle-mic').textContent='Silenciar micrófono';
   renderStudio();status(publish?(heartbeatVerified?'Estás en directo.':'Vídeo conectado. La verificación del listado se reintentará sin cortar la emisión.'):'Conectado al directo. Pulsa «Activar sonido» si no lo escuchas.');$('live-stage').scrollIntoView({behavior:'smooth'});
@@ -216,7 +217,7 @@ $('enable-sound').addEventListener('click',()=>room?.startAudio().catch(()=>stat
 $('toggle-camera').addEventListener('click',async()=>{if(!publishing||!room)return;const enable=!room.localParticipant.isCameraEnabled;try{await room.localParticipant.setCameraEnabled(enable);$('toggle-camera').textContent=enable?'Apagar cámara':'Encender cámara';}catch{status('No se pudo cambiar la cámara.');}});
 $('toggle-mic').addEventListener('click',async()=>{if(!publishing||!room)return;const enable=!room.localParticipant.isMicrophoneEnabled;try{await room.localParticipant.setMicrophoneEnabled(enable);tools.syncRoomMic(room);community.syncMicrophone(enable);$('toggle-mic').textContent=enable?'Silenciar micrófono':'Activar micrófono';}catch{status('No se pudo cambiar el micrófono.');}});
 window.addEventListener('maggy:access-changed',event=>{if(!event.detail.premium){stopPreview('',true);$('stream-studio').classList.add('hidden');if(publishing||!window.MaggySession.authenticated)disconnect();$('creator-panel').classList.add('hidden');renderCatalogue();$('stream-access').classList.remove('hidden');}});
-window.addEventListener('pagehide',()=>{community.stop();stopPreview('',true);if(publishing)window.MaggySession.fetch('/api/streamers/me/live',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({live:false}),keepalive:true}).catch(()=>{});room?.disconnect();});
+window.addEventListener('pagehide',()=>{community.stop();stopPreview('',true);if(publishing&&!guestMode)window.MaggySession.fetch('/api/streamers/me/live',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({live:false}),keepalive:true}).catch(()=>{});room?.disconnect();});
 await window.MaggySession.ready;loadRecentChannels();
 $('stream-access').classList.toggle('hidden',window.MaggySession.authenticated);
 if(window.MaggySession.authenticated){try{await refresh();status(info?.video_ready?'Elige un directo o prepara tu canal.':'Zona preparada; las emisiones y las altas de Ol Livis aún no están disponibles.');navigateSection(location.hash);}catch(error){status(error.message);}}
@@ -230,3 +231,11 @@ $('mobile-live-controls').addEventListener('click',()=>{const open=$('live-stage
 window.addEventListener('ol:interface-update',async event=>{if(document.hidden)return;try{if(event.detail.account)await window.MaggySession.refresh?.();await refresh();}catch{}});
 window.addEventListener('focus',()=>refresh().catch(()=>{}));
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh().catch(()=>{});});
+
+const inviteButton=document.createElement('button');inviteButton.id='invite-guests';inviteButton.textContent='Invitar creador · hasta 7';inviteButton.type='button';$('publisher-screen-controls').append(inviteButton);
+inviteButton.addEventListener('click',async()=>{if(!publishing||guestMode)return status('Solo el anfitrión puede invitar.');const username=prompt('Usuario del creador que quieres invitar a este directo:');if(!username)return;try{await api('/api/streamers/me/guests',{username});status('Invitación preparada. El creador debe abrir tu directo y pulsar Participar con cámara.');}catch(error){status(error.message);}});
+const joinGuest=document.createElement('button');joinGuest.id='join-guest';joinGuest.className='hidden';joinGuest.textContent='Participar con cámara';joinGuest.type='button';$('mobile-live-controls').after(joinGuest);joinGuest.addEventListener('click',()=>{if(!selected)return;if(confirm('Entrarás con cámara y micrófono. El directo puede grabarse durante 30 días para moderación. ¿Aceptas participar?'))connect(selected,true,true);});
+function updateGuestGrid(){const media=$('live-media'),videos=[...media.querySelectorAll('video:not(.screen-track)')];videos.forEach((video,index)=>video.style.setProperty('--guest-index',String(index)));media.classList.toggle('group-stage',videos.length>1);media.style.setProperty('--guest-columns',videos.length<=4?'2':'3');}
+new MutationObserver(updateGuestGrid).observe($('live-media'),{childList:true});
+
+for(const id of ['toggle-camera','share-screen-live','copy-channel-live'])$('publisher-screen-controls').prepend($(id));

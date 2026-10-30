@@ -51,7 +51,10 @@ TABLES={
     'interface_revisions':['topic','version'],
     'live_channel_views':['channel_id','member_id','day'],
     'community_retention_clock':['id','last_run'],
+    'live_broadcast_sessions':['channel_id','started_at'],
+    'live_guest_invites':['channel_id','member_id','session_start'],
     'community_messages':['id','channel_id','member_id','kind','body','category','blocked','created_at'],
+    'community_likes':['message_id','member_id'],
     'community_report_details':['message_id','snapshot_json'],
     'community_audiences':['message_id','audience'],
     'payments':['id','member_id','plan','amount_cents','starts_at','ends_at','verified_at','verified_by','reference'],
@@ -73,7 +76,7 @@ def migrate(source,app):
         rows={}
         for table,columns in TABLES.items():
             actual=[row['name'] for row in original.execute('PRAGMA table_info('+table+')')]
-            if not actual and table in {'community_report_details','live_recordings','adult_channel_rules','adult_age_declarations','interface_revisions','live_channel_views','community_retention_clock','sticker_voice_audio','member_legal_names','stripe_order_names','member_profiles','email_tokens','fan_aliases','stripe_orders','stripe_accounts','stripe_connect_states','stripe_events','stripe_reversals','ol_operations','ol_supervisors','moderator_permissions','member_two_factor','two_factor_recovery','pricing_moderators','subscription_agreements','subscription_approvals','channel_subscription_settings','creator_subscriptions','community_audiences','founder_slot_history','live_launch','live_entitlements','founder_activity','creator_daily_activity','promotion_metrics','founder_signatures','live_founders','sticker_designs','member_rewards','friend_access','streamer_access','streamer_channels','community_messages','admin_notifications','live_channel_settings'}:
+            if not actual and table in {'live_broadcast_sessions','live_guest_invites','community_likes','community_report_details','live_recordings','adult_channel_rules','adult_age_declarations','interface_revisions','live_channel_views','community_retention_clock','sticker_voice_audio','member_legal_names','stripe_order_names','member_profiles','email_tokens','fan_aliases','stripe_orders','stripe_accounts','stripe_connect_states','stripe_events','stripe_reversals','ol_operations','ol_supervisors','moderator_permissions','member_two_factor','two_factor_recovery','pricing_moderators','subscription_agreements','subscription_approvals','channel_subscription_settings','creator_subscriptions','community_audiences','founder_slot_history','live_launch','live_entitlements','founder_activity','creator_daily_activity','promotion_metrics','founder_signatures','live_founders','sticker_designs','member_rewards','friend_access','streamer_access','streamer_channels','community_messages','admin_notifications','live_channel_settings'}:
                 rows[table]=[];continue
             if set(actual)!=set(columns):raise ValueError('La estructura SQLite no es compatible: '+table)
             rows[table]=[dict(row) for row in original.execute('SELECT '+','.join(columns)+' FROM '+table)]

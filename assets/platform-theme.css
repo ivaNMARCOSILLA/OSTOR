@@ -221,3 +221,17 @@ body.electronicama-theme #report-form:not(.hidden){position:absolute;left:0;bott
 .electronicama-theme #recording-live-note{position:absolute;top:12px;left:12px;z-index:5;padding:5px 8px;background:#080808e8;color:#f5d397;font-size:11px;border-radius:6px;pointer-events:none}@media(max-width:600px){.electronicama-theme #recording-live-note{top:68px}}
 
 .moderation-report-context{white-space:pre-wrap;overflow-wrap:anywhere;max-width:min(65ch,75vw);font-size:12px}
+
+/* Reserve a separate controls lane; chat remains visible. */
+body.electronicama-theme #live-stage.mobile-controls-open #publisher-screen-controls{position:absolute;right:8px;top:60px;bottom:80px;width:min(300px,43%);overflow:auto;z-index:15;background:#080808f5;padding:10px;border:1px solid #e2c389;border-radius:12px;box-sizing:border-box}
+body.electronicama-theme #live-stage.mobile-controls-open #live-player #community-panel{width:46%;left:8px;right:auto;max-height:60%}
+body.electronicama-theme #live-stage .live-controls{position:relative;z-index:12}
+body.electronicama-theme #live-player #live-media.group-stage:not(:has(.screen-track)){display:grid!important;grid-template-columns:repeat(var(--guest-columns,2),minmax(0,1fr));grid-auto-rows:minmax(0,1fr);gap:4px}
+body.electronicama-theme #live-player #live-media.group-stage:not(:has(.screen-track)) video{position:relative!important;inset:auto!important;width:100%!important;height:100%!important;min-height:0;max-width:none!important;max-height:none!important;object-fit:contain}
+
+body.electronicama-theme #live-comments .comment-like-button{display:inline-flex;align-items:center;gap:4px;background:#101010;color:#e2c389!important;-webkit-text-fill-color:#e2c389!important;border:1px solid #776544;border-radius:20px;padding:3px 9px;min-height:28px;margin:3px 4px;font-size:12px}
+body.electronicama-theme #live-comments .comment-like-button[aria-pressed=true]{background:#e2c389;color:#101010!important;-webkit-text-fill-color:#101010!important}
+
+body.electronicama-theme #live-player #live-media.group-stage:has(.screen-track) video:not(.screen-track){position:absolute!important;top:8px!important;left:calc(8px + var(--guest-index,0)*13%)!important;right:auto!important;bottom:auto!important;width:12%!important;height:20%!important;object-fit:contain;z-index:3}
+
+body.electronicama-theme #live-stage .live-actions{z-index:12;isolation:isolate}

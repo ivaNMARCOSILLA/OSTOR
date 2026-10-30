@@ -17,7 +17,7 @@ def init_database():
           member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
           kind TEXT NOT NULL,body TEXT NOT NULL,category TEXT NOT NULL DEFAULT '',blocked INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL
         ); CREATE INDEX IF NOT EXISTS community_channel ON community_messages(channel_id,created_at);
-        CREATE TABLE IF NOT EXISTS community_report_details(message_id TEXT PRIMARY KEY REFERENCES community_messages(id) ON DELETE CASCADE,snapshot_json TEXT NOT NULL); CREATE INDEX IF NOT EXISTS community_retention ON community_messages(created_at); CREATE INDEX IF NOT EXISTS community_live_feed ON community_messages(channel_id,blocked,created_at,id); CREATE INDEX IF NOT EXISTS community_member_time ON community_messages(member_id,created_at); CREATE TABLE IF NOT EXISTS community_retention_clock (id INTEGER PRIMARY KEY,last_run TEXT NOT NULL)''')
+        CREATE TABLE IF NOT EXISTS community_likes(message_id TEXT NOT NULL REFERENCES community_messages(id) ON DELETE CASCADE,member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,PRIMARY KEY(message_id,member_id)); CREATE TABLE IF NOT EXISTS community_report_details(message_id TEXT PRIMARY KEY REFERENCES community_messages(id) ON DELETE CASCADE,snapshot_json TEXT NOT NULL); CREATE INDEX IF NOT EXISTS community_retention ON community_messages(created_at); CREATE INDEX IF NOT EXISTS community_live_feed ON community_messages(channel_id,blocked,created_at,id); CREATE INDEX IF NOT EXISTS community_member_time ON community_messages(member_id,created_at); CREATE TABLE IF NOT EXISTS community_retention_clock (id INTEGER PRIMARY KEY,last_run TEXT NOT NULL)''')
     from subscriptions import init_database as init_subscriptions
     init_subscriptions()
 
@@ -50,7 +50,10 @@ def comments(channel_id):
         user=get_user()
         if not watch_allowed(conn,channel,user):return jsonify(error='Este directo está reservado a suscriptores del creador.'),403
         private_access=chat_allowed(conn,channel,user);mode=settings(conn,channel_id)
-        rows=conn.execute("SELECT c.id,c.member_id,c.body,c.kind,c.created_at,m.username,COALESCE(NULLIF(p.nickname,''),m.username) AS display_name,fa.alias AS fan_alias,f.number AS founder_number,sg.mode AS badge_mode,sg.letter AS badge_letter,sg.caption AS badge_caption FROM community_messages c JOIN members m ON m.id=c.member_id LEFT JOIN member_profiles p ON p.member_id=m.id LEFT JOIN fan_aliases fa ON fa.member_id=m.id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN founder_signatures sg ON sg.member_id=m.id WHERE c.channel_id=? AND c.created_at>=? AND (c.created_at>? OR (c.created_at=? AND c.id>?)) AND c.kind IN ('comment','sticker') AND c.blocked=0 AND (?=1 OR NOT EXISTS(SELECT 1 FROM community_audiences a WHERE a.message_id=c.id AND a.audience='subscribers')) ORDER BY c.created_at DESC,c.id DESC LIMIT 101",(channel_id,stamp(now_utc()-timedelta(days=RETENTION_DAYS)),after_time,after_time,after_id,int(private_access))).fetchall()
+        broadcast=conn.execute('SELECT started_at FROM live_broadcast_sessions WHERE channel_id=?',(channel_id,)).fetchone()
+        since=broadcast['started_at'] if broadcast else stamp(now_utc()-timedelta(days=RETENTION_DAYS))
+        rows=conn.execute("SELECT (SELECT COUNT(*) FROM community_likes l WHERE l.message_id=c.id) AS likes,(SELECT COUNT(*) FROM community_likes l WHERE l.message_id=c.id AND l.member_id=?) AS liked,c.id,c.member_id,c.body,c.kind,c.created_at,m.username,COALESCE(NULLIF(p.nickname,''),m.username) AS display_name,fa.alias AS fan_alias,f.number AS founder_number,sg.mode AS badge_mode,sg.letter AS badge_letter,sg.caption AS badge_caption FROM community_messages c JOIN members m ON m.id=c.member_id LEFT JOIN member_profiles p ON p.member_id=m.id LEFT JOIN fan_aliases fa ON fa.member_id=m.id LEFT JOIN live_founders f ON f.member_id=m.id LEFT JOIN founder_signatures sg ON sg.member_id=m.id WHERE c.channel_id=? AND c.created_at>=? AND (c.created_at>? OR (c.created_at=? AND c.id>?)) AND c.kind IN ('comment','sticker') AND c.blocked=0 AND (?=1 OR NOT EXISTS(SELECT 1 FROM community_audiences a WHERE a.message_id=c.id AND a.audience='subscribers')) ORDER BY c.created_at DESC,c.id DESC LIMIT 101",(user['id'],channel_id,since,after_time,after_time,after_id,int(private_access))).fetchall()
+        reactions=[dict(r) for r in conn.execute("SELECT c.id,(SELECT COUNT(*) FROM community_likes l WHERE l.message_id=c.id) AS likes,(SELECT COUNT(*) FROM community_likes l WHERE l.message_id=c.id AND l.member_id=?) AS liked FROM community_messages c WHERE c.channel_id=? AND c.created_at>=? AND c.blocked=0 AND c.kind IN ('comment','sticker') AND (?=1 OR NOT EXISTS(SELECT 1 FROM community_audiences a WHERE a.message_id=c.id AND a.audience='subscribers')) ORDER BY c.created_at DESC,c.id DESC LIMIT 100",(user['id'],channel_id,since,int(private_access))).fetchall()]
         truncated=len(rows)>100;rows=rows[:100]
         authors=list({row['member_id'] for row in rows})
         badge_members={row['member_id'] for row in conn.execute("SELECT DISTINCT member_id FROM creator_subscriptions WHERE channel_id=? AND revoked_at IS NULL AND starts_at<=? AND (ends_at IS NULL OR ends_at>?) AND benefits_json LIKE ? AND member_id IN ("+','.join('?' for _ in authors)+")",(channel_id,stamp(now_utc()),stamp(now_utc()),'%"badge"%',*authors)).fetchall()} if authors else set()
@@ -64,7 +67,7 @@ def comments(channel_id):
             comment['founder_signature']=signature_from_row(comment)
         for key in ['badge_mode','badge_letter','badge_caption']:comment.pop(key,None)
         if comment['kind']=='sticker':comment['sticker']={key:designs[comment['body']][key] for key in ['id','name','image','phrase']} if comment['body'] in designs else None
-    return jsonify(comments=comments,cursor=(rows[0]['created_at']+'|'+rows[0]['id']) if rows else cursor,truncated=truncated,subscriber_chat=bool(mode['subscriber_chat']),can_post=not mode['subscriber_chat'] or private_access)
+    return jsonify(reactions=reactions,session_start=since,comments=comments,cursor=(rows[0]['created_at']+'|'+rows[0]['id']) if rows else cursor,truncated=truncated,subscriber_chat=bool(mode['subscriber_chat']),can_post=not mode['subscriber_chat'] or private_access)
 
 
 @bp.post('/api/streamers/<channel_id>/comments')
@@ -166,3 +169,25 @@ def cancel_annual():
 
 
 def install(app):app.register_blueprint(bp)
+
+@bp.post('/api/streamers/<channel_id>/comments/<message_id>/like')
+def like_comment(channel_id,message_id):
+    user=get_user();data=request.get_json(silent=True) or {}
+    if not isinstance(data.get('liked'),bool):return jsonify(error='Indica si deseas dar o retirar Me gusta.'),400
+    with database() as conn:
+        conn.execute('BEGIN IMMEDIATE');channel=live_channel(conn,channel_id)
+        if not channel:return jsonify(error='El directo ha terminado.'),404
+        from age_policy import gate
+        restricted=gate(conn,channel_id,user)
+        if restricted:return restricted
+        from subscriptions import watch_allowed,chat_allowed
+        if not watch_allowed(conn,channel,user):return jsonify(error='No tienes acceso a este directo.'),403
+        message=conn.execute("SELECT * FROM community_messages WHERE id=? AND channel_id=? AND blocked=0 AND kind IN ('comment','sticker')",(message_id,channel_id)).fetchone()
+        start=conn.execute('SELECT started_at FROM live_broadcast_sessions WHERE channel_id=?',(channel_id,)).fetchone()
+        if not message or (start and message['created_at']<start['started_at']):return jsonify(error='Comentario no disponible en esta emisión.'),404
+        private=conn.execute("SELECT 1 FROM community_audiences WHERE message_id=? AND audience='subscribers'",(message_id,)).fetchone()
+        if private and not chat_allowed(conn,channel,user):return jsonify(error='Comentario privado.'),403
+        if data['liked']:conn.execute('INSERT INTO community_likes(message_id,member_id) VALUES(?,?) ON CONFLICT(message_id,member_id) DO NOTHING',(message_id,user['id']))
+        else:conn.execute('DELETE FROM community_likes WHERE message_id=? AND member_id=?',(message_id,user['id']))
+        count=conn.execute('SELECT COUNT(*) AS n FROM community_likes WHERE message_id=?',(message_id,)).fetchone()['n']
+    return jsonify(likes=count,liked=data['liked'])

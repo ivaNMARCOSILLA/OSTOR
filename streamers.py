@@ -49,7 +49,7 @@ def init_database():
             id TEXT PRIMARY KEY, member_id TEXT NOT NULL UNIQUE REFERENCES members(id),
             title TEXT NOT NULL, bio TEXT NOT NULL DEFAULT '', paypal_url TEXT NOT NULL DEFAULT '',
             room_name TEXT NOT NULL UNIQUE, live_until TEXT, updated_at TEXT NOT NULL
-        ); CREATE TABLE IF NOT EXISTS live_channel_settings (
+        ); CREATE TABLE IF NOT EXISTS live_broadcast_sessions (channel_id TEXT PRIMARY KEY REFERENCES streamer_channels(id) ON DELETE CASCADE,started_at TEXT NOT NULL); CREATE TABLE IF NOT EXISTS live_guest_invites (channel_id TEXT NOT NULL REFERENCES streamer_channels(id) ON DELETE CASCADE,member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,session_start TEXT NOT NULL,PRIMARY KEY(channel_id,member_id)); CREATE TABLE IF NOT EXISTS live_channel_settings (
             channel_id TEXT PRIMARY KEY REFERENCES streamer_channels(id) ON DELETE CASCADE,
             category TEXT NOT NULL DEFAULT 'entretenimiento',featured INTEGER NOT NULL DEFAULT 0
         ); CREATE TABLE IF NOT EXISTS live_channel_views (channel_id TEXT NOT NULL REFERENCES streamer_channels(id) ON DELETE CASCADE,member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,day TEXT NOT NULL,PRIMARY KEY(channel_id,member_id,day)); CREATE INDEX IF NOT EXISTS live_views_channel ON live_channel_views(channel_id)''')
@@ -96,7 +96,7 @@ def mint_token(user,channel,publish):
     now=int(time.time())
     grant={'roomJoin':True,'room':channel['room_name'],'canPublish':publish,'canSubscribe':True,'canPublishData':False}
     if publish: grant['canPublishSources']=['camera','microphone','screen_share','screen_share_audio']
-    claims={'iss':os.environ['LIVEKIT_API_KEY'].strip(),'sub':f"maggy-{user['id']}-{secrets.token_hex(5)}",'name':user['username'],
+    claims={'iss':os.environ['LIVEKIT_API_KEY'].strip(),'sub':f"maggy-{user['id']}-publisher" if publish else f"maggy-{user['id']}-{secrets.token_hex(5)}",'name':user['username'],
             'iat':now,'nbf':now-5,'exp':now+300,'video':grant}
     return sign_token(claims)
 
@@ -266,7 +266,8 @@ def room_access(channel_id):
         from subscriptions import watch_allowed
         if not watch_allowed(conn,channel,user):return jsonify(error='Ya no tienes acceso a este directo.',code='creator_subscription_required'),403
         layout=conn.execute('SELECT layout FROM live_stage_layouts WHERE channel_id=?',(channel_id,)).fetchone()
-    return jsonify(allowed=True,layout=layout['layout'] if layout else 'auto',ended=channel['live_until'] is None,listed=bool(channel['live_until'] and channel['live_until']>stamp(now_utc())))
+    with database() as conn:invited=guest_allowed(conn,channel,user)
+    return jsonify(guest_allowed=invited,allowed=True,layout=layout['layout'] if layout else 'auto',ended=channel['live_until'] is None,listed=bool(channel['live_until'] and channel['live_until']>stamp(now_utc())))
 
 
 def viewer_connected(channel,user):
@@ -310,7 +311,12 @@ def token(channel_id):
     from age_policy import gate
     with database() as conn:restricted=gate(conn,channel_id,user)
     if restricted:return restricted
-    if publish and (channel['member_id']!=user['id'] or not publisher_allowed()): return jsonify(error='Solo el creador con plan Ol Livis Creador activo puede emitir en este canal.'),403
+    guest=(request.get_json(silent=True) or {}).get('guest') is True
+    if guest:
+        with database() as conn:approved=guest_allowed(conn,channel,user)
+        if not approved or not publisher_allowed():return jsonify(error='Necesitas una invitación vigente del anfitrión y acceso de creador.'),403
+        if (request.get_json(silent=True) or {}).get('recording_notice_accepted') is not True:return jsonify(error='Acepta el aviso de grabación para participar.'),403
+    if publish and not guest and (channel['member_id']!=user['id'] or not publisher_allowed()): return jsonify(error='Solo el creador con plan Ol Livis Creador activo puede emitir en este canal.'),403
     if not publish and not (channel['live_until'] and channel['live_until']>stamp(now_utc())): return jsonify(error='Este canal no está en directo.'),404
     if not publish:
         from subscriptions import watch_allowed
@@ -341,6 +347,9 @@ def presence():
             if str(exc)=='recording_start_pending':return jsonify(error='La grabación se está iniciando. El directo aún no se publica.',code='recording_pending'),409
             return jsonify(error='La grabación obligatoria no está preparada o necesita revisión de administración. No se publicará el directo.',code='recording_required'),409
     with database() as conn:
+        if live and channel and not (channel['live_until'] and channel['live_until']>stamp(now_utc())):
+            conn.execute('INSERT INTO live_broadcast_sessions(channel_id,started_at) VALUES(?,?) ON CONFLICT(channel_id) DO UPDATE SET started_at=excluded.started_at',(channel['id'],stamp(now_utc())))
+            conn.execute('DELETE FROM live_guest_invites WHERE channel_id=?',(channel['id'],))
         conn.execute('UPDATE streamer_channels SET live_until=?,updated_at=? WHERE member_id=?',
                      (stamp(now_utc()+timedelta(seconds=75)) if live else None,stamp(now_utc()),get_user()['id']))
         if live:
@@ -376,3 +385,25 @@ def install(app,rate_limiter=None):
     if rate_limiter: app.extensions['streamer_rate_limiter']=rate_limiter
     with app.app_context(): init_database()
     app.register_blueprint(bp)
+
+
+def guest_allowed(conn,channel,user):
+    if not user or not channel['live_until'] or channel['live_until']<=stamp(now_utc()):return False
+    return bool(conn.execute('SELECT 1 FROM live_guest_invites i JOIN live_broadcast_sessions s ON s.channel_id=i.channel_id AND s.started_at=i.session_start WHERE i.channel_id=? AND i.member_id=?',(channel['id'],user['id'])).fetchone())
+
+@bp.post('/api/streamers/me/guests')
+def invite_guest():
+    channel=own_channel();data=request.get_json(silent=True) or {}
+    if not channel or not publisher_allowed():return jsonify(error='Solo el anfitrión activo puede invitar.'),403
+    with database() as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        current=conn.execute('SELECT * FROM streamer_channels WHERE id=?',(channel['id'],)).fetchone()
+        session=conn.execute('SELECT started_at FROM live_broadcast_sessions WHERE channel_id=?',(channel['id'],)).fetchone()
+        if not session or not current['live_until'] or current['live_until']<=stamp(now_utc()):return jsonify(error='Inicia el directo antes de invitar.'),409
+        member=conn.execute('SELECT id FROM members WHERE username=?',(str(data.get('username','')).strip(),)).fetchone()
+        if not member or member['id']==get_user()['id']:return jsonify(error='Introduce el usuario de otro creador registrado.'),400
+        count=conn.execute('SELECT COUNT(*) AS n FROM live_guest_invites WHERE channel_id=?',(channel['id'],)).fetchone()['n']
+        exists=conn.execute('SELECT 1 FROM live_guest_invites WHERE channel_id=? AND member_id=?',(channel['id'],member['id'])).fetchone()
+        if count>=6 and not exists:return jsonify(error='Máximo siete participantes contando al anfitrión.'),409
+        conn.execute('INSERT INTO live_guest_invites(channel_id,member_id,session_start) VALUES(?,?,?) ON CONFLICT(channel_id,member_id) DO UPDATE SET session_start=excluded.session_start',(channel['id'],member['id'],session['started_at']))
+    return jsonify(ok=True)
