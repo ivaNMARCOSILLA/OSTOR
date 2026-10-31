@@ -77,6 +77,25 @@ body.electronicama-theme button .brand-infinity{color:inherit}
 body.electronicama-theme:has(>.back) a{color:#bcefe7!important}
 body.electronicama-theme details{background:#080808!important}
 body.electronicama-theme #mobile-menu span{color:inherit!important}
+/* The home menu must override the older light navigation and generic buttons. */
+body.electronicama-theme .mobile-nav.organized-nav:not(.hidden){background:#080808;border-color:#6d756f;box-shadow:0 12px 28px #0008}
+@media(max-width:900px){
+ body.electronicama-theme .content>.topbar{height:auto;min-height:65px;flex-wrap:wrap;gap:8px 12px;padding-top:max(8px,env(safe-area-inset-top));padding-bottom:10px}
+ body.electronicama-theme .topbar .mobile-brand{flex:0 0 auto;max-width:100%;padding:8px 0;gap:8px;border:1px solid transparent;background:transparent;color:#f5d397;box-shadow:none;white-space:nowrap;overflow-wrap:normal}
+ body.electronicama-theme .mobile-brand strong{flex:none;white-space:nowrap;overflow-wrap:normal}
+ body.electronicama-theme #mobile-menu-label{display:none}
+ body.electronicama-theme .topbar-right{flex:none;margin-left:auto;gap:0}
+ body.electronicama-theme .topbar .header-account{box-sizing:border-box;min-height:44px;white-space:normal;overflow-wrap:normal}
+ body.electronicama-theme .topbar .site-language{flex:none;margin:0}
+ body.electronicama-theme .topbar .site-language>span{display:none}
+ body.electronicama-theme .topbar .site-language select{min-height:44px;min-width:116px;max-width:180px;font-size:16px}
+}
+@media(max-width:600px){
+ body.electronicama-theme .content>.topbar{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;row-gap:4px}
+ body.electronicama-theme .topbar .mobile-brand{grid-column:1/-1;justify-self:start}
+ body.electronicama-theme .topbar-right{grid-column:1;margin-left:0;justify-self:start}
+ body.electronicama-theme .topbar .site-language{grid-column:2;justify-self:end}
+}
 body.electronicama-theme .account-shell>header>span{color:#d4d4df}
 body.electronicama-theme .ol-live-premiere>a{background:#111!important;color:#bcefe7!important;border-color:#8abfb8}
 /* Annual-access actions remain still and readable throughout the LED cycle. */
