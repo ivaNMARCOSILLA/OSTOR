@@ -17,7 +17,10 @@
   for(const link of dock.children){if(link.dataset.mobileDestination===key)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');}
  }
  current();window.addEventListener('hashchange',current);window.addEventListener('popstate',current);
- document.addEventListener('click',event=>{if(event.target.closest('#mobile-dock a'))setTimeout(current,0);});
+ document.addEventListener('click',event=>{
+  const link=event.target.closest('a[href]');if(!link)return;
+  try{const url=new URL(link.href,location.href);if(url.origin===location.origin&&url.pathname===location.pathname)setTimeout(current,0);}catch{}
+ });
  const header=document.querySelector('.content>.topbar'),menu=document.getElementById('mobile-nav');
  if(!header||!menu)return;
  const language=header.querySelector('.site-language'),marker=document.createComment('desktop language position');

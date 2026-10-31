@@ -22,3 +22,7 @@ entre 320 y 800 px, orientación horizontal, menú, idioma, búsqueda, reproduct
 destinos reales y preservación del escritorio. Se mantienen las pruebas de menú
 en ocho anchuras y las comprobaciones de contraste y directos. No se ha verificado
 en Safari de un iPhone físico desde este entorno.
+
+Revisión 9.28.6: el acceso activo también se sincroniza al usar los enlaces del
+menú o la búsqueda. Las etiquetas se comprueban a 320 px en los siete idiomas
+disponibles, reservando espacio para sus nombres completos.

@@ -48,4 +48,8 @@
  body.electronicama-theme #track-grid .track-origin{position:static;display:block;margin-bottom:4px;font-size:11px}
  body.electronicama-theme :is(#inicio,#library,#hologramas,#mi-espacio){scroll-margin-top:90px}
 }
+@media(max-width:360px){
+ /* Long translated names get room without shrinking the text or touch areas. */
+ body.electronicama-theme #mobile-dock{grid-template-columns:repeat(3,minmax(0,.9fr)) minmax(0,1.3fr) minmax(0,1.1fr)}
+}
 @media(prefers-reduced-motion:reduce){#mobile-dock *{transition:none;scroll-behavior:auto}}

@@ -40,6 +40,7 @@ def run():
         expect(page.locator('.mobile-quick-search')).to_be_visible()
         page.locator('.mobile-quick-search').click()
         expect(page.locator('#search-input')).to_be_focused()
+        expect(page.locator('#mobile-dock a[href="/#library"]')).to_have_attribute('aria-current','page')
 
         # The drawer floats above content, and its last settings remain reachable
         # in both a phone portrait viewport and a short horizontal viewport.
@@ -66,6 +67,16 @@ def run():
         page.locator('#mobile-nav [data-site-language]').select_option('auto')
         expect(page.locator('html')).to_have_attribute('lang','es')
         page.keyboard.press('Escape')
+
+        # Translated labels must also fit the narrowest supported phone.
+        page.set_viewport_size({'width':320,'height':740})
+        for language in ['fr','de','it','pt','ca','en','es','auto']:
+            page.locator('#mobile-menu').click()
+            page.locator('#mobile-nav [data-site-language]').select_option(language)
+            expect(page.locator('html')).to_have_attribute('lang','es' if language=='auto' else language)
+            page.keyboard.press('Escape')
+            assert_dock(page,320,740)
+        page.set_viewport_size({'width':393,'height':852})
 
         # Layout-only player fixture: playback and real video have their own
         # suites; here a visible player may never cover the mobile navigation.
