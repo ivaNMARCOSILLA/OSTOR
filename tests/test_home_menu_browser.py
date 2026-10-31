@@ -6,7 +6,7 @@ def assert_mobile_header(page, width):
   """Visible controls and every label must fit without colliding or wrapping vertically."""
   issues=page.locator('.topbar').evaluate('''header=>{
    const issues=[],bounds=header.getBoundingClientRect();
-   const controls=[...header.querySelectorAll('#mobile-menu,.header-account,.site-language select')].filter(el=>el.getClientRects().length);
+   const controls=[...header.querySelectorAll('#mobile-menu,.mobile-quick-search,.header-account,.site-language select')].filter(el=>el.getClientRects().length);
    for(const el of controls){
     const box=el.getBoundingClientRect(),name=el.id||el.className;
     if(box.left<bounds.left-1||box.right>bounds.right+1||box.top<bounds.top-1||box.bottom>bounds.bottom+1)issues.push(name+' escapes header');
@@ -72,15 +72,17 @@ def run():
   page.evaluate('scrollTo(0,0)');menu.click();nav.locator('#cookie-settings').click()
   assert page.locator('#consent-dialog').is_visible() and nav.is_hidden()
   page.locator('#consent-decline').click()
-  page.evaluate('scrollTo(0,0)');menu.click();page.locator('#music-free-banner strong').click()
+  page.evaluate('scrollTo(0,0)');menu.click();page.locator('.mobile-quick-search').click()
   assert nav.is_hidden()
   page.evaluate("document.querySelector('#player').classList.add('hidden')")
   for width in [320,360,390,393,430,600,768,900]:
    height=430 if width==900 else 844
    page.set_viewport_size({'width':width,'height':height})
    for language in ['de','fr','auto']:
+    if width<=800:menu.click()
     page.locator('[data-site-language]').select_option(language)
     page.wait_for_function('wanted=>document.documentElement.lang===wanted',arg='es' if language=='auto' else language)
+    if width<=800:page.keyboard.press('Escape')
     page.evaluate('scrollTo(0,0)');assert_mobile_header(page,width);menu.click()
     assert_mobile_header(page,width);assert_dark_menu(page,width)
     box=nav.bounding_box();assert box['y']>=page.locator('.topbar').bounding_box()['height']-1,(width,box)

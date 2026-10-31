@@ -1,0 +1,51 @@
+/* The wide layout retains its sidebar; the phone gets a separate touch shell. */
+#mobile-dock,.mobile-quick-search{display:none}
+@media(max-width:800px){
+ body.electronicama-theme:has(#mobile-dock){--mobile-dock-height:calc(64px + env(safe-area-inset-bottom));padding-bottom:var(--mobile-dock-height)}
+ body.electronicama-theme #mobile-dock{position:fixed;inset:auto 0 0;z-index:18;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:2px;height:var(--mobile-dock-height);padding:5px max(6px,env(safe-area-inset-right)) calc(5px + env(safe-area-inset-bottom)) max(6px,env(safe-area-inset-left));background:#080808;border-top:1px solid #66583e;box-shadow:0 -8px 26px #0009}
+ body.electronicama-theme #mobile-dock a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:0;min-height:48px;padding:3px 1px;border:1px solid transparent;border-radius:12px;background:transparent;color:#c9c9d3;font:500 10px/1.25 system-ui,sans-serif;letter-spacing:0;text-align:center;text-decoration:none;overflow-wrap:normal}
+ body.electronicama-theme #mobile-dock a[aria-current]{color:#f5d397;background:#211c13;border-color:#72603e}
+ body.electronicama-theme #mobile-dock a:hover{color:#fff0cf;background:#211c13}
+ #mobile-dock svg{display:block;flex:none;width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+ body.electronicama-theme #mobile-dock a:focus-visible{outline:2px solid #ffe1a3;outline-offset:-2px}
+ body.electronicama-theme .player{bottom:var(--mobile-dock-height);max-height:calc(85dvh - var(--mobile-dock-height))}
+ body.electronicama-theme:has(#live-stage:not(.hidden)),body.electronicama-theme:has(:fullscreen){--mobile-dock-height:0px}
+ body.electronicama-theme:has(#live-stage:not(.hidden)) #mobile-dock,body.electronicama-theme:has(:fullscreen) #mobile-dock{display:none}
+
+ /* A single compact header; account lives in the dock, language in the drawer. */
+ body.electronicama-theme .content>.topbar{position:sticky;top:0;z-index:22;display:flex;flex-wrap:nowrap;align-items:center;justify-content:space-between;gap:8px;min-height:72px;height:auto;padding:8px 0;padding-top:max(8px,env(safe-area-inset-top));background:#000;border-bottom:1px solid #4b4334}
+ body.electronicama-theme .topbar .mobile-brand{flex:0 1 auto;min-width:0;max-width:calc(100% - 76px);gap:7px;color:#f5d397}
+ body.electronicama-theme .mobile-brand strong{font-size:clamp(18px,4.8vw,23px)}
+ body.electronicama-theme .content>.topbar .topbar-right,body.electronicama-theme .content>.topbar>.site-language{display:none}
+ body.electronicama-theme .topbar .mobile-quick-search{display:inline-flex;align-items:center;justify-content:center;flex:none;min-height:44px;padding:10px 13px;border:1px solid #80704b;border-radius:14px;background:#12100c;color:#f5d397;font:600 13px/1.4 system-ui,sans-serif;text-decoration:none}
+ body.electronicama-theme #mobile-nav:not(.hidden){position:fixed;inset:calc(var(--mobile-header-edge,72px) + 8px) 12px calc(var(--mobile-dock-height) + 12px);z-index:21;display:flex;flex-direction:column;gap:16px;width:auto;max-height:none;margin:0;padding:16px;border:1px solid #8f7b52;border-radius:22px;background:#080808;overflow-y:auto;overscroll-behavior:contain;box-shadow:0 24px 70px #000e}
+ body.electronicama-theme #mobile-nav .menu-group{flex:none;background:transparent}
+ body.electronicama-theme #mobile-nav .menu-group-title{margin:0 0 8px;color:#d5c198;font-size:11px;letter-spacing:1.5px}
+ body.electronicama-theme #mobile-nav .menu-group-items{gap:8px}
+ body.electronicama-theme #mobile-nav .nav-item{min-height:52px;border-radius:14px;border-color:#4f5259;background:#171717;color:#e5e5ee;font-size:13px}
+ body.electronicama-theme #mobile-nav .site-language{flex:none;display:flex;justify-content:space-between;width:100%;margin:0;padding-top:8px;color:#eee4d0}
+ body.electronicama-theme #mobile-nav .site-language>span{display:inline}
+ body.electronicama-theme #mobile-nav .site-language select{min-height:44px;max-width:180px;font-size:16px}
+ body.electronicama-theme #mobile-nav .menu-preferences{flex:none;min-height:48px;width:100%;padding:12px 0;background:transparent;color:#d5d5df;border-color:#5f5847}
+
+ /* Vertical music rows leave room for titles and large touch targets. */
+ body.electronicama-theme .content{padding-right:max(12px,env(safe-area-inset-right));padding-left:max(12px,env(safe-area-inset-left))}
+ body.electronicama-theme .content>#hero{margin-top:14px;border-radius:22px}
+ body.electronicama-theme #hero .hero-copy{padding:18px}
+ body.electronicama-theme #hero h1{font-size:clamp(23px,6vw,31px);line-height:1.2;letter-spacing:-.7px}
+ body.electronicama-theme #hero p{margin-top:8px;font-size:13px}
+ body.electronicama-theme .content>#library{padding:16px 12px;border-radius:22px}
+ body.electronicama-theme #source-filters{display:flex;flex-wrap:nowrap;gap:8px;max-width:100%;padding:10px 0;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin}
+ body.electronicama-theme #source-filters button{flex:none;min-height:44px;padding:10px 14px;border-radius:999px;white-space:nowrap}
+ body.electronicama-theme #track-grid{grid-template-columns:minmax(0,1fr);gap:12px}
+ body.electronicama-theme #track-grid .track-card{display:grid;grid-template-columns:76px minmax(0,1fr);align-items:start;gap:12px;padding:12px;border-radius:18px}
+ body.electronicama-theme #track-grid .cover-button{width:76px;min-height:76px;aspect-ratio:1;border-radius:12px;overflow:hidden}
+ body.electronicama-theme #track-grid .track-body{min-width:0;padding:0}
+ body.electronicama-theme #track-grid .track-top{min-height:36px;margin:0 0 4px}
+ body.electronicama-theme #track-grid .track-title{min-height:44px;font-size:15px;line-height:1.5}
+ body.electronicama-theme #track-grid .save-button{min-width:44px;min-height:44px}
+ body.electronicama-theme #track-grid .track-artist{margin:4px 0;font-size:12px;line-height:1.5}
+ body.electronicama-theme #track-grid .track-origin{position:static;display:block;margin-bottom:4px;font-size:11px}
+ body.electronicama-theme :is(#inicio,#library,#hologramas,#mi-espacio){scroll-margin-top:90px}
+}
+@media(prefers-reduced-motion:reduce){#mobile-dock *{transition:none;scroll-behavior:auto}}
