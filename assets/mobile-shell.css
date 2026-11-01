@@ -47,6 +47,9 @@
  body.electronicama-theme #track-grid .track-artist{margin:4px 0;font-size:12px;line-height:1.5}
  body.electronicama-theme #track-grid .track-origin{position:static;display:block;margin-bottom:4px;font-size:11px}
  body.electronicama-theme :is(#inicio,#library,#hologramas,#mi-espacio){scroll-margin-top:90px}
+ body.electronicama-theme #planes .plan-actions{display:grid;grid-template-columns:minmax(0,1fr)}
+ body.electronicama-theme #planes .plan-actions a.button{width:100%;font-size:14px}
+ body.electronicama-theme #founders{scroll-margin-top:calc(var(--mobile-header-edge,72px) + 12px)}
 }
 @media(max-width:360px){
  /* Long translated names get room without shrinking the text or touch areas. */

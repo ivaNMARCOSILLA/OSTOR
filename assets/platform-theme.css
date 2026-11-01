@@ -105,6 +105,9 @@ body.electronicama-theme .ol-live-premiere>a{background:#111!important;color:#bc
 body.electronicama-theme #planes a.button,body.electronicama-theme #intro-start{animation:none!important;transition:none!important;opacity:1!important;visibility:visible;color:#101010!important;-webkit-text-fill-color:#101010!important;background:#f5d397!important;background-image:none!important;border:1px solid #ffe4b6!important;text-shadow:none!important;filter:none!important;transform:none!important;box-shadow:none!important}
 body.electronicama-theme #planes a.button::before,body.electronicama-theme #planes a.button::after,body.electronicama-theme #intro-start::before,body.electronicama-theme #intro-start::after{content:none!important;animation:none!important;display:none!important}
 body.electronicama-theme #planes a.button.secondary{background:#111!important;color:#f5d397!important;-webkit-text-fill-color:#f5d397!important}
+/* Founder accounts hide the plan copy; buttons retain independent touch areas. */
+body.electronicama-theme #planes .plan-actions{display:flex;flex-wrap:wrap;align-items:stretch;gap:12px;margin:14px 0}
+body.electronicama-theme #planes .plan-actions a.button{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;min-width:0;max-width:100%;min-height:48px;margin:0;padding:12px 18px;line-height:1.45;text-align:center;white-space:normal;overflow-wrap:normal;text-decoration:none}
 
 body.electronicama-theme a.annual-access-link,body.electronicama-theme a.annual-access-link:visited,body.electronicama-theme a.annual-access-link:hover,body.electronicama-theme #intro-start{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 24px;font-size:16px;font-weight:800;line-height:1.4;color:#101010!important;-webkit-text-fill-color:#101010!important;background:#f5d397!important;text-decoration:none!important;opacity:1!important;mix-blend-mode:normal!important}
 

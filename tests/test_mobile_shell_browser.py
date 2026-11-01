@@ -121,6 +121,32 @@ def run():
                     expect(page.locator('.mobile-quick-search')).to_be_hidden()
             page.set_viewport_size({'width':393,'height':852})
         page.goto(BASE_URL+'/');page.screenshot(path='/tmp/electronicama-mobile-edition.png',full_page=False)
+        # Layout fixture for the founder state: session.js hides the explanatory
+        # paragraphs and operations.js replaces the annual-access label.
+        # Billing and entitlement checks remain in their separate test suites.
+        page.emulate_media(reduced_motion='reduce')
+        page.evaluate('''()=>{
+            document.documentElement.classList.add('friend-access');
+            document.querySelector('#planes .annual-access-link').textContent='Tu estado actual · Ol Livis';
+        }''')
+        for width in [320,393,430,768,1440]:
+            page.set_viewport_size({'width':width,'height':900})
+            plans=page.locator('#planes');plans.scroll_into_view_if_needed()
+            links=plans.locator('a.button');assert links.count()==2
+            for link in links.all():
+                assert link.evaluate('el=>el.getClientRects().length===1'),'button border must not fragment across text lines'
+                box=link.bounding_box();bounds=plans.bounding_box()
+                assert box['height']>=44 and box['x']>=bounds['x'] and box['x']+box['width']<=bounds['x']+bounds['width']+1,(width,box,bounds)
+            if width<=800:
+                first,second=[link.bounding_box() for link in links.all()]
+                assert second['y']>=first['y']+first['height']+8,(width,first,second)
+            if width==393:plans.screenshot(path='/tmp/electronicama-founder-buttons-mobile.png')
+            plans.locator('a[href="#founders"]').click()
+            expect(page).to_have_url(BASE_URL+'/#founders')
+            assert page.evaluate('document.activeElement.id')=='founders'
+            if width<=800:
+                page.wait_for_function("document.querySelector('#founders').getBoundingClientRect().top>=document.querySelector('.topbar').getBoundingClientRect().bottom")
+            assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+1'),width
         assert not errors,errors
         browser.close()
     print('OK: dedicated mobile navigation, compact search, floating drawer, locale controls, player separation, real destinations and desktop preservation')
