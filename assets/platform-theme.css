@@ -77,6 +77,9 @@ body.electronicama-theme button .brand-infinity{color:inherit}
 body.electronicama-theme:has(>.back) a{color:#bcefe7!important}
 body.electronicama-theme details{background:#080808!important}
 body.electronicama-theme #mobile-menu span{color:inherit!important}
+/* The owner's entry titles and captions remain distinct from artist credits. */
+body.electronicama-theme .entry-shutter{margin:0;min-width:0}
+body.electronicama-theme .entry-caption{display:block;margin-top:10px;padding-top:8px;border-top:1px solid #76623d;color:#e2c389;font:600 11px/1.5 system-ui,sans-serif;letter-spacing:.12em}
 /* The home menu must override the older light navigation and generic buttons. */
 body.electronicama-theme .mobile-nav.organized-nav:not(.hidden){background:#080808;border-color:#6d756f;box-shadow:0 12px 28px #0008}
 @media(max-width:900px){
