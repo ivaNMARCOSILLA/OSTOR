@@ -40,7 +40,7 @@ def run():
   page.locator('#maintenance-scope').select_option('off');page.locator('#maintenance-form button').click();page.wait_for_function("document.querySelector('#ol-maintenance-banner').hidden")
   assert guest.request.get(BASE_URL+'/').status==200
   page.goto(BASE_URL+'/live#video-setup');page.wait_for_function("document.activeElement.textContent==='Comprobar conexión de vídeo'");assert page.locator('.web-funds-note').inner_text().find('Fondos Web')>=0
-  page.goto(BASE_URL+'/#mi-espacio');page.locator('#consent-decline').click();assert page.locator('#space-theme').count()==0
+  page.goto(BASE_URL+'/');page.locator('#consent-decline').click();assert page.locator('#mi-espacio,#space-theme').count()==0
   page.locator('#ol-collection > summary').click();page.locator('.collection-sticker').first.wait_for()
   animation=page.locator('.collection-sticker').first.evaluate("e=>getComputedStyle(e,'::before').animationName");assert animation=='ol-horizon-drift'
   page.locator('.sticker-motion-control').click();assert page.evaluate("document.documentElement.dataset.stickerMotion==='off'")

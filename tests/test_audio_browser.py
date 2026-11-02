@@ -1,4 +1,4 @@
-"""Audio playback, legacy provider filtering, local library, and responsive UI."""
+"""Audio playback, legacy provider filtering, favorites, and responsive UI."""
 import io
 import json
 import wave
@@ -37,19 +37,16 @@ def run():
         page.locator('.track-card').first.wait_for()
         assert page.locator('.track-card').count()==2
         assert page.locator('iframe').count()==0
-        assert page.locator('.channel-card button').first.is_disabled()
+        assert page.locator('#mi-espacio,#channel-form,#channels-list').count()==0
         page.locator('[data-source="AUDIUS"]').click();assert page.locator('.track-card').count()==1
         page.locator('[data-source="ALL"]').click()
         page.locator('.track-card .save-button').first.click()
-        page.locator('#profile-name').fill('Pilot');page.locator('#profile-form button').click()
-        page.locator('#channel-name').fill('My orbit');page.locator('#channel-form button').click()
-        assert page.locator('.channel-card').count()==2
-        page.locator('.channel-card').last.locator('button').first.click()
+        page.locator('.track-card .cover-button').first.click()
         page.wait_for_function("document.querySelector('audio')?.currentTime > 0")
         assert any('/api/play/archive_test?retry=1' in url for url in requests)
         assert not any('/api/resolve/' in url for url in requests)
         page.evaluate("document.querySelector('audio').dataset.reused = 'yes'")
-        page.locator('.channel-card').last.locator('button').first.click()
+        page.locator('.track-card .cover-button').first.click()
         page.wait_for_function("document.querySelector('audio')?.currentTime > 0")
         assert page.locator('audio').get_attribute('data-reused') == 'yes'
 
@@ -70,8 +67,8 @@ def run():
         page.locator('[data-view="history"]').first.click();assert page.locator('.track-card').count()==1
         page.locator('[data-view="favorites"]').first.click();assert page.locator('.track-card').count()==1
         page.reload();page.locator('.track-card').first.wait_for()
-        assert page.locator('#profile-name').input_value()=='Pilot'
-        assert page.locator('.channel-card').count()==2
+        assert page.evaluate('key=>JSON.parse(localStorage.getItem(key))',prefix+'maggy_channels_v1')==[{'name':'Legacy','tracks':removed}]
+        assert page.locator('#mi-espacio,script[src*="/assets/maggy.js"]').count()==0
         page.locator('[data-source="MIX"]').click()
         page.wait_for_function("document.querySelectorAll('#track-grid .track-credit').length === 2")
         assert page.locator('#track-grid').get_attribute('class').endswith('mix-list')
@@ -93,7 +90,7 @@ def run():
         assert not any('youtube' in url.lower() or 'jamendo' in url.lower() or 'retired.mp3' in url for url in requests)
         assert not errors,errors
         browser.close()
-    print('OK: Archive/Audius audio, controls, favorites, channels, legacy entries hidden, no retired-provider requests, 4 screen widths')
+    print('OK: Archive/Audius audio, controls, favorites, removed local-space UI, old local data preserved, no retired-provider requests, 4 screen widths')
 
 
 if __name__=='__main__':run()

@@ -13,7 +13,8 @@ def run():
   assert page.locator('#hero #search-form').count()==0
   assert page.locator('#momentos #quick-style-picker').count()==1
   assert page.evaluate("document.querySelector('#library').compareDocumentPosition(document.querySelector('#momentos'))&Node.DOCUMENT_POSITION_FOLLOWING")
-  assert page.evaluate("document.querySelector('#mi-espacio').compareDocumentPosition(document.querySelector('#ol-collection'))&Node.DOCUMENT_POSITION_FOLLOWING")
+  assert page.locator('#mi-espacio,a[href="#mi-espacio"]').count()==0
+  assert page.evaluate("document.querySelector('#momentos').compareDocumentPosition(document.querySelector('#ol-collection'))&Node.DOCUMENT_POSITION_FOLLOWING")
   assert page.evaluate("document.querySelector('#ol-collection').compareDocumentPosition(document.querySelector('#ol-live-premiere'))&Node.DOCUMENT_POSITION_FOLLOWING")
 
   for width in [320,390,768,1440]:
