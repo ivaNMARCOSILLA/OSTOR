@@ -63,7 +63,7 @@ class OperationsTests(unittest.TestCase):
   self.assertEqual(rows['Archivos esenciales']['status'],'ok')
   self.assertEqual(rows['Comprobaciones exclusivas de administración']['status'],'ok')
   self.assertEqual(rows['Sincronización entre dispositivos']['status'],'ok')
-  for label in ['Sesiones independientes de emisión','Invitados del directo','Me gusta reales de comentarios','Límite de siete participantes','Invitaciones vinculadas a su emisión','Un Me gusta por cuenta y comentario']:
+  for label in ['Recuento acumulado anónimo de entradas','Sesiones independientes de emisión','Invitados del directo','Me gusta reales de comentarios','Límite de siete participantes','Invitaciones vinculadas a su emisión','Un Me gusta por cuenta y comentario']:
    self.assertEqual(rows[label]['status'],'ok',label)
   self.assertEqual(rows['Clasificación de contenido adulto']['status'],'ok')
   self.assertEqual(rows['Ubicación y VPN para contenido adulto']['status'],'pending')

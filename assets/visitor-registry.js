@@ -29,7 +29,7 @@
   if(document.getElementById('visitor-consent-panel'))return;
   const panel=document.createElement('aside');panel.id='visitor-consent-panel';panel.className='visitor-consent-panel';panel.setAttribute('aria-label','Preferencias de visitas');
   const title=document.createElement('strong');title.textContent='Tú decides qué compartes';
-  const copy=document.createElement('p');copy.textContent='Con tu permiso, guardamos visitas durante 7 días. Las entradas anónimas y el tipo de dispositivo aparecen en la portada. Si entras con cuenta, solo administración puede relacionarlas con tu usuario. Puedes usar la web sin aceptar.';
+  const copy=document.createElement('p');copy.textContent='Con tu permiso, guardamos el detalle de las visitas durante 7 días. Las entradas recientes y el tipo de dispositivo aparecen en la portada. El total acumulado se conserva de forma anónima, sin identificarte. Si entras con cuenta, solo administración puede relacionar el detalle con tu usuario. Puedes usar la web sin aceptar.';
   const no=document.createElement('button');no.type='button';no.textContent='Solo necesarias';no.addEventListener('click',()=>choose(false));
   const yes=document.createElement('button');yes.type='button';yes.textContent='Permitir visitas opcionales';yes.addEventListener('click',()=>choose(true));
   const privacy=document.createElement('a');privacy.href='/legal/privacidad.html';privacy.textContent='Ver privacidad';panel.append(title,copy,no,yes,privacy);document.body.append(panel);
@@ -37,12 +37,15 @@
  async function refreshPublic(force=false){
   const list=document.getElementById('public-visit-list');if(!list||publicBusy||document.hidden||(!force&&Date.now()-publicLast<15000))return;
   publicBusy=true;
-  try{const response=await fetch('/api/visits/public',{cache:'no-store'});if(!response.ok)throw Error();const data=await response.json();list.replaceChildren();
-   const t=text=>window.OlLocale?.t(text)||text;document.getElementById('public-visit-count').textContent=`${data.summary.sessions} ${t('entradas')} · ${data.summary.browsers} ${t('navegadores estimados en 24 horas')}`;
+  try{const response=await fetch('/api/visits/public',{cache:'no-store'});if(!response.ok)throw Error();const data=await response.json(),total=data.cumulative?.sessions,since=new Date(data.cumulative?.since);if(!Number.isSafeInteger(total)||total<0||typeof data.cumulative?.since!=='string'||Number.isNaN(since.getTime()))throw Error();
+   const t=text=>window.OlLocale?.t(text)||text,locale=document.documentElement.lang||'es',count=document.getElementById('public-visit-count'),value=document.createElement('strong'),caption=document.createElement('span');
+   value.className='public-visit-total';value.textContent=new Intl.NumberFormat(locale).format(total);caption.textContent=t(total===1?'entrada acumulada':'entradas acumuladas');count.replaceChildren(value,caption);
+   document.getElementById('public-visit-since').textContent=`${t('Desde el')} ${new Intl.DateTimeFormat(locale,{timeZone:'Europe/Madrid',dateStyle:'long'}).format(since)} · ${t('recuento acumulado')}`;
+   const updateStatus=document.getElementById('public-visit-update-status');if(updateStatus){updateStatus.hidden=true;updateStatus.textContent='';}list.replaceChildren();
    const labels={desktop:'Ordenador',mobile:'Móvil',tablet:'Tableta',bot:'Automatizado',unknown:'Sin identificar'},pages={'/':'Música','/live':'Ol Livis','/account':'Cuenta','/legal/cookies.html':'Información legal','/legal/privacidad.html':'Información legal','/legal/aviso-legal.html':'Información legal'};
    for(const visit of data.visits){const row=document.createElement('li'),device=document.createElement('strong'),time=document.createElement('time'),where=document.createElement('span');device.textContent=t(labels[visit.device]||visit.device||'Sin identificar');time.dateTime=visit.at;time.textContent=new Intl.DateTimeFormat(document.documentElement.lang||'es',{timeZone:'Europe/Madrid',hour:'2-digit',minute:'2-digit'}).format(new Date(visit.at));where.textContent=t(pages[visit.page]||visit.page||'Web');row.append(device,where,time);list.append(row);}
-   document.getElementById('public-visit-status').textContent=data.visits.length?'Horas de Madrid · datos actualizados.':'Todavía no hay entradas compartidas en las últimas 24 horas.';publicLast=Date.now();
-  }catch{document.getElementById('public-visit-status').textContent='No se ha podido actualizar la actividad. Volveremos a intentarlo.';}finally{publicBusy=false;}
+   document.getElementById('public-visit-status').textContent=t(data.visits.length?'Horas de Madrid · datos actualizados.':'No hay actividad reciente compartida. El total acumulado se mantiene.');publicLast=Date.now();
+  }catch{const status=document.getElementById('public-visit-update-status')||document.getElementById('public-visit-status');status.textContent=window.OlLocale?.t('No se ha podido actualizar el recuento. Volveremos a intentarlo.')||'No se ha podido actualizar el recuento. Volveremos a intentarlo.';status.hidden=false;}finally{publicBusy=false;}
  }
  window.addEventListener('electronicama:navigation-consent',event=>{if(!event.detail?.visitRegistryHandled)choose(event.detail?.allowed,false);});
  window.addEventListener('storage',event=>{if(event.key!==KEY)return;allowed=preference()==='accepted'&&!privacySignal();if(allowed)record('page');else choose(false,false);});

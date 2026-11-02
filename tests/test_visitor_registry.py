@@ -1,7 +1,8 @@
 """Consented browser visits, network estimates and strictly anonymous public feed."""
 import os
 import unittest
-from datetime import timedelta
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime,timedelta,timezone
 from unittest.mock import patch
 import app,membership as m,visitor_registry as vr
 from auth_support import authenticated_client
@@ -18,6 +19,12 @@ class VisitorRegistryTests(unittest.TestCase):
   csrf=client.get('/api/account/me').json['csrf']
   return client.post(path,json={'consent':True,'page':'/','event':'page'} if data is None else data,headers={'X-CSRF-Token':csrf,'User-Agent':MOBILE}|(headers or {}),environ_overrides={'REMOTE_ADDR':ip})
  def visits(self,**query):return self.admin.get('/api/admin/visits',query_string=query).json
+ def cumulative(self):return self.guest.get('/api/visits/public').json['cumulative']
+ def seed_session(self,ident,at):
+  with app.app.app_context(),m.database() as conn:
+   when=m.stamp(at)
+   conn.execute('INSERT INTO visitor_devices(id,first_seen,last_seen) VALUES(?,?,?)',(ident,when,when))
+   conn.execute('INSERT INTO visitor_sessions(id,device_id,member_id,account_kind,started_at,last_seen,pageviews,last_page,network_id,network_day,device,os,browser) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',(ident,ident,None,'guest',when,when,1,'/',None,at.date().isoformat(),'Móvil','iOS','Safari'))
  def test_csrf_explicit_consent_and_private_admin_access(self):
   self.assertEqual(self.guest.post('/api/visits',json={'consent':True,'page':'/'}).status_code,403)
   declined=self.post(self.guest,data={'consent':False,'page':'/'})
@@ -87,3 +94,84 @@ class VisitorRegistryTests(unittest.TestCase):
    ident=conn.execute('SELECT id FROM visitor_devices').fetchone()['id'];bucket=vr.protected(ident,'visit-rate')
    for _ in range(120):conn.execute('INSERT INTO login_attempts(bucket,attempted_at) VALUES(?,?)',(bucket,m.stamp(m.now_utc())))
   self.assertEqual(self.post(self.guest,data={'consent':True,'page':'/','username':'bypass'}).status_code,429)
+ def test_cumulative_seeds_only_this_madrid_week_once_before_first_new_visit(self):
+  instant=datetime(2026,11,4,12,tzinfo=timezone.utc)
+  origin=datetime(2026,11,1,23,tzinfo=timezone.utc)  # Monday midnight in Madrid.
+  self.seed_session('previous-week',origin-timedelta(seconds=1))
+  self.seed_session('week-start',origin)
+  self.seed_session('this-week',instant-timedelta(hours=1))
+  with patch('visitor_registry.now_utc',return_value=instant):
+   self.assertEqual(self.post(self.guest).status_code,200)
+   total=self.cumulative()
+   self.assertEqual(total,{'sessions':3,'since':m.stamp(origin),'time_zone':'Europe/Madrid'})
+   self.assertEqual(self.cumulative(),total)
+   with app.app.app_context():vr.init_database()
+   self.assertEqual(self.cumulative(),total)
+   with app.app.app_context(),m.database() as conn:
+    rows=conn.execute('SELECT * FROM visitor_public_totals').fetchall()
+    self.assertEqual(len(rows),1);self.assertEqual(set(rows[0].keys()),{'id','since','sessions'})
+ def test_cumulative_empty_origin_is_fixed_and_continuing_updates_do_not_increment(self):
+  instant=datetime(2026,7,1,12,tzinfo=timezone.utc)
+  with patch('visitor_registry.now_utc',return_value=instant):
+   empty=self.cumulative()
+   self.assertEqual(empty['sessions'],0)
+   self.assertEqual(empty['since'],'2026-06-28T22:00:00+00:00')  # CEST.
+   self.post(self.guest)
+   self.post(self.guest,data={'consent':True,'page':'/live','event':'heartbeat'})
+   self.post(self.guest,data={'consent':True,'page':'/account','event':'page'})
+   self.assertEqual(self.cumulative()['sessions'],1)
+  with patch('visitor_registry.now_utc',return_value=instant+timedelta(minutes=31)):
+   self.post(self.guest)
+   self.assertEqual(self.cumulative(),dict(empty,sessions=2))
+ def test_cumulative_survives_retention_next_week_and_daylight_saving_change(self):
+  instant=datetime(2026,3,27,12,tzinfo=timezone.utc)
+  with patch('visitor_registry.now_utc',return_value=instant):
+   self.post(self.guest);initial=self.cumulative()
+   self.assertEqual(initial['since'],'2026-03-22T23:00:00+00:00')
+  with patch('visitor_registry.now_utc',return_value=instant+timedelta(days=8)):
+   self.assertEqual(self.visits()['total'],0)
+   data=self.guest.get('/api/visits/public').json
+   self.assertEqual(data['summary']['sessions'],0);self.assertEqual(data['visits'],[])
+   self.assertEqual(data['cumulative'],initial)
+   self.post(self.guest)
+   self.assertEqual(self.cumulative(),dict(initial,sessions=2))
+ def test_cumulative_is_anonymous_and_survives_consent_withdrawal(self):
+  self.post(self.guest);other=app.app.test_client();self.post(other)
+  initial=self.cumulative();self.assertEqual(initial['sessions'],2)
+  self.post(self.guest,'/api/visits/consent',{'allowed':False})
+  self.assertEqual(self.visits()['total'],1);self.assertEqual(self.cumulative(),initial)
+  self.post(other,headers={'Sec-GPC':'1'})
+  self.assertEqual(self.visits()['total'],0);self.assertEqual(self.cumulative(),initial)
+  self.post(self.guest,data={'consent':False,'page':'/'})
+  self.assertEqual(self.cumulative(),initial)
+  self.post(self.guest)
+  self.assertEqual(self.cumulative(),dict(initial,sessions=3))
+ def test_first_post_upgrade_withdrawal_seeds_before_erasing_sessions(self):
+  self.post(self.guest)
+  with app.app.app_context(),m.database() as conn:
+   conn.execute('DELETE FROM visitor_public_totals')  # Pre-upgrade state.
+  self.post(self.guest,'/api/visits/consent',{'allowed':False})
+  self.assertEqual(self.visits()['total'],0)
+  self.assertEqual(self.cumulative()['sessions'],1)
+ def test_first_admin_read_preserves_week_seed_before_fall_dst_retention_cleanup(self):
+  # This Madrid week is 169 hours long. Its first half-hour has already passed
+  # seven days of retention by Sunday night, but belongs to this week's seed.
+  instant=datetime(2026,10,25,22,30,tzinfo=timezone.utc)
+  origin=datetime(2026,10,18,22,tzinfo=timezone.utc)
+  self.seed_session('early-in-long-week',origin)
+  self.seed_session('recent-in-long-week',instant-timedelta(hours=1))
+  with patch('visitor_registry.now_utc',return_value=instant):
+   self.assertEqual(self.visits()['total'],1)
+   self.assertEqual(self.cumulative(),{'sessions':2,'since':m.stamp(origin),'time_zone':'Europe/Madrid'})
+ def test_concurrent_initial_read_and_new_sessions_increment_without_lost_updates(self):
+  instant=datetime(2026,11,4,12,tzinfo=timezone.utc)
+  self.seed_session('existing-one',instant-timedelta(hours=2))
+  self.seed_session('existing-two',instant-timedelta(hours=1))
+  def enter(number):
+   client=app.app.test_client()
+   if number%2==0:self.assertEqual(client.get('/api/visits/public').status_code,200)
+   return self.post(client).status_code
+  with patch('visitor_registry.now_utc',return_value=instant):
+   with ThreadPoolExecutor(max_workers=8) as pool:statuses=list(pool.map(enter,range(8)))
+   self.assertEqual(statuses,[200]*8)
+   self.assertEqual(self.cumulative()['sessions'],10)

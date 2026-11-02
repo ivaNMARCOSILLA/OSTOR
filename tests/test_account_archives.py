@@ -360,11 +360,13 @@ class AccountArchiveTests(unittest.TestCase):
     def test_physical_delete_removes_only_unpaid_account_and_owned_children(self):
         member, ident = self.member('delete-owner', email='archive@example.test', nickname='admin')
         other, other_id = self.member('preserved-account')
+        self.assertEqual(self.post(member, '/api/visits', {'consent': True, 'page': '/', 'event': 'page'}).status_code, 200)
         channel, other_channel = secrets.token_hex(16), secrets.token_hex(16)
         now, expiry = m.stamp(m.now_utc()), m.stamp(m.now_utc() + timedelta(hours=1))
         comment, order = secrets.token_hex(16), secrets.token_hex(16)
         self.token(ident)
         with app.app.app_context(), m.database() as conn:
+            conn.execute('DELETE FROM visitor_public_totals')  # First action after upgrading an existing registry.
             for cid, owner in [(channel, ident), (other_channel, other_id)]:
                 conn.execute('INSERT INTO streamer_channels(id,member_id,title,room_name,live_until,updated_at) VALUES(?,?,?,?,?,?)', (cid, owner, 'Prueba sin pago', 'room-' + cid, expiry, now))
                 conn.execute('INSERT INTO live_broadcast_sessions VALUES(?,?)', (cid, now))
@@ -387,6 +389,8 @@ class AccountArchiveTests(unittest.TestCase):
         self.assertIsNotNone(other.get('/api/account/me').json['user'])
         with app.app.app_context(), m.database() as conn:
             self.assertIsNone(conn.execute('SELECT * FROM members WHERE id=?', (ident,)).fetchone())
+            self.assertEqual(conn.execute('SELECT COUNT(*) AS n FROM visitor_sessions WHERE member_id=?', (ident,)).fetchone()['n'], 0)
+            self.assertEqual(conn.execute("SELECT sessions FROM visitor_public_totals WHERE id='entries'").fetchone()['sessions'], 1)
             for table in ('member_profiles', 'email_tokens', 'invitations', 'friend_access', 'service_grants', 'member_archives', 'member_archive_events'):
                 self.assertEqual(conn.execute('SELECT COUNT(*) AS n FROM '+table+' WHERE member_id=?', (ident,)).fetchone()['n'], 0, table)
             self.assertIsNone(conn.execute('SELECT * FROM streamer_channels WHERE id=?', (channel,)).fetchone())

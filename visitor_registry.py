@@ -6,6 +6,7 @@ import os
 import re
 import secrets
 from datetime import timedelta
+from zoneinfo import ZoneInfo
 from flask import Blueprint,current_app,jsonify,request
 from itsdangerous import URLSafeTimedSerializer,BadSignature
 from membership import database,get_user,now_utc,stamp,require_admin
@@ -13,6 +14,8 @@ from membership import database,get_user,now_utc,stamp,require_admin
 bp=Blueprint('visitor_registry',__name__)
 COOKIE='electronicama_visits'
 RETENTION_DAYS=7
+PUBLIC_TOTAL_ID='entries'
+PUBLIC_TIME_ZONE='Europe/Madrid'
 PAGES={'/','/live','/account','/legal/privacidad.html','/legal/cookies.html','/legal/aviso-legal.html'}
 
 
@@ -29,7 +32,31 @@ def init_database():
         );
         CREATE INDEX IF NOT EXISTS visitor_session_recent ON visitor_sessions(last_seen,id);
         CREATE INDEX IF NOT EXISTS visitor_session_device ON visitor_sessions(device_id,last_seen);
+        CREATE TABLE IF NOT EXISTS visitor_public_totals (
+            id TEXT PRIMARY KEY,since TEXT NOT NULL,
+            sessions BIGINT NOT NULL DEFAULT 0 CHECK(sessions>=0)
+        );
         ''')
+
+
+def cumulative_visits(conn,instant=None,*,initialize=True):
+    """Initialize once under the caller's serialized transaction, before erasure.
+
+    The retained session rows can seed this week's real entries. The permanent
+    row stores only their anonymous sum and a fixed origin, never device/member
+    identifiers, so later expiry or consent withdrawal does not subtract it.
+    """
+    row=conn.execute('SELECT since,sessions FROM visitor_public_totals WHERE id=?',(PUBLIC_TOTAL_ID,)).fetchone()
+    if row is None:
+        if not initialize:return None
+        instant=instant or now_utc()
+        local=instant.astimezone(ZoneInfo(PUBLIC_TIME_ZONE))
+        monday=(local-timedelta(days=local.weekday())).replace(hour=0,minute=0,second=0,microsecond=0)
+        since=stamp(monday)
+        retained=conn.execute('SELECT COUNT(*) AS n FROM visitor_sessions WHERE started_at>=? AND started_at<=?',(since,stamp(instant))).fetchone()['n']
+        conn.execute('INSERT INTO visitor_public_totals(id,since,sessions) VALUES(?,?,?)',(PUBLIC_TOTAL_ID,since,retained))
+        row={'since':since,'sessions':retained}
+    return {'sessions':row['sessions'],'since':row['since'],'time_zone':PUBLIC_TIME_ZONE}
 
 
 def cleanup(conn):
@@ -92,7 +119,9 @@ def erase_current():
     forget_presence()
     raw=cookie_identity()
     if raw:
-        with database() as conn:conn.execute('DELETE FROM visitor_devices WHERE id=?',(protected(raw,'browser'),))
+        with database() as conn:
+            conn.execute('BEGIN IMMEDIATE');cumulative_visits(conn)
+            conn.execute('DELETE FROM visitor_devices WHERE id=?',(protected(raw,'browser'),))
 
 
 def private_response(data):
@@ -112,7 +141,7 @@ def record_visit():
     ip=address();network=protected(ip,'network-'+day) if ip else None
     user=get_user();member=user['id'] if user else None;kind='registered' if user else 'guest';device,os_name,browser=coarse_device()
     with database() as conn:
-        conn.execute('BEGIN IMMEDIATE');cleanup(conn)
+        conn.execute('BEGIN IMMEDIATE');cumulative_visits(conn,instant);cleanup(conn)
         # Rate buckets use a secret-key digest and cannot be changed by a username
         # supplied in the JSON body. No address or user agent is written to DB.
         bucket=protected(ident,'visit-rate')
@@ -129,6 +158,7 @@ def record_visit():
         else:
             session_id=secrets.token_hex(16)
             conn.execute('INSERT INTO visitor_sessions(id,device_id,member_id,account_kind,started_at,last_seen,pageviews,last_page,network_id,network_day,device,os,browser) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',(session_id,ident,member,kind,at,at,int(view),page,network,day,device,os_name,browser))
+            conn.execute('UPDATE visitor_public_totals SET sessions=sessions+1 WHERE id=? AND since<=?',(PUBLIC_TOTAL_ID,at))
     response=private_response({'recorded':True})
     response.set_cookie(COOKIE,signer().dumps({'device':raw,'session':session_id}),max_age=30*86400,httponly=True,secure=current_app.config['SESSION_COOKIE_SECURE'],samesite='Lax')
     return response
@@ -150,7 +180,7 @@ def list_visits():
     if kind not in {'all','guest','registered'}:return private_response({'error':'Filtro no válido.'}),400
     where='' if kind=='all' else ' WHERE v.account_kind=?';args=() if kind=='all' else (kind,)
     with database() as conn:
-        cleanup(conn)
+        conn.execute('BEGIN IMMEDIATE');cumulative_visits(conn);cleanup(conn)
         summary=conn.execute('SELECT COUNT(*) AS sessions,COUNT(DISTINCT device_id) AS browsers,COALESCE(SUM(CASE WHEN account_kind=\'registered\' THEN 1 ELSE 0 END),0) AS registered,COALESCE(SUM(CASE WHEN account_kind=\'guest\' THEN 1 ELSE 0 END),0) AS guests FROM visitor_sessions v'+where,args).fetchone()
         total=summary['sessions'];pages=max(1,(total+24)//25);page=min(page,pages)
         rows=conn.execute('SELECT v.*,m.username FROM visitor_sessions v LEFT JOIN members m ON m.id=v.member_id'+where+' ORDER BY v.last_seen DESC,v.id DESC LIMIT 25 OFFSET ?',(*args,25*(page-1))).fetchall()
@@ -164,13 +194,18 @@ def list_visits():
 
 @bp.get('/api/visits/public')
 def public_visits():
-    cutoff=stamp(now_utc()-timedelta(hours=24))
+    instant=now_utc();cutoff=stamp(instant-timedelta(hours=24))
     with database() as conn:
+        # Established totals need no global writer lock for every public poll.
+        # The first reader locks and rechecks before seeding or deleting rows.
+        cumulative=cumulative_visits(conn,instant,initialize=False)
+        if cumulative is None:
+            conn.execute('BEGIN IMMEDIATE');cumulative=cumulative_visits(conn,instant)
         cleanup(conn)
         summary=conn.execute('SELECT COUNT(*) AS sessions,COUNT(DISTINCT device_id) AS browsers FROM visitor_sessions WHERE started_at>=?',(cutoff,)).fetchone()
         rows=conn.execute('SELECT started_at,device,last_page FROM visitor_sessions WHERE started_at>=? ORDER BY started_at DESC,id DESC LIMIT 20',(cutoff,)).fetchall()
     labels={'/':'Música','/live':'Ol Livis','/account':'Cuenta','/legal/privacidad.html':'Información legal','/legal/cookies.html':'Información legal','/legal/aviso-legal.html':'Información legal'}
-    return private_response({'visits':[{'at':row['started_at'][:16]+':00+00:00','device':row['device'],'page':labels.get(row['last_page'],'Web')} for row in rows], 'summary':dict(summary),'window_hours':24,'limit':20,'consented_only':True,'approximate':True})
+    return private_response({'visits':[{'at':row['started_at'][:16]+':00+00:00','device':row['device'],'page':labels.get(row['last_page'],'Web')} for row in rows], 'summary':dict(summary),'cumulative':cumulative,'window_hours':24,'limit':20,'consented_only':True,'approximate':True})
 
 
 def install(app):

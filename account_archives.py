@@ -193,6 +193,9 @@ def delete_unpaid_member(conn, member_id, actor_id=None):
                           'live_guest_invites', 'live_channel_settings', 'live_channel_views',
                           'adult_channel_rules'):
                 delete(table, 'channel_id IN ('+channel_marks+')', channel_ids)
+        if {'visitor_sessions', 'visitor_public_totals'} <= tables:
+            from visitor_registry import cumulative_visits
+            cumulative_visits(conn)
         for table in ('live_guest_invites', 'live_channel_views', 'adult_age_declarations',
                       'stripe_connect_states', 'stripe_accounts', 'email_tokens', 'invitations',
                       'member_two_factor', 'two_factor_recovery', 'member_legal_names',
