@@ -25,7 +25,7 @@ Texto propuesto para música:
 
 Texto propuesto para creadores:
 
-> Ol Livis · Crea en directo
+> Ol Live · Crea en directo
 >
 > Acceso de creador: 25 €/año
 >

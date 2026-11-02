@@ -299,7 +299,7 @@ def verify_csrf():
 
 
 def restrict_music():
-    # Music is free. Account collections require login; Ol Livis requires premium.
+    # Music is free. Account collections require login; Ol Live requires premium.
     path=request.path
     if not path.startswith('/api/') or path.startswith(('/api/account/','/api/admin/','/api/streamers/admin/','/api/play/','/api/resolve/','/api/channel-subscriptions/','/api/payments/')) or path in {'/api/visits','/api/visits/public','/api/visits/consent','/api/navigation/events','/api/navigation/consent','/api/status','/api/locale','/api/sync','/api/search','/api/trending','/api/proxy','/api/promotion/event','/api/presence','/api/live/catalogue','/api/live/founders','/api/live/founders/claim'}:
         return None
@@ -321,7 +321,7 @@ def restrict_music():
         if not user:return jsonify(error='Inicia sesión con una cuenta gratuita para ver los directos.',code='login_required'),401
         return None
     if not user or not user_public(user)['active']:
-        return jsonify(error='Ver y participar en Ol Livis requiere acceso premium. La música sigue siendo gratuita.',code='premium_required'),402 if user else 401
+        return jsonify(error='Ver y participar en Ol Live requiere acceso premium. La música sigue siendo gratuita.',code='premium_required'),402 if user else 401
 
 
 def payload():
@@ -594,7 +594,7 @@ def confirm_payment():
     if plan not in PLANS or not 4 <= len(reference) <= 120:
         return jsonify(error='Indica plan y referencia única del pago comprobado en PayPal.'), 400
     from payments import ready
-    if not ready():return jsonify(error='Los cobros de Ol Livis están bloqueados hasta que la emisión esté disponible. Escuchar música es gratuito.'),409
+    if not ready():return jsonify(error='Los cobros de Ol Live están bloqueados hasta que la emisión esté disponible. Escuchar música es gratuito.'),409
     try:
         with database() as conn:
             conn.execute('BEGIN IMMEDIATE')
@@ -607,7 +607,7 @@ def confirm_payment():
             friend=conn.execute('SELECT revoked_at FROM friend_access WHERE member_id=?',(user['id'],)).fetchone()
             if friend and not friend['revoked_at']:return jsonify(error='Esta cuenta tiene acceso especial activo. No corresponde registrar un cobro.'),409
             entitlement=details(user['id'],conn)
-            if entitlement.get('paid_at'):return jsonify(error='Esta cuenta ya tiene el pago único de Ol Livis.'),409
+            if entitlement.get('paid_at'):return jsonify(error='Esta cuenta ya tiene el pago único de Ol Live.'),409
             slot=reservation(conn,user['id'])
             if not payment_allowed(entitlement,slot):return jsonify(error='El pago único se habilita al terminar la prueba de siete días. Los plazos históricos ya iniciados se conservan.'),409
             start=now_utc();end=end_of_plan(start,plan)

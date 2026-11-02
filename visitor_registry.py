@@ -204,7 +204,7 @@ def public_visits():
         cleanup(conn)
         summary=conn.execute('SELECT COUNT(*) AS sessions,COUNT(DISTINCT device_id) AS browsers FROM visitor_sessions WHERE started_at>=?',(cutoff,)).fetchone()
         rows=conn.execute('SELECT started_at,device,last_page FROM visitor_sessions WHERE started_at>=? ORDER BY started_at DESC,id DESC LIMIT 20',(cutoff,)).fetchall()
-    labels={'/':'Música','/live':'Ol Livis','/account':'Cuenta','/legal/privacidad.html':'Información legal','/legal/cookies.html':'Información legal','/legal/aviso-legal.html':'Información legal'}
+    labels={'/':'Música','/live':'Ol Live','/account':'Cuenta','/legal/privacidad.html':'Información legal','/legal/cookies.html':'Información legal','/legal/aviso-legal.html':'Información legal'}
     return private_response({'visits':[{'at':row['started_at'][:16]+':00+00:00','device':row['device'],'page':labels.get(row['last_page'],'Web')} for row in rows], 'summary':dict(summary),'cumulative':cumulative,'window_hours':24,'limit':20,'consented_only':True,'approximate':True})
 
 

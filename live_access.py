@@ -1,4 +1,4 @@
-"""Ol Livis: one seven-day trial, one fixed price, verified creator activity."""
+"""Ol Live: one seven-day trial, one fixed price, verified creator activity."""
 import calendar,os,time
 from datetime import datetime,timedelta
 from flask import Blueprint,jsonify
@@ -38,7 +38,7 @@ def founder_activity(member_id,conn):
 
 @bp.post('/api/account/live-trial')
 def trial():
- return jsonify(error='Ol Livis cuesta 25 € al año desde la contratación. No se ofrecen pruebas gratuitas.',code='trial_retired'),410
+ return jsonify(error='Ol Live cuesta 25 € al año desde la contratación. No se ofrecen pruebas gratuitas.',code='trial_retired'),410
 
 def verified_broadcast(channel,user):
  """Ask LiveKit for actual published tracks; never trust the browser's live flag."""

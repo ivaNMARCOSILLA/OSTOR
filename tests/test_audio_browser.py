@@ -88,8 +88,8 @@ def run():
         for width in [1440,768,390,320]:
             page.set_viewport_size({'width':width,'height':900})
             assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+2'),width
-        page.set_viewport_size({'width':1440,'height':1000});page.screenshot(path='docs/maggy-desktop.png',full_page=True)
-        page.set_viewport_size({'width':390,'height':844});page.screenshot(path='docs/maggy-mobile.png',full_page=True)
+        page.set_viewport_size({'width':1440,'height':1000});page.screenshot(path='/tmp/maggy-desktop.png',full_page=True)
+        page.set_viewport_size({'width':390,'height':844});page.screenshot(path='/tmp/maggy-mobile.png',full_page=True)
         assert not any('youtube' in url.lower() or 'jamendo' in url.lower() or 'retired.mp3' in url for url in requests)
         assert not errors,errors
         browser.close()

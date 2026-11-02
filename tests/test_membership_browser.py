@@ -19,8 +19,8 @@ def run():
   assert invited.locator('#enter-maggy').is_visible();assert 'invitación' in invited.locator('#access-status').inner_text().lower();assert not invited.locator('#pricing').is_visible();assert not invited.locator('#admin-panel').is_visible()
   for width in [1440,768,390,320]:
    admin.set_viewport_size({'width':width,'height':900});assert admin.evaluate('document.documentElement.scrollWidth<=innerWidth+2'),width
-  admin.set_viewport_size({'width':1440,'height':1000});admin.locator('#invite-result').evaluate("node=>node.textContent='Invitación gratuita de Ol Livis creada. Enlace privado oculto en esta captura.'");admin.screenshot(path='docs/maggy-admin.png',full_page=True)
+  admin.set_viewport_size({'width':1440,'height':1000});admin.locator('#invite-result').evaluate("node=>node.textContent='Invitación gratuita de Ol Live creada. Enlace privado oculto en esta captura.'");admin.screenshot(path='docs/maggy-admin.png',full_page=True)
   assert not errors,errors;browser.close()
- print('OK: free music/account collection, premium-only Ol Livis, no premature billing, free friend invitations, 4 widths')
+ print('OK: free music/account collection, premium-only Ol Live, no premature billing, free friend invitations, 4 widths')
 
 if __name__=='__main__':run()

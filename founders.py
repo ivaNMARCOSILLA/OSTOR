@@ -1,4 +1,4 @@
-"""One hundred numbered, durable Ol Livis founding-creator places."""
+"""One hundred numbered, durable Ol Live founding-creator places."""
 from flask import Blueprint,jsonify
 from membership import database,get_user,now_utc,stamp,allow_attempt,require_admin,payload
 from notifications import notify
@@ -32,7 +32,7 @@ def status():
 @bp.post('/api/live/founders/claim')
 def claim():
  from operations import premiere
- if premiere():return jsonify(error='Ol Livis · próximo estreno. Las plazas aún no están abiertas.'),409
+ if premiere():return jsonify(error='Ol Live · próximo estreno. Las plazas aún no están abiertas.'),409
  user=get_user()
  if not user:return jsonify(error='Crea una cuenta gratuita o inicia sesión para reservar tu plaza.'),401
  if not allow_attempt('founder-claim',12):return jsonify(error='Demasiados intentos. Espera unos minutos.'),429
@@ -47,10 +47,10 @@ def claim():
   from human_check import verify
   if not verify(conn):return jsonify(error='Completa la comprobación visual antes de reservar. El código caduca y solo se usa una vez.'),400
   from membership import user_public
-  if not user_public(user).get('full_service') and not user_public(user).get('live_annual') and not user_public(user).get('live_lifetime'):return jsonify(error='Primero contrata Ol Livis por 25 € al año. Las plazas requieren un pago confirmado.'),409
+  if not user_public(user).get('full_service') and not user_public(user).get('live_annual') and not user_public(user).get('live_lifetime'):return jsonify(error='Primero contrata Ol Live por 25 € al año. Las plazas requieren un pago confirmado.'),409
   number=reserve(conn,user['id'])
-  if number is None:return jsonify(error='Las 100 plazas de fundador están ocupadas. Ol Livis sigue disponible con acceso anual ordinario, sin beneficios de fundador.'),409
- notify('founder','Nueva plaza Ol Livis fundadores',f'Se ha reservado la plaza {number} de 100. Acceso anual confirmado. Para conservarla se debe renovar el acceso de 25 € al año y mantener la actividad indicada. Consulta la cuenta en administración.',event_key='founder:'+user['id'],member_ids=[user['id']])
+  if number is None:return jsonify(error='Las 100 plazas de fundador están ocupadas. Ol Live sigue disponible con acceso anual ordinario, sin beneficios de fundador.'),409
+ notify('founder','Nueva plaza Ol Live fundadores',f'Se ha reservado la plaza {number} de 100. Acceso anual confirmado. Para conservarla se debe renovar el acceso de 25 € al año y mantener la actividad indicada. Consulta la cuenta en administración.',event_key='founder:'+user['id'],member_ids=[user['id']])
  return jsonify(ok=True,number=number,already_claimed=False,lifetime=False,payment_required=True)
 
 @bp.post('/api/admin/founders/revoke')

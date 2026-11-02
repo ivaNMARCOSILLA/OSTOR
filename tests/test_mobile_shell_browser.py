@@ -127,7 +127,7 @@ def run():
         page.emulate_media(reduced_motion='reduce')
         page.evaluate('''()=>{
             document.documentElement.classList.add('friend-access');
-            document.querySelector('#planes .annual-access-link').textContent='Tu estado actual · Ol Livis';
+            document.querySelector('#planes .annual-access-link').textContent='Tu estado actual · Ol Live';
         }''')
         for width in [320,393,430,768,1440]:
             page.set_viewport_size({'width':width,'height':900})

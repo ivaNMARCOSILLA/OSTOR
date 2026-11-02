@@ -2,7 +2,7 @@
 (()=>{
  if(document.getElementById('mobile-dock'))return;
  const dock=document.createElement('nav');dock.id='mobile-dock';dock.setAttribute('aria-label','Navegación principal móvil');
- const destinations=[['/#inicio','Inicio','home'],['/#library','Música','music'],['/live#live-catalogue','Ol Livis','live'],['/#hologramas','Hologramas','holograms'],['/account','Mi cuenta','account']];
+ const destinations=[['/#inicio','Inicio','home'],['/#library','Música','music'],['/live#live-catalogue','Ol Live','live'],['/#hologramas','Hologramas','holograms'],['/account','Mi cuenta','account']];
  const drawings={home:'M3 10 12 3l9 7M5 9v12h5v-7h4v7h5V9',music:'M9 18V5l11-2v13M9 7l11-2M9 18c0 2-6 3-6 0s6-3 6 0M20 16c0 2-6 3-6 0s6-3 6 0',live:'M8 3h8l5 5v8l-5 5H8l-5-5V8Z M10 8l7 4-7 4Z',holograms:'m12 2 10 10-10 10L2 12Z M12 2v20M2 12h20',account:'M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0M4 21v-3c0-6 16-6 16 0v3'};
  for(const [href,title,key] of destinations){
   const link=document.createElement('a');link.href=href;link.dataset.mobileDestination=key;

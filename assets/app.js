@@ -175,20 +175,6 @@ function goView(view) {
   render();
   byId('library').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
-function updateExternalSearch(query) {
-  query = String(query || '').trim().replace(/\s+/g, ' ').slice(0, 90);
-  const encoded = encodeURIComponent(query);
-  const urls = {
-    soundcloud: `https://soundcloud.com/search/sounds?q=${encoded}`,
-    youtube: `https://www.youtube.com/results?search_query=${encoded}`,
-    spotify: `https://open.spotify.com/search/${encoded}`,
-    commons: `https://commons.wikimedia.org/w/index.php?title=Special:MediaSearch&type=audio&search=${encoded}`
-  };
-  document.querySelectorAll('[data-external-search]').forEach(link => {
-    if (urls[link.dataset.externalSearch]) link.href = urls[link.dataset.externalSearch];
-  });
-  byId('directory-query').textContent = query ? `Búsqueda externa: «${query}». SoundCloud, YouTube, Spotify y Commons usarán estas palabras.` : 'Escribe un artista o canción para buscarlo en otras plataformas.';
-}
 const searchMemory = new Map();
 async function requestSearch(query, append = false) {
   if (state.source === 'MIX') return requestMixSearch(query, append);
@@ -202,7 +188,6 @@ async function requestSearch(query, append = false) {
   state.loading = true;
   byId('search-button').disabled = true; byId('load-more').disabled = true;
   byId('search-input').value = query;
-  updateExternalSearch(query);
   message(state.source==='YOUTUBE'?`Buscando vídeos de YouTube para «${query}»…`:`Buscando «${query}»… Objetivo: al menos 120 coincidencias disponibles.`); render();
   const youtubeOnly=state.source==='YOUTUBE';
   const sources = youtubeOnly ? ['YOUTUBE'] : ['AUDIUS', 'ARCHIVE'];
@@ -252,7 +237,7 @@ async function requestMixSearch(query = 'piano', append = false) {
   const controller = new AbortController(); state.mixRequest = controller;
   if (!append) { state.mixResults = []; state.mixPage = 1; state.mixQuery = query; }
   state.mixLoading = true; state.view = 'discover'; state.source = 'MIX';
-  byId('mix-query').value = query; byId('search-input').value = query; updateExternalSearch(query);
+  byId('mix-query').value = query; byId('search-input').value = query;
   byId('mix-status').textContent = 'Buscando grabaciones libres y emisoras…';
   render();
   const deadline = setTimeout(() => controller.abort(), 14000);
@@ -325,7 +310,7 @@ function playTrack(track, queue = filteredTracks()) {
   state.playSerial += 1;
   if (window.MaggySession && !window.MaggySession.requireAccess()) return;
   // Keep the same native element, and call play() in the tap event on iOS.
-  // Music playback is free; Ol Livis access is managed separately.
+  // Music playback is free; Ol Live access is managed separately.
   if(track.source==='YOUTUBE'||state.youtube||state.youtubeLoading)destroyMedia();
   state.audio?.pause();
   state.currentTrack = track;
@@ -534,7 +519,6 @@ function init() {
   byId('mobile-nav').addEventListener('click',event=>{if(event.target.closest('a,button'))closeMobileMenu();});
   document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!byId('mobile-nav').classList.contains('hidden')){closeMobileMenu();byId('mobile-menu').focus();}});
   document.addEventListener('click',event=>{if(!event.target.closest('#mobile-nav,#mobile-menu'))closeMobileMenu();});
-  byId('search-input').addEventListener('input', event => updateExternalSearch(event.target.value));
   byId('search-form').addEventListener('submit', event => { event.preventDefault(); requestSearch(byId('search-input').value); });
   byId('mix-search-form').addEventListener('submit', event => { event.preventDefault(); requestMixSearch(byId('mix-query').value); });
   document.querySelectorAll('[data-mix-query]').forEach(button => button.addEventListener('click', () => requestMixSearch(button.dataset.mixQuery)));

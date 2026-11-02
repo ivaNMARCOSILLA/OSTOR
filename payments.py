@@ -87,7 +87,7 @@ def account_for(c,member_id):
 def status():
  user=get_user()
  with database() as c:account=account_for(c,user['id']) if user else None
- return jsonify(provider=provider(),configured=configured(),enabled=ready(),creator_connected=bool(account),connect_available=connect_configuration_error() is None,connect_pending_reason=connect_configuration_error() if user else None,platform_price_cents=2500,currency='eur',platform_commission_percent=0,renewal='manual',billing_period='year',trial_days=0,play_distribution=bool(session.get('ol_play_distribution')),pending_reason=None if ready() else 'Ol Livis · próximo estreno. Todavía no hay cobros disponibles.')
+ return jsonify(provider=provider(),configured=configured(),enabled=ready(),creator_connected=bool(account),connect_available=connect_configuration_error() is None,connect_pending_reason=connect_configuration_error() if user else None,platform_price_cents=2500,currency='eur',platform_commission_percent=0,renewal='manual',billing_period='year',trial_days=0,play_distribution=bool(session.get('ol_play_distribution')),pending_reason=None if ready() else 'Ol Live · próximo estreno. Todavía no hay cobros disponibles.')
 
 def sandbox_configured():return bool(os.getenv('STRIPE_TEST_SECRET_KEY','').startswith(('sk_test_','rk_test_')) and os.getenv('STRIPE_TEST_WEBHOOK_SECRET','').startswith('whsec_'))
 
@@ -174,7 +174,7 @@ def validate_order(c,user,channel_id=None):
  if channel_id:
   import subscriptions as sub
   channel=c.execute('SELECT * FROM streamer_channels WHERE id=?',(channel_id,)).fetchone()
-  if not channel or channel['member_id']==user['id'] or not user_public(user)['active']:raise PaymentError('Necesitas acceso a Ol Livis y una cuenta distinta del creador.')
+  if not channel or channel['member_id']==user['id'] or not user_public(user)['active']:raise PaymentError('Necesitas acceso a Ol Live y una cuenta distinta del creador.')
   from account_archives import is_archived
   if is_archived(c,channel['member_id']):raise PaymentError('El creador ha dado de baja su cuenta. No se admiten nuevas suscripciones.',code='creator_unavailable')
   mode=sub.settings(c,channel_id);agreement=c.execute('SELECT * FROM subscription_agreements WHERE id=?',(mode['agreement_id'] or '',)).fetchone();account=account_for(c,channel['member_id'])
@@ -183,13 +183,13 @@ def validate_order(c,user,channel_id=None):
   if sub.active_benefits(c,channel_id,user['id']):raise PaymentError('Ya tienes una suscripción activa. Renueva cuando termine su periodo.')
   pending=c.execute("SELECT id FROM stripe_orders WHERE member_id=? AND channel_id=? AND paid_at IS NULL AND state='open' AND created_at>?",(user['id'],channel_id,stamp(now_utc()-timedelta(minutes=32)))).fetchone()
   if pending:raise PaymentError('Ya hay un pago pendiente para este canal. Completa o deja caducar la sesión anterior.')
-  return dict(kind='creator',channel_id=channel_id,agreement_id=agreement['id'],account_id=account,amount_cents=sub.channel_price(c,channel_id,agreement['price_cents'],user['id']),label='Ol Livis · '+channel['title'])
+  return dict(kind='creator',channel_id=channel_id,agreement_id=agreement['id'],account_id=account,amount_cents=sub.channel_price(c,channel_id,agreement['price_cents'],user['id']),label='Ol Live · '+channel['title'])
  release_expired(c);entitlement=details(user['id'],c);slot=reservation(c,user['id'])
  if entitlement.get('revoked_at'):raise PaymentError('Contacta con administración para revisar el acceso antes de contratar.')
  if user['role']=='admin' or user_public(user)['complimentary'] or user_public(user)['live_lifetime']:raise PaymentError('Esta cuenta ya dispone de acceso; no corresponde cobrar.')
  if user_public(user)['active'] and user['access_until'] and user['access_until']>stamp(now_utc()+timedelta(days=30)):raise PaymentError('Tu acceso anual sigue vigente. Podrás renovar durante sus últimos 30 días.')
  if c.execute("SELECT id FROM stripe_orders WHERE member_id=? AND kind IN ('platform','platform_annual') AND paid_at IS NULL AND state='open' AND created_at>?",(user['id'],stamp(now_utc()-timedelta(minutes=32)))).fetchone():raise PaymentError('Ya hay un pago pendiente. Completa o deja caducar la sesión anterior.')
- return dict(kind='platform_annual',channel_id=None,agreement_id=None,account_id='',amount_cents=2500,label='Ol Livis · 25 EUR por un año, sin prueba gratuita')
+ return dict(kind='platform_annual',channel_id=None,agreement_id=None,account_id='',amount_cents=2500,label='Ol Live · 25 EUR por un año, sin prueba gratuita')
 
 @bp.post('/api/payments/checkout')
 def checkout():
@@ -221,7 +221,7 @@ def checkout():
     from email_security import clean_legal_name
     saved=c.execute('SELECT legal_name FROM member_legal_names WHERE member_id=?',(user['id'],)).fetchone()
     legal_name=clean_legal_name(payload().get('legal_name') or (saved['legal_name'] if saved else ''))
-    if not legal_name:raise PaymentError('Indica tu nombre real completo para identificar el pago de Ol Livis.')
+    if not legal_name:raise PaymentError('Indica tu nombre real completo para identificar el pago de Ol Live.')
     c.execute('INSERT INTO member_legal_names(member_id,legal_name,updated_at) VALUES(?,?,?) ON CONFLICT(member_id) DO UPDATE SET legal_name=excluded.legal_name,updated_at=excluded.updated_at',(user['id'],legal_name,stamp(now_utc())))
    c.execute('INSERT INTO stripe_orders(id,member_id,kind,channel_id,agreement_id,account_id,amount_cents,currency,created_at,state) VALUES(?,?,?,?,?,?,?,?,?,?)',(order_id,user['id'],order['kind'],order['channel_id'],order['agreement_id'],order['account_id'],order['amount_cents'],'eur',stamp(now_utc()),'open'))
    c.execute('INSERT INTO stripe_order_context VALUES(?,?)',(order_id,timezone_name))
@@ -399,8 +399,8 @@ def send_annual_access_emails():
   if not claimed:continue
   try:
    with database() as c:founder=c.execute('SELECT number,revoked_at FROM live_founders WHERE member_id=?',(row['member_id'],)).fetchone()
-   badge=('Tu plaza de fundador n.º '+str(founder['number'])+' se ha asignado automáticamente. Conserva el acceso anual y cumple las condiciones de actividad.' if founder and not founder['revoked_at'] else 'Tienes acceso anual como participante de Ol Livis. Las 100 insignias de fundador están sujetas a disponibilidad; no limitan el acceso ordinario.')
-   deliver_to(row['recipient'],'Ol Livis · tu acceso anual está activo','Tu pago de 25 € está confirmado y tu acceso anual a Ol Livis está activo.\n\n'+badge+'\n\nNo necesitas solicitar otra plaza ni realizar otro pago.\n\nConsulta tu estado y vencimiento en '+ORIGIN+'/account#pricing')
+   badge=('Tu plaza de fundador n.º '+str(founder['number'])+' se ha asignado automáticamente. Conserva el acceso anual y cumple las condiciones de actividad.' if founder and not founder['revoked_at'] else 'Tienes acceso anual como participante de Ol Live. Las 100 insignias de fundador están sujetas a disponibilidad; no limitan el acceso ordinario.')
+   deliver_to(row['recipient'],'Ol Live · tu acceso anual está activo','Tu pago de 25 € está confirmado y tu acceso anual a Ol Live está activo.\n\n'+badge+'\n\nNo necesitas solicitar otra plaza ni realizar otro pago.\n\nConsulta tu estado y vencimiento en '+ORIGIN+'/account#pricing')
   except Exception:
    with database() as c:c.execute("UPDATE annual_access_emails SET status='pending' WHERE order_id=?",(row['order_id'],))
   else:
