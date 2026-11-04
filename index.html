@@ -30,10 +30,10 @@
   <meta name="author" content="Iván Marcos Illa">
   <title>electronicama · Music Universe</title>
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg?v=9.10.5">
-  <link rel="stylesheet" href="/assets/styles.css?v=9.28.11">
-  <script defer src="/assets/session.js?v=9.28.11"></script>
-  <script type="module" src="/assets/app.js?v=9.28.11"></script>
-<link rel="stylesheet" href="/assets/ol-theme.css?v=9.28.11"><script type="module" src="/assets/rewards.js?v=9.28.11"></script><script type="module" src="/assets/founders.js?v=9.28.11"></script><script defer src="/assets/presence.js?v=9.28.11"></script><script defer src="/assets/intro.js?v=9.28.11"></script><script type="module" src="/assets/operations.js?v=9.28.11"></script><script defer src="/assets/navigation.js?v=9.28.11"></script><script defer src="/assets/holograms-launcher.js?v=9.28.11"></script><script defer src="/assets/guest-navigation.js?v=9.28.11"></script><link rel="stylesheet" href="/assets/platform-theme.css?v=9.28.11"><script defer src="/assets/interface-sync.js?v=9.28.11"></script><link rel="stylesheet" href="/assets/visitor-registry.css?v=9.28.11"><script defer src="/assets/visitor-registry.js?v=9.28.11"></script><link rel="stylesheet" href="/assets/site-language.css?v=9.28.11"><script defer src="/assets/site-language.js?v=9.28.11"></script><link rel="stylesheet" href="/assets/mobile-shell.css?v=9.28.11"><script defer src="/assets/mobile-shell.js?v=9.28.11"></script></head>
+  <link rel="stylesheet" href="/assets/styles.css?v=9.29.0">
+  <script defer src="/assets/session.js?v=9.29.0"></script>
+  <script type="module" src="/assets/app.js?v=9.29.0"></script>
+<link rel="stylesheet" href="/assets/ol-theme.css?v=9.29.0"><script type="module" src="/assets/rewards.js?v=9.29.0"></script><script type="module" src="/assets/founders.js?v=9.29.0"></script><script defer src="/assets/presence.js?v=9.29.0"></script><script defer src="/assets/intro.js?v=9.29.0"></script><script type="module" src="/assets/operations.js?v=9.29.0"></script><script defer src="/assets/navigation.js?v=9.29.0"></script><script defer src="/assets/holograms-launcher.js?v=9.29.0"></script><script defer src="/assets/guest-navigation.js?v=9.29.0"></script><link rel="stylesheet" href="/assets/platform-theme.css?v=9.29.0"><script defer src="/assets/interface-sync.js?v=9.29.0"></script><link rel="stylesheet" href="/assets/visitor-registry.css?v=9.29.0"><script defer src="/assets/visitor-registry.js?v=9.29.0"></script><link rel="stylesheet" href="/assets/site-language.css?v=9.29.0"><script defer src="/assets/site-language.js?v=9.29.0"></script><link rel="stylesheet" href="/assets/mobile-shell.css?v=9.29.0"><script defer src="/assets/mobile-shell.js?v=9.29.0"></script></head>
 <body class="electronicama-theme"><div class="online-counter" data-online-counter hidden role="status" aria-live="off">Comprobando personas en línea…</div>
   <div class="app-shell">
     <aside class="sidebar" aria-label="Navegación principal">
@@ -123,8 +123,14 @@
         <p id="public-visit-count">Consultando el recuento…</p>
         <p id="public-visit-since">Consultando el inicio del recuento…</p>
         <p id="public-visit-update-status" role="status" hidden></p>
-        <details id="public-visit-history"><summary>Actividad reciente</summary><ol id="public-visit-list" aria-label="Entradas recientes compartidas"></ol><p id="public-visit-status" role="status">Consultando actividad reciente…</p></details>
-        <p>Entradas registradas con permiso, no personas únicas. El total anónimo se acumula desde la fecha indicada; el detalle se conserva 7 días. No mostramos identidades ni direcciones IP.</p>
+        <details id="public-visit-history"><summary>Recorrido diario</summary>
+          <p>El historial se conserva. «Sin datos disponibles» indica un día sin registros recuperables; «Al menos» indica un recuento anterior incompleto.</p>
+          <p id="public-visit-unassigned" hidden></p>
+          <div class="public-visit-day-scroll" tabindex="0" role="region" aria-label="Recorrido diario de entradas"><table class="public-visit-day-table"><thead><tr><th scope="col">Fecha</th><th scope="col">Entradas</th></tr></thead><tbody id="public-visit-days"></tbody></table></div>
+          <nav class="public-visit-history-pages" aria-label="Páginas del recorrido"><button id="public-visit-older" type="button" class="secondary" disabled>Días anteriores</button><span id="public-visit-range"></span><button id="public-visit-newer" type="button" class="secondary" disabled>Más recientes</button></nav>
+          <details id="public-visit-recent"><summary>Últimas entradas</summary><ol id="public-visit-list" aria-label="Entradas recientes compartidas"></ol><p id="public-visit-status" role="status">Consultando actividad reciente…</p></details>
+        </details>
+        <p>Entradas registradas con permiso, no personas únicas. El total anónimo se acumula desde la fecha indicada; el detalle se conserva 7 días. No mostramos identidades ni direcciones IP. <span>El recorrido diario se conserva de forma anónima.</span></p>
       </section><footer class="site-footer"><span>electronicama <b>✦</b> electronicama.com · Edición © 2026 Iván Marcos Illa</span><nav class="legal-links" aria-label="Información legal"><button type="button" id="privacy-button">Preferencias de cookies</button><a href="/legal/cookies.html">Política de cookies</a><a href="/legal/privacidad.html">Privacidad</a><a href="/legal/aviso-legal.html">Aviso legal</a></nav></footer>
     </main>
   </div>
@@ -148,7 +154,7 @@
     <div class="consent-panel">
       <span class="eyebrow">PRIVACIDAD Y COOKIES</span>
       <h3 id="consent-title">Tu privacidad.</h3>
-      <p id="consent-description">Guardamos tus favoritos y protegemos tu sesión. Si lo permites, guardamos visitas durante 7 días y mostramos entradas anónimas y tipos de dispositivo en la portada. Si entras con cuenta, solo administración puede relacionarlas con tu usuario. También recogemos botones pulsados por visitantes sin cuenta: sin textos escritos, búsquedas, contraseñas ni IP completa. Puedes rechazar estas métricas y seguir escuchando música. <span>El total acumulado se conserva de forma anónima, sin identificarte.</span></p>
+      <p id="consent-description">Guardamos tus favoritos y protegemos tu sesión. Si lo permites, guardamos visitas durante 7 días y mostramos entradas anónimas y tipos de dispositivo en la portada. Si entras con cuenta, solo administración puede relacionarlas con tu usuario. También recogemos botones pulsados por visitantes sin cuenta: sin textos escritos, búsquedas, contraseñas ni IP completa. Puedes rechazar estas métricas y seguir escuchando música. <span>El total acumulado se conserva de forma anónima, sin identificarte.</span> <span>El recorrido diario se conserva de forma anónima.</span></p>
       <p class="consent-info"><a href="/legal/cookies.html" target="_blank" rel="noopener">Política de cookies</a> · <a href="/legal/privacidad.html" target="_blank" rel="noopener">Privacidad</a> · <a href="/legal/aviso-legal.html" target="_blank" rel="noopener">Aviso legal</a></p>
       <div class="consent-buttons"><button id="consent-decline" type="button">Solo necesarias</button><button id="consent-accept" type="button">Permitir métricas opcionales</button></div>
       <p class="consent-small">Puedes cambiar esta elección cuando quieras desde «Preferencias de cookies» en el menú o al pie de página. La música y la biblioteca son gratuitas.</p>

@@ -2,6 +2,21 @@
 (()=>{
  const LANGS=['es','ca','en','fr','pt','de','it'],KEY='electronicama_language';
  const rows={
+ "total compartido entre dispositivos":["total compartit entre dispositius", "shared total across devices", "total partagé entre appareils", "total compartilhado entre dispositivos", "gemeinsamer Gesamtstand aller Geräte", "totale condiviso tra dispositivi"],
+ "Recorrido diario":["Recorregut diari", "Daily history", "Historique quotidien", "Histórico diário", "Tagesverlauf", "Cronologia giornaliera"],
+ "Recorrido diario de entradas":["Recorregut diari d’entrades", "Daily visit history", "Historique quotidien des visites", "Histórico diário de visitas", "Tagesverlauf der Besuche", "Cronologia giornaliera delle visite"],
+ "Páginas del recorrido":["Pàgines del recorregut", "History pages", "Pages de l’historique", "Páginas do histórico", "Verlaufsseiten", "Pagine della cronologia"],
+ "Fecha":["Data", "Date", "Date", "Data", "Datum", "Data"],
+ "Entradas":["Entrades", "Visits", "Visites", "Visitas", "Besuche", "Visite"],
+ "Sin datos disponibles":["Sense dades disponibles", "No data available", "Données indisponibles", "Dados indisponíveis", "Keine Daten verfügbar", "Dati non disponibili"],
+ "Al menos":["Com a mínim", "At least", "Au moins", "Pelo menos", "Mindestens", "Almeno"],
+ "Desglose anterior incompleto":["Desglossament anterior incomplet", "Earlier breakdown is incomplete", "Détail antérieur incomplet", "Detalhamento anterior incompleto", "Frühere Aufschlüsselung unvollständig", "Dettaglio precedente incompleto"],
+ "entradas anteriores sin desglose diario":["entrades anteriors sense desglossament diari", "earlier visits without a daily breakdown", "visites antérieures sans détail quotidien", "visitas anteriores sem detalhamento diário", "frühere Besuche ohne Tagesaufschlüsselung", "visite precedenti senza dettaglio giornaliero"],
+ "Días anteriores":["Dies anteriors", "Earlier days", "Jours précédents", "Dias anteriores", "Frühere Tage", "Giorni precedenti"],
+ "Más recientes":["Més recents", "More recent", "Plus récents", "Mais recentes", "Neuere Tage", "Più recenti"],
+ "Últimas entradas":["Últimes entrades", "Latest visits", "Dernières visites", "Últimas visitas", "Letzte Besuche", "Ultime visite"],
+ "El recorrido diario se conserva de forma anónima.":["El recorregut diari es conserva de manera anònima.", "Daily history is retained anonymously.", "L’historique quotidien est conservé anonymement.", "O histórico diário é mantido de forma anônima.", "Der Tagesverlauf wird anonym gespeichert.", "La cronologia giornaliera è conservata in forma anonima."],
+ "El historial se conserva. «Sin datos disponibles» indica un día sin registros recuperables; «Al menos» indica un recuento anterior incompleto.":["L’historial es conserva. «Sense dades disponibles» indica un dia sense registres recuperables; «Com a mínim» indica un recompte anterior incomplet.", "History is retained. “No data available” marks a day without recoverable records; “At least” marks an incomplete earlier count.", "L’historique est conservé. « Données indisponibles » indique un jour sans enregistrements récupérables ; « Au moins » indique un décompte antérieur incomplet.", "O histórico é mantido. «Dados indisponíveis» indica um dia sem registros recuperáveis; «Pelo menos» indica uma contagem anterior incompleta.", "Der Verlauf bleibt gespeichert. „Keine Daten verfügbar“ kennzeichnet Tage ohne wiederherstellbare Einträge; „Mindestens“ kennzeichnet frühere unvollständige Zählungen.", "La cronologia viene conservata. «Dati non disponibili» indica un giorno senza registrazioni recuperabili; «Almeno» indica un conteggio precedente incompleto."],
  "entrada acumulada":["entrada acumulada","cumulative visit","visite cumulée","visita acumulada","gesammelter Besuch","visita cumulativa"],
  "Entradas acumuladas · electronicama":["Entrades acumulades · electronicama", "Cumulative visits · electronicama", "Visites cumulées · electronicama", "Visitas acumuladas · electronicama", "Gesammelte Besuche · electronicama", "Visite cumulative · electronicama"],
  "entradas acumuladas":["entrades acumulades", "cumulative visits", "visites cumulées", "visitas acumuladas", "gesammelte Besuche", "visite cumulative"],

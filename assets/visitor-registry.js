@@ -5,13 +5,21 @@
  const page=()=>location.pathname==='/streamers'?'/live':location.pathname;
  const privacySignal=()=>navigator.globalPrivacyControl||navigator.doNotTrack==='1';
  const preference=()=>{try{return localStorage.getItem(KEY);}catch{return null;}};
- let csrf='',allowed=preference()==='accepted'&&!privacySignal(),active=null,generation=0,lastAccount,identityReady=false,publicBusy=false,publicLast=0;
- async function token(){const response=await fetch('/api/account/me',{cache:'no-store'});if(!response.ok)throw Error();const data=await response.json();csrf=data.csrf;return data;}
- async function request(path,data,retry=true){if(!csrf)await token();const response=await fetch(path,{method:'POST',keepalive:true,headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify(data)});if(response.status===403&&retry){await token();return request(path,data,false);}if(!response.ok)throw Error();return response.json();}
+ const PUBLIC_REFRESH_MS=3000,REQUEST_TIMEOUT_MS=8000;
+ let csrf='',allowed=preference()==='accepted'&&!privacySignal(),active=null,generation=0,lastAccount,identityReady=false;
+ let publicBusy=false,publicQueued=false,publicTimer=null,publicController=null,writeRevision=0,historyPage=1,lastPublicTotal=null;
+ const t=text=>window.OlLocale?.t(text)||text;
+ async function fetchJson(path,options={},controller=new AbortController()){
+  const deadline=setTimeout(()=>controller.abort(),REQUEST_TIMEOUT_MS);
+  try{const response=await fetch(path,{...options,signal:controller.signal});const data=await response.json();return {response,data};}
+  finally{clearTimeout(deadline);}
+ }
+ async function token(){const {response,data}=await fetchJson('/api/account/me',{cache:'no-store'});if(!response.ok)throw Error();csrf=data.csrf;return data;}
+ async function request(path,data,retry=true){if(!csrf)await token();const result=await fetchJson(path,{method:'POST',keepalive:true,headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify(data)});if(result.response.status===403&&retry){await token();return request(path,data,false);}if(!result.response.ok)throw Error();return result.data;}
  function record(event='heartbeat'){
   if(!allowed||privacySignal()||!paths.has(page())||document.hidden||active)return Promise.resolve();
   const version=generation;
-  active=request('/api/visits',{consent:true,page:page(),event}).then(result=>{if(version===generation&&result.recorded){window.dispatchEvent(new Event('electronicama:visit-recorded'));}}).catch(()=>{}).finally(()=>{active=null;});return active;
+  active=request('/api/visits',{consent:true,page:page(),event}).then(result=>{if(version===generation&&result.recorded){writeRevision++;if(result.cumulative)renderTotal(result.cumulative);window.dispatchEvent(new Event('electronicama:visit-recorded'));}}).catch(()=>{}).finally(()=>{active=null;});return active;
  }
  async function choose(value,notifyLegacy=true){
   const version=++generation;allowed=Boolean(value)&&!privacySignal();
@@ -30,31 +38,88 @@
   const panel=document.createElement('aside');panel.id='visitor-consent-panel';panel.className='visitor-consent-panel';panel.setAttribute('aria-label','Preferencias de visitas');
   const title=document.createElement('strong');title.textContent='Tú decides qué compartes';
   const copy=document.createElement('p');copy.textContent='Con tu permiso, guardamos el detalle de las visitas durante 7 días. Las entradas recientes y el tipo de dispositivo aparecen en la portada. El total acumulado se conserva de forma anónima, sin identificarte. Si entras con cuenta, solo administración puede relacionar el detalle con tu usuario. Puedes usar la web sin aceptar.';
+  const dailyNote=document.createElement('span');dailyNote.textContent='El recorrido diario se conserva de forma anónima.';copy.append(' ',dailyNote);
   const no=document.createElement('button');no.type='button';no.textContent='Solo necesarias';no.addEventListener('click',()=>choose(false));
   const yes=document.createElement('button');yes.type='button';yes.textContent='Permitir visitas opcionales';yes.addEventListener('click',()=>choose(true));
   const privacy=document.createElement('a');privacy.href='/legal/privacidad.html';privacy.textContent='Ver privacidad';panel.append(title,copy,no,yes,privacy);document.body.append(panel);
  }
+ function renderTotal(cumulative){
+  const count=document.getElementById('public-visit-count');if(!count)return;
+  const total=cumulative?.sessions,since=new Date(cumulative?.since);
+  if(!Number.isSafeInteger(total)||total<0||typeof cumulative?.since!=='string'||Number.isNaN(since.getTime()))throw Error('Invalid total');
+  // Responses can arrive out of order across reads and writes. Keep only a
+  // server-confirmed maximum for this origin; never invent a local increment.
+  const origin=since.toISOString();
+  if(lastPublicTotal?.since===origin&&total<lastPublicTotal.sessions)return false;
+  lastPublicTotal={sessions:total,since:origin};
+  const locale=document.documentElement.lang||'es',value=document.createElement('strong'),caption=document.createElement('span');
+  value.className='public-visit-total';value.textContent=new Intl.NumberFormat(locale).format(total);caption.textContent=t(total===1?'entrada acumulada':'entradas acumuladas');count.replaceChildren(value,caption);
+  document.getElementById('public-visit-since').textContent=`${t('Desde el')} ${new Intl.DateTimeFormat(locale,{timeZone:'Europe/Madrid',dateStyle:'long'}).format(since)} · ${t('total compartido entre dispositivos')}`;
+  return true;
+ }
+ function renderHistory(history){
+  const body=document.getElementById('public-visit-days');if(!body||!history)return;
+  if(!Array.isArray(history.days)||!Number.isSafeInteger(history.page)||!Number.isSafeInteger(history.pages))throw Error('Invalid history');
+  const locale=document.documentElement.lang||'es',number=new Intl.NumberFormat(locale),date=new Intl.DateTimeFormat(locale,{timeZone:'Europe/Madrid',day:'numeric',month:'short',year:'numeric'});
+  const maximum=Math.max(1,...history.days.map(day=>Number.isSafeInteger(day.sessions)?day.sessions:0));
+  const rows=document.createDocumentFragment();
+  for(const day of history.days){
+   if(!/^\d{4}-\d{2}-\d{2}$/.test(day.day)||!(day.sessions===null||Number.isSafeInteger(day.sessions)&&day.sessions>=0))throw Error('Invalid day');
+   const row=document.createElement('tr'),when=document.createElement('th'),time=document.createElement('time'),value=document.createElement('td'),label=document.createElement('span');
+   when.scope='row';time.dateTime=day.day;time.textContent=date.format(new Date(day.day+'T12:00:00+00:00'));when.append(time);
+   label.textContent=day.sessions===null?t('Sin datos disponibles'):day.complete?number.format(day.sessions):`${t('Al menos')} ${number.format(day.sessions)}`;
+   if(!day.complete){row.className='public-visit-partial';label.title=t('Desglose anterior incompleto');}
+   value.append(label);
+   if(day.sessions!==null){const bar=document.createElement('span'),fill=document.createElement('span');bar.className='public-visit-day-bar';bar.setAttribute('aria-hidden','true');fill.style.width=(100*day.sessions/maximum)+'%';bar.append(fill);value.append(bar);}
+   row.append(when,value);rows.append(row);
+  }
+  body.replaceChildren(rows);historyPage=history.page;
+  document.getElementById('public-visit-older').disabled=history.page>=history.pages;
+  document.getElementById('public-visit-newer').disabled=history.page<=1;
+  document.getElementById('public-visit-range').textContent=`${history.page} / ${history.pages}`;
+  const unassigned=document.getElementById('public-visit-unassigned');unassigned.hidden=!history.unassigned;
+  unassigned.textContent=history.unassigned?`${number.format(history.unassigned)} · ${t('entradas anteriores sin desglose diario')}`:'';
+ }
+ function schedulePublic(delay=PUBLIC_REFRESH_MS){
+  clearTimeout(publicTimer);if(document.getElementById('public-visit-count')&&!document.hidden)publicTimer=setTimeout(()=>refreshPublic(),delay);
+ }
  async function refreshPublic(force=false){
-  const list=document.getElementById('public-visit-list');if(!list||publicBusy||document.hidden||(!force&&Date.now()-publicLast<15000))return;
-  publicBusy=true;
-  try{const response=await fetch('/api/visits/public',{cache:'no-store'});if(!response.ok)throw Error();const data=await response.json(),total=data.cumulative?.sessions,since=new Date(data.cumulative?.since);if(!Number.isSafeInteger(total)||total<0||typeof data.cumulative?.since!=='string'||Number.isNaN(since.getTime()))throw Error();
-   const t=text=>window.OlLocale?.t(text)||text,locale=document.documentElement.lang||'es',count=document.getElementById('public-visit-count'),value=document.createElement('strong'),caption=document.createElement('span');
-   value.className='public-visit-total';value.textContent=new Intl.NumberFormat(locale).format(total);caption.textContent=t(total===1?'entrada acumulada':'entradas acumuladas');count.replaceChildren(value,caption);
-   document.getElementById('public-visit-since').textContent=`${t('Desde el')} ${new Intl.DateTimeFormat(locale,{timeZone:'Europe/Madrid',dateStyle:'long'}).format(since)} · ${t('recuento acumulado')}`;
-   const updateStatus=document.getElementById('public-visit-update-status');if(updateStatus){updateStatus.hidden=true;updateStatus.textContent='';}list.replaceChildren();
+  if(!document.getElementById('public-visit-count')||document.hidden)return;
+  if(publicBusy){publicQueued=publicQueued||force;return;}
+  clearTimeout(publicTimer);publicBusy=true;publicController=new AbortController();
+  const revision=writeRevision,requestedPage=historyPage;
+  try{
+   const path='/api/visits/public'+(requestedPage>1?'?history_page='+requestedPage:'');
+   const {response,data}=await fetchJson(path,{cache:'no-store'},publicController);if(!response.ok)throw Error();
+   // A GET already in flight when this browser records a visit can contain an
+   // older snapshot. Use the confirmed write, then fetch again for all devices.
+   if(revision!==writeRevision){publicQueued=true;return;}
+   if(!renderTotal(data.cumulative))return;
+   if(requestedPage===historyPage)renderHistory(data.history);
+   const updateStatus=document.getElementById('public-visit-update-status');if(updateStatus){updateStatus.hidden=true;updateStatus.textContent='';}
+   const list=document.getElementById('public-visit-list');list.replaceChildren();
    const labels={desktop:'Ordenador',mobile:'Móvil',tablet:'Tableta',bot:'Automatizado',unknown:'Sin identificar'},pages={'/':'Música','/live':'Ol Live','/account':'Cuenta','/legal/cookies.html':'Información legal','/legal/privacidad.html':'Información legal','/legal/aviso-legal.html':'Información legal'};
    for(const visit of data.visits){const row=document.createElement('li'),device=document.createElement('strong'),time=document.createElement('time'),where=document.createElement('span');device.textContent=t(labels[visit.device]||visit.device||'Sin identificar');time.dateTime=visit.at;time.textContent=new Intl.DateTimeFormat(document.documentElement.lang||'es',{timeZone:'Europe/Madrid',hour:'2-digit',minute:'2-digit'}).format(new Date(visit.at));where.textContent=t(pages[visit.page]||visit.page||'Web');row.append(device,where,time);list.append(row);}
-   document.getElementById('public-visit-status').textContent=t(data.visits.length?'Horas de Madrid · datos actualizados.':'No hay actividad reciente compartida. El total acumulado se mantiene.');publicLast=Date.now();
-  }catch{const status=document.getElementById('public-visit-update-status')||document.getElementById('public-visit-status');status.textContent=window.OlLocale?.t('No se ha podido actualizar el recuento. Volveremos a intentarlo.')||'No se ha podido actualizar el recuento. Volveremos a intentarlo.';status.hidden=false;}finally{publicBusy=false;}
+   document.getElementById('public-visit-status').textContent=t(data.visits.length?'Horas de Madrid · datos actualizados.':'No hay actividad reciente compartida. El total acumulado se mantiene.');
+  }catch{
+   if(!document.hidden){const status=document.getElementById('public-visit-update-status');status.textContent=t('No se ha podido actualizar el recuento. Volveremos a intentarlo.');status.hidden=false;}
+  }finally{
+   publicBusy=false;publicController=null;
+   if(publicQueued&&!document.hidden){publicQueued=false;queueMicrotask(()=>refreshPublic(true));}else schedulePublic();
+  }
  }
  window.addEventListener('electronicama:navigation-consent',event=>{if(!event.detail?.visitRegistryHandled)choose(event.detail?.allowed,false);});
  window.addEventListener('storage',event=>{if(event.key!==KEY)return;allowed=preference()==='accepted'&&!privacySignal();if(allowed)record('page');else choose(false,false);});
  window.addEventListener('ol:account-refreshed',async()=>{if(!allowed)return;try{const account=await token(),id=account.user?.id||null;if(identityReady&&id!==lastAccount)await record('page');lastAccount=id;identityReady=true;}catch{}});
  window.addEventListener('electronicama:visit-recorded',()=>refreshPublic(true));window.addEventListener('ol:language-changed',()=>refreshPublic(true));
- document.addEventListener('visibilitychange',()=>{if(!document.hidden){record();refreshPublic(true);}});
+ const resume=()=>{if(!document.hidden){record();refreshPublic(true);}};
+ document.addEventListener('visibilitychange',()=>{if(document.hidden){clearTimeout(publicTimer);publicController?.abort();}else resume();});
+ window.addEventListener('focus',resume);window.addEventListener('online',resume);window.addEventListener('pageshow',resume);
+ document.getElementById('public-visit-older')?.addEventListener('click',()=>{historyPage++;refreshPublic(true);});
+ document.getElementById('public-visit-newer')?.addEventListener('click',()=>{historyPage=Math.max(1,historyPage-1);refreshPublic(true);});
  const settings=document.createElement('button');settings.type='button';settings.className='secondary';settings.textContent='Preferencias de visitas';settings.dataset.visitsPreferences='';settings.addEventListener('click',showPreferences);if(!document.getElementById('privacy-button'))(document.querySelector('footer')||document.body).append(settings);
  if(allowed)token().then(account=>{lastAccount=account.user?.id||null;identityReady=true;record('page');}).catch(()=>{});
  else if(!preference()&&!privacySignal()&&!document.getElementById('consent-dialog'))showPreferences();
  if(privacySignal()&&preference()==='accepted')choose(false,false);
- refreshPublic(true);setInterval(()=>{record();refreshPublic();},60000);setInterval(()=>refreshPublic(),30000);
+ refreshPublic(true);setInterval(()=>record(),60000);
 })();

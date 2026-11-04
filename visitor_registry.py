@@ -5,7 +5,8 @@ import ipaddress
 import os
 import re
 import secrets
-from datetime import timedelta
+from collections import Counter
+from datetime import datetime,timedelta
 from zoneinfo import ZoneInfo
 from flask import Blueprint,current_app,jsonify,request
 from itsdangerous import URLSafeTimedSerializer,BadSignature
@@ -16,6 +17,8 @@ COOKIE='electronicama_visits'
 RETENTION_DAYS=7
 PUBLIC_TOTAL_ID='entries'
 PUBLIC_TIME_ZONE='Europe/Madrid'
+PUBLIC_HISTORY_DAYS=14
+PUBLIC_HISTORY_PAGE_SIZE=15
 PAGES={'/','/live','/account','/legal/privacidad.html','/legal/cookies.html','/legal/aviso-legal.html'}
 
 
@@ -36,27 +39,69 @@ def init_database():
             id TEXT PRIMARY KEY,since TEXT NOT NULL,
             sessions BIGINT NOT NULL DEFAULT 0 CHECK(sessions>=0)
         );
+        CREATE TABLE IF NOT EXISTS visitor_public_history (
+            id TEXT PRIMARY KEY,since TEXT NOT NULL,initialized_at TEXT NOT NULL,
+            unassigned BIGINT NOT NULL DEFAULT 0 CHECK(unassigned>=0)
+        );
+        CREATE TABLE IF NOT EXISTS visitor_public_days (
+            day TEXT PRIMARY KEY,sessions BIGINT NOT NULL DEFAULT 0 CHECK(sessions>=0)
+        );
         ''')
 
 
 def cumulative_visits(conn,instant=None,*,initialize=True):
     """Initialize once under the caller's serialized transaction, before erasure.
 
-    The retained session rows can seed this week's real entries. The permanent
-    row stores only their anonymous sum and a fixed origin, never device/member
-    identifiers, so later expiry or consent withdrawal does not subtract it.
+    The origin starts fourteen Madrid calendar days before first activation and
+    stays fixed. An older aggregate is preserved; only retained observations from
+    before its old origin are added. Anonymous daily rows preserve known history,
+    while the part of an old aggregate with no surviving dates stays unassigned.
     """
     row=conn.execute('SELECT since,sessions FROM visitor_public_totals WHERE id=?',(PUBLIC_TOTAL_ID,)).fetchone()
-    if row is None:
+    history=conn.execute('SELECT since,initialized_at,unassigned FROM visitor_public_history WHERE id=?',(PUBLIC_TOTAL_ID,)).fetchone()
+    if row is None or history is None:
         if not initialize:return None
         instant=instant or now_utc()
-        local=instant.astimezone(ZoneInfo(PUBLIC_TIME_ZONE))
-        monday=(local-timedelta(days=local.weekday())).replace(hour=0,minute=0,second=0,microsecond=0)
-        since=stamp(monday)
-        retained=conn.execute('SELECT COUNT(*) AS n FROM visitor_sessions WHERE started_at>=? AND started_at<=?',(since,stamp(instant))).fetchone()['n']
-        conn.execute('INSERT INTO visitor_public_totals(id,since,sessions) VALUES(?,?,?)',(PUBLIC_TOTAL_ID,since,retained))
-        row={'since':since,'sessions':retained}
+        if history is not None:
+            # Defensive recovery if only the aggregate row was lost. Daily sums
+            # and the anonymous undated remainder reconstruct the same total.
+            known=int(conn.execute('SELECT COALESCE(SUM(sessions),0) AS n FROM visitor_public_days').fetchone()['n'])
+            row={'since':history['since'],'sessions':known+history['unassigned']}
+            conn.execute('INSERT INTO visitor_public_totals(id,since,sessions) VALUES(?,?,?)',(PUBLIC_TOTAL_ID,row['since'],row['sessions']))
+        else:
+            local=instant.astimezone(ZoneInfo(PUBLIC_TIME_ZONE))
+            anchor=stamp((local-timedelta(days=PUBLIC_HISTORY_DAYS)).replace(hour=0,minute=0,second=0,microsecond=0))
+            since=min(anchor,row['since']) if row is not None else anchor
+            retained=conn.execute('SELECT started_at FROM visitor_sessions WHERE started_at>=? AND started_at<=?',(since,stamp(instant))).fetchall()
+            daily=Counter(datetime.fromisoformat(item['started_at']).astimezone(ZoneInfo(PUBLIC_TIME_ZONE)).date().isoformat() for item in retained)
+            for day,count in daily.items():
+                conn.execute('INSERT INTO visitor_public_days(day,sessions) VALUES(?,?) ON CONFLICT(day) DO UPDATE SET sessions=CASE WHEN visitor_public_days.sessions<excluded.sessions THEN excluded.sessions ELSE visitor_public_days.sessions END',(day,count))
+            known=int(conn.execute('SELECT COALESCE(SUM(sessions),0) AS n FROM visitor_public_days').fetchone()['n'])
+            total=(row['sessions']+sum(item['started_at']<row['since'] for item in retained)) if row is not None else len(retained)
+            # Existing daily rows are also real retained anonymous evidence.
+            total=max(total,known)
+            conn.execute('INSERT INTO visitor_public_totals(id,since,sessions) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET since=excluded.since,sessions=excluded.sessions',(PUBLIC_TOTAL_ID,since,total))
+            conn.execute('INSERT INTO visitor_public_history(id,since,initialized_at,unassigned) VALUES(?,?,?,?)',(PUBLIC_TOTAL_ID,since,stamp(instant),total-known))
+            row={'since':since,'sessions':total}
     return {'sessions':row['sessions'],'since':row['since'],'time_zone':PUBLIC_TIME_ZONE}
+
+
+def public_history(conn,instant,page):
+    history=conn.execute('SELECT since,initialized_at,unassigned FROM visitor_public_history WHERE id=?',(PUBLIC_TOTAL_ID,)).fetchone()
+    zone=ZoneInfo(PUBLIC_TIME_ZONE)
+    start=datetime.fromisoformat(history['since']).astimezone(zone).date()
+    initialized=datetime.fromisoformat(history['initialized_at']).astimezone(zone).date()
+    today=instant.astimezone(zone).date()
+    total_days=max(0,(today-start).days+1)
+    pages=max(1,(total_days+PUBLIC_HISTORY_PAGE_SIZE-1)//PUBLIC_HISTORY_PAGE_SIZE);page=min(page,pages)
+    end=today-timedelta(days=(page-1)*PUBLIC_HISTORY_PAGE_SIZE)
+    first=max(start,end-timedelta(days=PUBLIC_HISTORY_PAGE_SIZE-1))
+    rows=conn.execute('SELECT day,sessions FROM visitor_public_days WHERE day>=? AND day<=? ORDER BY day',(first.isoformat(),end.isoformat())).fetchall()
+    counts={row['day']:row['sessions'] for row in rows};days=[]
+    for offset in range(max(0,(end-first).days+1)):
+        date=first+timedelta(days=offset);day=date.isoformat();complete=date>initialized
+        days.append({'day':day,'sessions':counts.get(day,0 if complete else None),'complete':complete})
+    return {'since':history['since'],'tracking_since':(initialized+timedelta(days=1)).isoformat(),'unassigned':history['unassigned'],'page':page,'pages':pages,'page_size':PUBLIC_HISTORY_PAGE_SIZE,'total_days':total_days,'days':days}
 
 
 def cleanup(conn):
@@ -141,7 +186,7 @@ def record_visit():
     ip=address();network=protected(ip,'network-'+day) if ip else None
     user=get_user();member=user['id'] if user else None;kind='registered' if user else 'guest';device,os_name,browser=coarse_device()
     with database() as conn:
-        conn.execute('BEGIN IMMEDIATE');cumulative_visits(conn,instant);cleanup(conn)
+        conn.execute('BEGIN IMMEDIATE');total=cumulative_visits(conn,instant);cleanup(conn)
         # Rate buckets use a secret-key digest and cannot be changed by a username
         # supplied in the JSON body. No address or user agent is written to DB.
         bucket=protected(ident,'visit-rate')
@@ -159,7 +204,11 @@ def record_visit():
             session_id=secrets.token_hex(16)
             conn.execute('INSERT INTO visitor_sessions(id,device_id,member_id,account_kind,started_at,last_seen,pageviews,last_page,network_id,network_day,device,os,browser) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',(session_id,ident,member,kind,at,at,int(view),page,network,day,device,os_name,browser))
             conn.execute('UPDATE visitor_public_totals SET sessions=sessions+1 WHERE id=? AND since<=?',(PUBLIC_TOTAL_ID,at))
-    response=private_response({'recorded':True})
+            if at>=total['since']:
+                public_day=instant.astimezone(ZoneInfo(PUBLIC_TIME_ZONE)).date().isoformat()
+                conn.execute('INSERT INTO visitor_public_days(day,sessions) VALUES(?,1) ON CONFLICT(day) DO UPDATE SET sessions=visitor_public_days.sessions+1',(public_day,))
+        total=cumulative_visits(conn,instant,initialize=False)
+    response=private_response({'recorded':True,'cumulative':total})
     response.set_cookie(COOKIE,signer().dumps({'device':raw,'session':session_id}),max_age=30*86400,httponly=True,secure=current_app.config['SESSION_COOKIE_SECURE'],samesite='Lax')
     return response
 
@@ -194,6 +243,10 @@ def list_visits():
 
 @bp.get('/api/visits/public')
 def public_visits():
+    try:
+        history_page=int(request.args.get('history_page',1))
+        if history_page<1:raise ValueError()
+    except ValueError:return private_response({'error':'Página de historial no válida.'}),400
     instant=now_utc();cutoff=stamp(instant-timedelta(hours=24))
     with database() as conn:
         # Established totals need no global writer lock for every public poll.
@@ -204,8 +257,9 @@ def public_visits():
         cleanup(conn)
         summary=conn.execute('SELECT COUNT(*) AS sessions,COUNT(DISTINCT device_id) AS browsers FROM visitor_sessions WHERE started_at>=?',(cutoff,)).fetchone()
         rows=conn.execute('SELECT started_at,device,last_page FROM visitor_sessions WHERE started_at>=? ORDER BY started_at DESC,id DESC LIMIT 20',(cutoff,)).fetchall()
+        history=public_history(conn,instant,history_page)
     labels={'/':'Música','/live':'Ol Live','/account':'Cuenta','/legal/privacidad.html':'Información legal','/legal/cookies.html':'Información legal','/legal/aviso-legal.html':'Información legal'}
-    return private_response({'visits':[{'at':row['started_at'][:16]+':00+00:00','device':row['device'],'page':labels.get(row['last_page'],'Web')} for row in rows], 'summary':dict(summary),'cumulative':cumulative,'window_hours':24,'limit':20,'consented_only':True,'approximate':True})
+    return private_response({'visits':[{'at':row['started_at'][:16]+':00+00:00','device':row['device'],'page':labels.get(row['last_page'],'Web')} for row in rows], 'summary':dict(summary),'cumulative':cumulative,'history':history,'window_hours':24,'limit':20,'consented_only':True,'approximate':True})
 
 
 def install(app):

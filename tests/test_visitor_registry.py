@@ -10,6 +10,7 @@ from registration_support import registration_data
 
 MOBILE='Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Version/17.0 Mobile/15E148 Safari/604.1'
 DESKTOP='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130.0 Safari/537.36'
+TABLET='Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Version/17.0 Safari/604.1'
 
 class VisitorRegistryTests(unittest.TestCase):
  def setUp(self):
@@ -94,11 +95,11 @@ class VisitorRegistryTests(unittest.TestCase):
    ident=conn.execute('SELECT id FROM visitor_devices').fetchone()['id'];bucket=vr.protected(ident,'visit-rate')
    for _ in range(120):conn.execute('INSERT INTO login_attempts(bucket,attempted_at) VALUES(?,?)',(bucket,m.stamp(m.now_utc())))
   self.assertEqual(self.post(self.guest,data={'consent':True,'page':'/','username':'bypass'}).status_code,429)
- def test_cumulative_seeds_only_this_madrid_week_once_before_first_new_visit(self):
+ def test_cumulative_seeds_fourteen_madrid_days_once_before_first_new_visit(self):
   instant=datetime(2026,11,4,12,tzinfo=timezone.utc)
-  origin=datetime(2026,11,1,23,tzinfo=timezone.utc)  # Monday midnight in Madrid.
-  self.seed_session('previous-week',origin-timedelta(seconds=1))
-  self.seed_session('week-start',origin)
+  origin=datetime(2026,10,20,22,tzinfo=timezone.utc)  # 21 October midnight in Madrid.
+  self.seed_session('before-history',origin-timedelta(seconds=1))
+  self.seed_session('history-start',origin)
   self.seed_session('this-week',instant-timedelta(hours=1))
   with patch('visitor_registry.now_utc',return_value=instant):
    self.assertEqual(self.post(self.guest).status_code,200)
@@ -115,7 +116,7 @@ class VisitorRegistryTests(unittest.TestCase):
   with patch('visitor_registry.now_utc',return_value=instant):
    empty=self.cumulative()
    self.assertEqual(empty['sessions'],0)
-   self.assertEqual(empty['since'],'2026-06-28T22:00:00+00:00')  # CEST.
+   self.assertEqual(empty['since'],'2026-06-16T22:00:00+00:00')  # 17 June midnight CEST.
    self.post(self.guest)
    self.post(self.guest,data={'consent':True,'page':'/live','event':'heartbeat'})
    self.post(self.guest,data={'consent':True,'page':'/account','event':'page'})
@@ -127,7 +128,7 @@ class VisitorRegistryTests(unittest.TestCase):
   instant=datetime(2026,3,27,12,tzinfo=timezone.utc)
   with patch('visitor_registry.now_utc',return_value=instant):
    self.post(self.guest);initial=self.cumulative()
-   self.assertEqual(initial['since'],'2026-03-22T23:00:00+00:00')
+   self.assertEqual(initial['since'],'2026-03-12T23:00:00+00:00')
   with patch('visitor_registry.now_utc',return_value=instant+timedelta(days=8)):
    self.assertEqual(self.visits()['total'],0)
    data=self.guest.get('/api/visits/public').json
@@ -153,11 +154,11 @@ class VisitorRegistryTests(unittest.TestCase):
   self.post(self.guest,'/api/visits/consent',{'allowed':False})
   self.assertEqual(self.visits()['total'],0)
   self.assertEqual(self.cumulative()['sessions'],1)
- def test_first_admin_read_preserves_week_seed_before_fall_dst_retention_cleanup(self):
-  # This Madrid week is 169 hours long. Its first half-hour has already passed
-  # seven days of retention by Sunday night, but belongs to this week's seed.
+ def test_first_admin_read_preserves_available_history_before_retention_cleanup(self):
+  # Old observations that still exist seed the anonymous history before the
+  # seven-day personal-detail cleanup, including an interval crossing DST.
   instant=datetime(2026,10,25,22,30,tzinfo=timezone.utc)
-  origin=datetime(2026,10,18,22,tzinfo=timezone.utc)
+  origin=datetime(2026,10,10,22,tzinfo=timezone.utc)
   self.seed_session('early-in-long-week',origin)
   self.seed_session('recent-in-long-week',instant-timedelta(hours=1))
   with patch('visitor_registry.now_utc',return_value=instant):
@@ -175,3 +176,115 @@ class VisitorRegistryTests(unittest.TestCase):
    with ThreadPoolExecutor(max_workers=8) as pool:statuses=list(pool.map(enter,range(8)))
    self.assertEqual(statuses,[200]*8)
    self.assertEqual(self.cumulative()['sessions'],10)
+   history=self.guest.get('/api/visits/public').json['history']
+   self.assertEqual(sum(row['sessions'] or 0 for row in history['days']),10)
+
+ def test_history_expands_old_total_once_without_faking_erased_dates(self):
+  instant=datetime(2026,11,4,12,tzinfo=timezone.utc)
+  old_origin=datetime(2026,11,1,23,tzinfo=timezone.utc)
+  self.seed_session('older-one',datetime(2026,10,25,12,tzinfo=timezone.utc))
+  self.seed_session('older-two',datetime(2026,11,1,12,tzinfo=timezone.utc))
+  self.seed_session('old-total-one',datetime(2026,11,2,12,tzinfo=timezone.utc))
+  self.seed_session('old-total-two',datetime(2026,11,3,12,tzinfo=timezone.utc))
+  with app.app.app_context(),m.database() as conn:
+   conn.execute('INSERT INTO visitor_public_totals(id,since,sessions) VALUES(?,?,?)',(vr.PUBLIC_TOTAL_ID,m.stamp(old_origin),12))
+  with patch('visitor_registry.now_utc',return_value=instant):
+   data=self.guest.get('/api/visits/public').json
+   self.assertEqual(data['cumulative'],{'sessions':14,'since':'2026-10-20T22:00:00+00:00','time_zone':'Europe/Madrid'})
+   history=data['history'];self.assertEqual(history['unassigned'],10)
+   self.assertEqual(history['tracking_since'],'2026-11-05')
+   self.assertEqual(history['total_days'],15);self.assertEqual(history['pages'],1)
+   days={day['day']:day for day in history['days']}
+   self.assertEqual(days['2026-10-21'],{'day':'2026-10-21','sessions':None,'complete':False})
+   self.assertEqual(days['2026-10-25'],{'day':'2026-10-25','sessions':1,'complete':False})
+   self.assertEqual(days['2026-11-02'],{'day':'2026-11-02','sessions':1,'complete':False})
+   self.assertEqual(self.guest.get('/api/visits/public').json['cumulative'],data['cumulative'])
+  with patch('visitor_registry.now_utc',return_value=instant+timedelta(days=30)):
+   later=self.guest.get('/api/visits/public').json
+   self.assertEqual(later['cumulative'],data['cumulative'])
+   self.assertEqual(later['history']['total_days'],45);self.assertEqual(later['history']['pages'],3)
+   self.assertTrue(all(day['complete'] and day['sessions']==0 for day in later['history']['days']))
+   first=self.guest.get('/api/visits/public?history_page=3').json['history']
+   self.assertEqual(first['days'],history['days'])
+   self.assertEqual(first['unassigned'],10)
+
+ def test_older_existing_origin_is_preserved_and_undated_total_is_not_reallocated(self):
+  instant=datetime(2026,11,4,12,tzinfo=timezone.utc)
+  origin='2026-09-30T22:00:00+00:00'
+  self.seed_session('known-day',instant-timedelta(days=1))
+  with app.app.app_context(),m.database() as conn:
+   conn.execute('INSERT INTO visitor_public_totals VALUES(?,?,?)',(vr.PUBLIC_TOTAL_ID,origin,25))
+  with patch('visitor_registry.now_utc',return_value=instant):
+   data=self.guest.get('/api/visits/public').json
+   self.assertEqual(data['cumulative']['since'],origin);self.assertEqual(data['cumulative']['sessions'],25)
+   self.assertEqual(data['history']['unassigned'],24);self.assertEqual(data['history']['total_days'],35)
+   self.assertEqual(data['history']['days'][0]['day'],'2026-10-21')
+   oldest=self.guest.get('/api/visits/public?history_page=3').json['history']
+   self.assertEqual(oldest['days'][0]['day'],'2026-10-01')
+   self.assertTrue(all(day['sessions'] is None and not day['complete'] for day in oldest['days']))
+
+ def test_history_pagination_keeps_all_dates_and_future_days_known(self):
+  instant=datetime(2026,11,4,12,tzinfo=timezone.utc)
+  with patch('visitor_registry.now_utc',return_value=instant):
+   self.post(self.guest)
+   first=self.guest.get('/api/visits/public').json['history']
+   self.assertEqual(first['days'][-1],{'day':'2026-11-04','sessions':1,'complete':False})
+  with patch('visitor_registry.now_utc',return_value=instant+timedelta(days=20)):
+   self.assertEqual(self.visits()['total'],0)
+   response=self.post(self.guest);self.assertEqual(response.json['cumulative']['sessions'],2)
+   pages=[self.guest.get('/api/visits/public?history_page='+str(page)).json['history'] for page in [1,2,3]]
+   days=[day for page in reversed(pages) for day in page['days']]
+   self.assertEqual(len(days),35);self.assertEqual(len({day['day'] for day in days}),35)
+   self.assertEqual(days[0]['day'],'2026-10-21');self.assertEqual(days[-1]['day'],'2026-11-24')
+   known={day['day']:day for day in days}
+   self.assertEqual(known['2026-11-05'],{'day':'2026-11-05','sessions':0,'complete':True})
+   self.assertEqual(known['2026-11-24'],{'day':'2026-11-24','sessions':1,'complete':True})
+   self.assertEqual(known['2026-11-04'],{'day':'2026-11-04','sessions':1,'complete':False})
+   self.assertEqual(self.guest.get('/api/visits/public?history_page=999').json['history']['page'],3)
+   for value in ['invalid','0','-1']:
+    self.assertEqual(self.guest.get('/api/visits/public?history_page='+value).status_code,400)
+
+ def test_daily_history_uses_madrid_dates_and_survives_withdrawal(self):
+  before_midnight=datetime(2026,11,4,22,59,tzinfo=timezone.utc)
+  with patch('visitor_registry.now_utc',return_value=before_midnight):self.post(self.guest)
+  other=app.app.test_client()
+  with patch('visitor_registry.now_utc',return_value=before_midnight+timedelta(minutes=2)):
+   self.post(other)
+   self.post(other,data={'consent':True,'event':'heartbeat','page':'/live'})
+   self.post(self.guest,'/api/visits/consent',{'allowed':False})
+   self.post(other,'/api/visits/consent',{'allowed':False})
+   data=self.guest.get('/api/visits/public').json
+   self.assertEqual(data['cumulative']['sessions'],2);self.assertEqual(data['visits'],[])
+   days={day['day']:day for day in data['history']['days']}
+   self.assertEqual(days['2026-11-04']['sessions'],1)
+   self.assertEqual(days['2026-11-05'],{'day':'2026-11-05','sessions':1,'complete':True})
+
+ def test_three_devices_on_same_network_and_account_share_one_total(self):
+  instant=datetime(2026,11,4,12,tzinfo=timezone.utc)
+  devices=[app.app.test_client() for _ in range(3)]
+  for client in devices:client.set_cookie('session',self.admin.get_cookie('session').value)
+  with patch('visitor_registry.now_utc',return_value=instant):
+   for index,(client,ua) in enumerate(zip(devices,[MOBILE,DESKTOP,TABLET]),1):
+    response=self.post(client,headers={'User-Agent':ua})
+    self.assertEqual(response.status_code,200);self.assertEqual(response.json['cumulative']['sessions'],index)
+   for client in devices:
+    self.assertEqual(client.get('/api/visits/public').json['cumulative']['sessions'],3)
+    self.post(client,data={'consent':True,'page':'/','event':'heartbeat'})
+   data=devices[0].get('/api/visits/public').json
+   self.assertEqual(data['cumulative']['sessions'],3)
+   self.assertEqual(data['history']['days'][-1]['sessions'],3)
+   private=self.visits()
+   self.assertEqual(private['summary']['browsers'],3)
+   self.assertEqual({row['device'] for row in private['visits']},{'Móvil','Ordenador','Tableta'})
+
+ def test_upgrade_withdrawal_keeps_available_old_daily_counts(self):
+  instant=datetime(2026,11,4,12,tzinfo=timezone.utc)
+  with patch('visitor_registry.now_utc',return_value=instant):
+   self.post(self.guest)
+   with app.app.app_context(),m.database() as conn:
+    conn.execute('DELETE FROM visitor_public_history');conn.execute('DELETE FROM visitor_public_days')
+   self.post(self.guest,'/api/visits/consent',{'allowed':False})
+   data=self.guest.get('/api/visits/public').json
+   self.assertEqual(data['cumulative']['sessions'],1)
+   self.assertEqual(data['history']['days'][-1]['sessions'],1)
+   self.assertEqual(data['history']['unassigned'],0)

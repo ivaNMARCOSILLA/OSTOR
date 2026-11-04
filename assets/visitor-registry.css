@@ -4,4 +4,18 @@
 .public-visit-registry ol{list-style:none;margin:12px 0;padding:0;max-height:240px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}.public-visit-registry li{display:grid;grid-template-columns:minmax(80px,1fr) minmax(50px,1fr) auto;gap:8px;border-top:1px solid #30302c;padding:9px 3px;font-size:12px}.public-visit-registry li strong{color:#f1d397}.public-visit-registry time{color:#aff1de;font-variant-numeric:tabular-nums}
 .visitor-consent-panel{position:fixed;bottom:14px;left:14px;z-index:2500;width:min(470px,calc(100vw - 28px));padding:18px;box-sizing:border-box;background:#080808;color:#eee;border:1px solid #e2c389;border-radius:18px;box-shadow:0 8px 40px #000a;font:14px/1.5 system-ui,sans-serif}.visitor-consent-panel strong{color:#f5d397}.visitor-consent-panel p{color:#eee;font-size:12px}.visitor-consent-panel button{margin:5px 8px 5px 0;min-height:42px;background:#e2c389;color:#111;border:1px solid #e2c389;border-radius:10px;padding:8px 12px;font:600 12px system-ui,sans-serif}.visitor-consent-panel a{display:block;color:#c9f5ef}.visitor-consent-panel button:first-of-type{background:#111;color:#eee}
 body:has(#live-stage:not(.hidden)) .visitor-consent-panel{display:none}
+.public-visit-registry .public-visit-day-scroll{max-height:360px;overflow:auto;overscroll-behavior:contain;border:1px solid #62573f;border-radius:12px;background:#080808}
+.public-visit-registry .public-visit-day-table{border-collapse:collapse;width:100%;font-size:12px;font-variant-numeric:tabular-nums}
+.public-visit-registry .public-visit-day-table :is(th,td){padding:10px 12px;border-bottom:1px solid #36352e;background:#080808;color:#eee4cf;text-align:left;font-weight:500;vertical-align:middle}
+.public-visit-registry .public-visit-day-table thead th{position:sticky;top:0;background:#211d15;color:#f5d397;z-index:1;font-weight:650}
+.public-visit-registry .public-visit-day-table td{width:52%;min-width:0}
+.public-visit-registry .public-visit-day-table time{color:#dedbd0}
+.public-visit-registry .public-visit-day-bar{display:block;height:5px;margin-top:6px;overflow:hidden;border-radius:5px;background:#34322b}
+.public-visit-registry .public-visit-day-bar>span{display:block;height:100%;background:#aff1de;border-radius:inherit}
+.public-visit-registry .public-visit-partial td{color:#d8c797}
+.public-visit-registry .public-visit-history-pages{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:12px 0;flex-wrap:wrap}
+.public-visit-registry .public-visit-history-pages button{min-height:44px;min-width:0;padding:8px 12px;font-size:12px;white-space:normal}
+.public-visit-registry #public-visit-range{color:#e3ddce;font-size:12px;font-variant-numeric:tabular-nums}
+.public-visit-registry #public-visit-recent{padding:8px 0;border-top:1px solid #62573f}
+.public-visit-registry #public-visit-recent>summary{min-height:44px;cursor:pointer;font-size:13px;padding:10px 0;color:#edcf96}
 @media(max-width:420px){.public-visit-registry{padding:14px}.visitor-consent-panel{max-height:60dvh;overflow:auto}}
