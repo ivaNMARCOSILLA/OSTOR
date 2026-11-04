@@ -5,17 +5,23 @@ from browser_support import BASE_URL
 def run():
  with sync_playwright() as p:
   browser=p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox'])
-  context=browser.new_context(viewport={'width':390,'height':844});page=context.new_page();requests=[];errors=[]
+  context=browser.new_context(viewport={'width':390,'height':844});page=context.new_page();requests=[];errors=[];public_requests=[]
   page.clock.install()
   page.on('pageerror',lambda e:errors.append(str(e)))
   page.on('request',lambda r:requests.append(r.url) if r.method=='POST' and r.url.endswith('/api/visits') else None)
+  page.on('request',lambda r:public_requests.append(r.url) if '/api/visits/public' in r.url else None)
   page.goto(BASE_URL+'/');page.locator('#public-visit-registry').wait_for();page.locator('#consent-decline').click();page.wait_for_timeout(500)
   assert not requests,'declining must not create visit records'
   initial=context.request.get(BASE_URL+'/api/visits/public').json()
   assert initial['summary']['sessions']==0 and initial['cumulative']['sessions']==0
   expect(page.locator('#public-visit-count .public-visit-total')).to_have_text('0')
   assert page.locator('#public-visit-history').get_attribute('open') is None
+  assert public_requests and all('compact=1' in url for url in public_requests),'closed recent details must use the inexpensive aggregate-only API'
   page.locator('#privacy-button').click();page.locator('#consent-accept').click()
+  expect(page.locator('#public-visit-count .public-visit-total')).to_have_text('1')
+  expect(page.locator('#public-visit-list li')).to_have_count(0)
+  page.locator('#public-visit-history>summary').click()
+  page.locator('#public-visit-recent>summary').click()
   page.wait_for_function("document.querySelector('#public-visit-list').children.length===1")
   assert len(requests)==1
   public=context.request.get(BASE_URL+'/api/visits/public').json()
@@ -42,12 +48,12 @@ def run():
   page.locator('#public-visit-history>summary').click()
   expect(page.locator('#public-visit-status')).to_contain_text('El total acumulado se mantiene')
   # A failed refresh keeps the last real total and its fixed starting date.
-  page.route('**/api/visits/public',lambda route:route.fulfill(status=503,json={'error':'temporary'}))
+  page.route('**/api/visits/public*',lambda route:route.fulfill(status=503,json={'error':'temporary'}))
   page.evaluate("window.dispatchEvent(new Event('electronicama:visit-recorded'))")
   expect(page.locator('#public-visit-update-status')).to_be_visible()
   expect(page.locator('#public-visit-count .public-visit-total')).to_have_text('1')
   expect(page.locator('#public-visit-since')).to_have_text(period)
-  page.unroute('**/api/visits/public')
+  page.unroute('**/api/visits/public*')
   page.evaluate("window.dispatchEvent(new Event('electronicama:visit-recorded'))")
   expect(page.locator('#public-visit-update-status')).to_be_hidden()
   page.reload();expect(page.locator('#public-visit-count .public-visit-total')).to_have_text('1')

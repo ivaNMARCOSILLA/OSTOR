@@ -295,3 +295,15 @@ body.electronicama-theme #live-player #live-media video[data-source=screen_share
 body.electronicama-theme #live-player #live-media video[data-primary-screen=false]{display:none!important}
 body.electronicama-theme .live-screen-source{font-size:11px;max-width:120px;color:#eee}
 body.electronicama-theme .live-screen-source select{width:100%;max-width:100%;min-height:40px;font-size:12px;background:#080808;color:#fff;border:1px solid #e2c389;border-radius:8px;padding:5px}
+
+/* Flores' stream distinction: compact gold lettering, readable on every width. */
+.stream-honor{display:inline-flex;align-items:baseline;flex-wrap:wrap;gap:3px 5px;max-width:100%;box-sizing:border-box;padding:6px 10px;border:1px solid #9d8753;border-radius:10px;background:#17140e;color:#f3dbac;font-size:12px;line-height:1.5;vertical-align:middle;overflow-wrap:anywhere}
+.stream-honor .stream-honor-title{color:#d8c999;font-size:11px;letter-spacing:.04em}.stream-honor .stream-honor-alias{color:#f3dbac;font-weight:650}
+.stream-honor-flower{width:19px;height:19px;flex:0 0 19px;align-self:center;fill:none;stroke:#e1bd75;stroke-width:.85}.stream-honor-flower circle{fill:#e1bd75;stroke:none}
+#flores-stream-alias-admin{margin:20px 0;padding:18px;border:1px solid #79663f;border-radius:16px;background:#0c0b09;min-width:0}#flores-stream-alias-admin h3{overflow-wrap:anywhere}#flores-stream-alias-admin p{font-size:13px;line-height:1.6}#flores-stream-alias-admin .button{min-height:44px;max-width:100%;white-space:normal;overflow-wrap:anywhere}
+#flores-stream-alias-admin{border-top-color:#c5a76a;background:radial-gradient(ellipse at 95% 5%,#826b3020,transparent 55%),#0c0b09}
+.live-stage-heading{min-width:0}.live-stage-heading #stage-stream-alias{margin:6px 0 0}.live-stage-heading #stage-stream-alias[hidden]{display:none}#live-comments .stream-honor{margin:4px 4px 4px 0;padding:3px 7px;font-size:11px}
+
+/* Natural flowers inspire the shared visual accent, independently of accounts. */
+body.electronicama-theme h1::after{content:"";display:inline-block;width:36px;height:54px;margin-left:12px;vertical-align:middle;background:url('/assets/botanical-bloom.svg') center/contain no-repeat;opacity:.82;pointer-events:none}
+@media(max-width:600px){body.electronicama-theme h1::after{width:27px;height:41px;margin-left:8px}}

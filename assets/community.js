@@ -1,5 +1,6 @@
-import {decorateSticker} from '/assets/sticker-scenes.js?v=9.29.0';
-import {playStickerSound} from '/assets/sticker-audio.js?v=9.29.0';
+import {decorateSticker} from '/assets/sticker-scenes.js?v=9.29.1';
+import {playStickerSound} from '/assets/sticker-audio.js?v=9.29.1';
+import {streamHonor} from '/assets/stream-honor.js?v=9.29.1';
 /* Moderated live comments and explicitly reported browser speech recognition. */
 const safeSticker=sticker=>sticker&&/^[a-z0-9_-]{1,60}$/.test(sticker.id)&&typeof sticker.image==='string'&&(sticker.image.startsWith('/assets/stickers/')||sticker.image.startsWith('/api/stickers/'));
 export class StreamCommunity{
@@ -39,6 +40,7 @@ export class StreamCommunity{
     if(this.seen.has(comment.id))continue;this.seen.add(comment.id);
     const line=document.createElement('p'),name=document.createElement('strong');line.dataset.messageId=comment.id;
     name.textContent=(comment.display_name||comment.username)+(comment.fan_alias?' · '+comment.fan_alias:'')+(comment.subscriber_badge?' · Suscriptor':'')+(comment.founder_number?' · '+(comment.founder_signature?.mode==='letra'?comment.founder_signature.letter+' · ':'')+'Fundador '+comment.founder_number:'')+': ';line.append(name);
+    const honor=streamHonor(comment.stream_alias);if(honor)line.append(honor,document.createTextNode(' '));
     if(comment.kind==='sticker'&&safeSticker(comment.sticker)){
      const image=document.createElement('img');image.src=comment.sticker.image;image.alt=comment.sticker.name;image.className='chat-sticker';
      const sound=document.createElement('button');sound.type='button';sound.className='chat-sticker-button';decorateSticker(sound,comment.sticker.id||comment.body);sound.setAttribute('aria-label','Escuchar sticker '+comment.sticker.name);sound.title='Pulsa para escuchar su sonido';sound.append(image);sound.addEventListener('click',()=>playStickerSound(comment.body,sound,comment.sticker.phrase));line.append(sound);

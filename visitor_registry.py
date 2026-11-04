@@ -35,6 +35,8 @@ def init_database():
         );
         CREATE INDEX IF NOT EXISTS visitor_session_recent ON visitor_sessions(last_seen,id);
         CREATE INDEX IF NOT EXISTS visitor_session_device ON visitor_sessions(device_id,last_seen);
+        CREATE INDEX IF NOT EXISTS visitor_session_started ON visitor_sessions(started_at,id);
+        CREATE INDEX IF NOT EXISTS visitor_device_recent ON visitor_devices(last_seen);
         CREATE TABLE IF NOT EXISTS visitor_public_totals (
             id TEXT PRIMARY KEY,since TEXT NOT NULL,
             sessions BIGINT NOT NULL DEFAULT 0 CHECK(sessions>=0)
@@ -247,6 +249,8 @@ def public_visits():
         history_page=int(request.args.get('history_page',1))
         if history_page<1:raise ValueError()
     except ValueError:return private_response({'error':'Página de historial no válida.'}),400
+    compact=request.args.get('compact','0')
+    if compact not in {'0','1'}:return private_response({'error':'Formato del recuento no válido.'}),400
     instant=now_utc();cutoff=stamp(instant-timedelta(hours=24))
     with database() as conn:
         # Established totals need no global writer lock for every public poll.
@@ -254,6 +258,10 @@ def public_visits():
         cumulative=cumulative_visits(conn,instant,initialize=False)
         if cumulative is None:
             conn.execute('BEGIN IMMEDIATE');cumulative=cumulative_visits(conn,instant)
+        # The regular homepage refresh reads only permanent anonymous sums.
+        # Personal-detail cleanup and the recent feed are requested separately.
+        if compact=='1':
+            return private_response({'cumulative':cumulative,'history':public_history(conn,instant,history_page),'consented_only':True,'approximate':True})
         cleanup(conn)
         summary=conn.execute('SELECT COUNT(*) AS sessions,COUNT(DISTINCT device_id) AS browsers FROM visitor_sessions WHERE started_at>=?',(cutoff,)).fetchone()
         rows=conn.execute('SELECT started_at,device,last_page FROM visitor_sessions WHERE started_at>=? ORDER BY started_at DESC,id DESC LIMIT 20',(cutoff,)).fetchall()

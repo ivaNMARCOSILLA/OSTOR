@@ -2,6 +2,7 @@
 import os
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from datetime import datetime,timedelta,timezone
 from unittest.mock import patch
 import app,membership as m,visitor_registry as vr
@@ -72,6 +73,44 @@ class VisitorRegistryTests(unittest.TestCase):
   for row in data['visits']:
    self.assertEqual(set(row),{'at','device','page'});self.assertTrue(row['at'].endswith(':00+00:00'))
   self.assertNotIn('test-admin',str(data));self.assertNotIn('network_id',str(data));self.assertNotIn('device_id',str(data));self.assertNotIn('8.8.8.8',str(data))
+ def test_compact_public_counter_reads_only_anonymous_sums_and_keeps_history(self):
+  instant=datetime(2026,11,4,12,tzinfo=timezone.utc)
+  with patch('visitor_registry.now_utc',return_value=instant):
+   for client in [self.guest,app.app.test_client(),app.app.test_client()]:self.post(client)
+   initial=self.guest.get('/api/visits/public').json
+  statements=[]
+  @contextmanager
+  def traced_database():
+   with m.database() as conn:
+    conn.set_trace_callback(statements.append)
+    yield conn
+  with patch('visitor_registry.now_utc',return_value=instant+timedelta(days=20)),patch('visitor_registry.database',traced_database),patch('visitor_registry.cleanup',side_effect=AssertionError('compact refresh must not clean personal detail')):
+   response=self.guest.get('/api/visits/public?compact=1&history_page=2')
+  self.assertEqual(response.status_code,200);data=response.json
+  self.assertEqual(set(data),{'cumulative','history','consented_only','approximate'})
+  self.assertEqual(data['cumulative'],initial['cumulative']);self.assertEqual(data['cumulative']['sessions'],3)
+  self.assertEqual(data['history']['page'],2);self.assertEqual(data['history']['pages'],3)
+  self.assertEqual(next(day['sessions'] for day in data['history']['days'] if day['day']=='2026-11-04'),3)
+  self.assertIn('no-store',response.headers['Cache-Control']);self.assertNotIn('Set-Cookie',response.headers)
+  for statement in statements:
+   self.assertNotIn('visitor_sessions',statement.lower());self.assertNotIn('visitor_devices',statement.lower())
+   self.assertNotIn('delete ',statement.lower());self.assertNotIn('count(',statement.lower())
+  self.assertEqual(len(statements),4)
+ def test_compact_first_read_seeds_real_counts_before_any_later_cleanup(self):
+  instant=datetime(2026,11,4,12,tzinfo=timezone.utc)
+  self.seed_session('recoverable-old',instant-timedelta(days=10))
+  self.seed_session('recent',instant-timedelta(hours=1))
+  with patch('visitor_registry.now_utc',return_value=instant):
+   with patch('visitor_registry.cleanup',side_effect=AssertionError('compact refresh must not clean personal detail')):
+    compact=self.guest.get('/api/visits/public?compact=1').json
+   self.assertEqual(compact['cumulative']['sessions'],2)
+   self.assertEqual(sum(day['sessions'] or 0 for day in compact['history']['days']),2)
+   full=self.guest.get('/api/visits/public?compact=0').json
+   self.assertEqual(full['cumulative'],compact['cumulative']);self.assertEqual(full['history'],compact['history'])
+   self.assertEqual(full['summary']['sessions'],1);self.assertEqual(len(full['visits']),1)
+   for value in ['','true','-1','2','invalid']:
+    self.assertEqual(self.guest.get('/api/visits/public?compact='+value).status_code,400)
+   self.assertEqual(self.guest.get('/api/visits/public?compact=1&history_page=0').status_code,400)
  def test_privacy_signals_withdrawal_and_retention_erase_current_browser(self):
   self.post(self.guest)
   for header in ['Sec-GPC','DNT']:

@@ -46,6 +46,7 @@ def run():
    assert not issues,(path,issues)
   page.goto(BASE_URL+'/')
   hero=page.locator('#hero');assert hero.evaluate("e=>getComputedStyle(e).backgroundColor")=='rgb(0, 0, 0)'
+  assert 'botanical-bloom.svg' in page.locator('#hero h1').evaluate("e=>getComputedStyle(e,'::after').backgroundImage")
   annual=page.locator('#planes a[href="/account#pricing"]')
   assert annual.inner_text()=='Acceso'
   assert annual.evaluate("e=>getComputedStyle(e).webkitTextFillColor")=='rgb(16, 16, 16)'
@@ -56,5 +57,5 @@ def run():
   first=hero.evaluate("e=>getComputedStyle(e).borderTopColor");page.wait_for_timeout(400);assert first!=hero.evaluate("e=>getComputedStyle(e).borderTopColor")
   page.emulate_media(reduced_motion='reduce');assert hero.evaluate("e=>getComputedStyle(e).animationName")=='none'
   page.screenshot(path='/tmp/electronicama-shared-theme-mobile.png',full_page=True);b.close()
- print('OK: shared style on six pages, no foliage or wallpaper UI, three widths, text contrast on solid surfaces, animated LED borders and reduced-motion support')
+ print('OK: shared style on six pages, natural flower heading accent without wallpaper UI, three widths, text contrast on solid surfaces, animated LED borders and reduced-motion support')
 if __name__=='__main__':run()

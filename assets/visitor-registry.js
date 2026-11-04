@@ -83,13 +83,15 @@
  function schedulePublic(delay=PUBLIC_REFRESH_MS){
   clearTimeout(publicTimer);if(document.getElementById('public-visit-count')&&!document.hidden)publicTimer=setTimeout(()=>refreshPublic(),delay);
  }
+ const recentOpen=()=>Boolean(document.getElementById('public-visit-history')?.open&&document.getElementById('public-visit-recent')?.open);
  async function refreshPublic(force=false){
   if(!document.getElementById('public-visit-count')||document.hidden)return;
   if(publicBusy){publicQueued=publicQueued||force;return;}
   clearTimeout(publicTimer);publicBusy=true;publicController=new AbortController();
-  const revision=writeRevision,requestedPage=historyPage;
+  const revision=writeRevision,requestedPage=historyPage,requestedRecent=recentOpen();
   try{
-   const path='/api/visits/public'+(requestedPage>1?'?history_page='+requestedPage:'');
+   const params=new URLSearchParams();if(requestedPage>1)params.set('history_page',requestedPage);if(!requestedRecent)params.set('compact','1');
+   const path='/api/visits/public'+(params.size?'?'+params:'');
    const {response,data}=await fetchJson(path,{cache:'no-store'},publicController);if(!response.ok)throw Error();
    // A GET already in flight when this browser records a visit can contain an
    // older snapshot. Use the confirmed write, then fetch again for all devices.
@@ -97,6 +99,7 @@
    if(!renderTotal(data.cumulative))return;
    if(requestedPage===historyPage)renderHistory(data.history);
    const updateStatus=document.getElementById('public-visit-update-status');if(updateStatus){updateStatus.hidden=true;updateStatus.textContent='';}
+   if(!requestedRecent||!recentOpen())return;
    const list=document.getElementById('public-visit-list');list.replaceChildren();
    const labels={desktop:'Ordenador',mobile:'Móvil',tablet:'Tableta',bot:'Automatizado',unknown:'Sin identificar'},pages={'/':'Música','/live':'Ol Live','/account':'Cuenta','/legal/cookies.html':'Información legal','/legal/privacidad.html':'Información legal','/legal/aviso-legal.html':'Información legal'};
    for(const visit of data.visits){const row=document.createElement('li'),device=document.createElement('strong'),time=document.createElement('time'),where=document.createElement('span');device.textContent=t(labels[visit.device]||visit.device||'Sin identificar');time.dateTime=visit.at;time.textContent=new Intl.DateTimeFormat(document.documentElement.lang||'es',{timeZone:'Europe/Madrid',hour:'2-digit',minute:'2-digit'}).format(new Date(visit.at));where.textContent=t(pages[visit.page]||visit.page||'Web');row.append(device,where,time);list.append(row);}
@@ -117,6 +120,7 @@
  window.addEventListener('focus',resume);window.addEventListener('online',resume);window.addEventListener('pageshow',resume);
  document.getElementById('public-visit-older')?.addEventListener('click',()=>{historyPage++;refreshPublic(true);});
  document.getElementById('public-visit-newer')?.addEventListener('click',()=>{historyPage=Math.max(1,historyPage-1);refreshPublic(true);});
+ for(const id of ['public-visit-history','public-visit-recent'])document.getElementById(id)?.addEventListener('toggle',()=>{if(!recentOpen())document.getElementById('public-visit-list').replaceChildren();refreshPublic(true);});
  const settings=document.createElement('button');settings.type='button';settings.className='secondary';settings.textContent='Preferencias de visitas';settings.dataset.visitsPreferences='';settings.addEventListener('click',showPreferences);if(!document.getElementById('privacy-button'))(document.querySelector('footer')||document.body).append(settings);
  if(allowed)token().then(account=>{lastAccount=account.user?.id||null;identityReady=true;record('page');}).catch(()=>{});
  else if(!preference()&&!privacySignal()&&!document.getElementById('consent-dialog'))showPreferences();

@@ -19,6 +19,12 @@ bp=Blueprint('streamers',__name__)
 LIVE_PRICE_CENTS=2500
 GIFT_COMMISSION_BPS=0
 LIVE_CATEGORIES={'videojuegos':'Videojuegos','musica':'Música','entretenimiento':'Entretenimiento','actualidad':'Actualidad'}
+FLORES_STREAM_ALIAS={'alias':'(primitivo)*ovelix','title':'Triunfador'}
+
+
+def stream_alias(username):
+    """A display-only distinction for Flores; no account or access changes."""
+    return dict(FLORES_STREAM_ALIAS) if username=='rosas' else None
 
 
 def video_configuration_checks():
@@ -74,7 +80,7 @@ def paypal_link(value):
 
 def channel_public(row):
     from founders import signature_from_row
-    return {key:row[key] for key in ['id','title','bio','username']} | {'paypal_url':'' if os.getenv('VERCEL_ENV') in {'production','preview'} or os.getenv('OL_PAYMENT_PROVIDER','stripe')=='stripe' else row['paypal_url']} | {'thumbnail_url':'/api/streamers/'+row['id']+'/thumbnail','live':bool(row['live_until'] and row['live_until']>stamp(now_utc())),'adult_content':bool(row['adult_content']) if 'adult_content' in row.keys() else False,'view_count':row['view_count'] if 'view_count' in row.keys() else 0,'category':row['category'] if 'category' in row.keys() and row['category'] else 'entretenimiento','featured':bool(row['featured']) if 'featured' in row.keys() else False,'founder_number':row['founder_number'] if 'founder_number' in row.keys() else None,'founder_signature':signature_from_row(row) if 'founder_number' in row.keys() and row['founder_number'] else None}
+    return {key:row[key] for key in ['id','title','bio','username']} | {'paypal_url':'' if os.getenv('VERCEL_ENV') in {'production','preview'} or os.getenv('OL_PAYMENT_PROVIDER','stripe')=='stripe' else row['paypal_url']} | {'thumbnail_url':'/api/streamers/'+row['id']+'/thumbnail','live':bool(row['live_until'] and row['live_until']>stamp(now_utc())),'adult_content':bool(row['adult_content']) if 'adult_content' in row.keys() else False,'view_count':row['view_count'] if 'view_count' in row.keys() else 0,'category':row['category'] if 'category' in row.keys() and row['category'] else 'entretenimiento','featured':bool(row['featured']) if 'featured' in row.keys() else False,'founder_number':row['founder_number'] if 'founder_number' in row.keys() else None,'founder_signature':signature_from_row(row) if 'founder_number' in row.keys() and row['founder_number'] else None,'stream_alias':stream_alias(row['username'])}
 
 
 def own_channel():
@@ -106,6 +112,20 @@ def sign_token(claims):
     message=encode({'alg':'HS256','typ':'JWT'})+b'.'+encode(claims)
     signature=base64.urlsafe_b64encode(hmac.new(os.environ['LIVEKIT_API_SECRET'].strip().encode(),message,hashlib.sha256).digest()).rstrip(b'=')
     return (message+b'.'+signature).decode()
+
+
+@bp.get('/api/streamers/admin/flores-alias')
+@require_admin
+def flores_alias():
+    with database() as conn:
+        member=conn.execute("SELECT m.id,m.username,COALESCE(NULLIF(p.nickname,''),m.username) AS display_name,CASE WHEN EXISTS(SELECT 1 FROM member_archives a WHERE a.member_id=m.id AND a.restored_at IS NULL) THEN 1 ELSE 0 END AS archived FROM members m LEFT JOIN member_profiles p ON p.member_id=m.id WHERE m.username=?",('rosas',)).fetchone()
+        channel=conn.execute('SELECT id,title,live_until FROM streamer_channels WHERE member_id=?',(member['id'],)).fetchone() if member else None
+    account=dict(member) if member else None
+    if account:account['archived']=bool(account['archived'])
+    info={'id':channel['id'],'title':channel['title'],'live':bool(not account['archived'] and channel['live_until'] and channel['live_until']>stamp(now_utc()))} if channel else None
+    response=jsonify(stream_alias=stream_alias('rosas'),account=account,channel=info)
+    response.headers['Cache-Control']='no-store'
+    return response
 
 
 @bp.post('/api/streamers/admin/check-video')

@@ -62,6 +62,7 @@ async function refresh() {
 }
 let adminLoadRevision=0;
 async function loadAdmin() {
+  loadFloresStreamAlias();
   const revision=++adminLoadRevision,showArchived=$('show-archived-members').checked;
   const data = await api('/api/admin/members'+(showArchived?'?archived=1':''));
   if(revision!==adminLoadRevision||current?.role!=='admin'||showArchived!==$('show-archived-members').checked)return;
@@ -77,6 +78,18 @@ async function loadAdmin() {
   }
   renderCalendar();
   await loadStatistics();
+}
+let floresAliasRevision=0;
+async function loadFloresStreamAlias(){
+ const revision=++floresAliasRevision;
+ try{
+  const [data,{streamHonor}]=await Promise.all([api('/api/streamers/admin/flores-alias'),import('/assets/stream-honor.js?v=9.29.1')]);
+  if(revision!==floresAliasRevision||current?.role!=='admin')return;
+  const container=$('flores-stream-alias-badge'),honor=streamHonor(data.stream_alias);container.replaceChildren();if(honor)container.append(honor);
+  const link=$('flores-stream-alias-link');link.hidden=!data.channel||Boolean(data.account?.archived);
+  if(data.channel)link.href='/live#canal-'+encodeURIComponent(data.channel.id);
+  $('flores-stream-alias-status').textContent=!data.account?'La cuenta @rosas todavía no existe en este entorno.':data.account.archived?'La cuenta de Flores está dada de baja.':data.channel?(data.channel.live?'Flores está en directo.':'El apodo está preparado para el próximo directo de Flores.'):'El apodo está preparado. Flores todavía no ha publicado su canal.';
+ }catch(error){if(revision===floresAliasRevision&&current?.role==='admin')$('flores-stream-alias-status').textContent='No se pudo comprobar el canal de Flores: '+error.message;}
 }
 const paymentSyncResults=new Map(),paymentSyncBusy=new Set();
 const accountArchiveBusy=new Set(),accountArchiveResults=new Map();
