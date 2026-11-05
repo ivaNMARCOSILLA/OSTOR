@@ -307,6 +307,9 @@ body.electronicama-theme .live-screen-source select{width:100%;max-width:100%;mi
 /* Entry copy has its own baseline; ornaments use separate reserved spaces. */
 .entry-heading{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px}
 .entry-heading .entry-motto{color:#dfd2b8;font-size:.57em;line-height:1.35;letter-spacing:.01em;font-weight:500}
+.search-granel-banner{margin:10px 0;min-width:0}.search-granel-link{display:grid;grid-template-columns:44px minmax(0,1fr) 20px;align-items:center;gap:12px;box-sizing:border-box;min-height:82px;max-width:100%;padding:8px 12px;border:1px solid #79663f;border-radius:14px;background:#0c0b09;color:#f1d397;text-decoration:none}
+.search-granel-link img{display:block;width:44px;height:66px;object-fit:contain;border-radius:5px;background:#000}.search-granel-copy{min-width:0;overflow-wrap:anywhere}.search-granel-copy strong{display:block;margin-bottom:3px;color:#f1d397;font-size:14px}.search-granel-copy>span{display:block;color:#e1d2b2;font-size:12px;line-height:1.4}.search-granel-link:focus-visible{outline:2px solid #ffe1a3;outline-offset:3px}
+.search-granel-link>svg{display:block;width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
 .live-stage-heading{flex:1 1 auto;min-width:0}
 @media(max-width:800px){
  body.electronicama-theme #live-stage>.heading{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 10px}

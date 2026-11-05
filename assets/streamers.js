@@ -1,9 +1,9 @@
 import {openSubscription} from '/assets/subscriptions.js?v=9.13.0';
 import {founderBadge} from '/assets/badges.js?v=9.15.0';
 'use strict';
-import {StreamCommunity} from '/assets/community.js?v=9.29.3';
-import {StudioTools} from '/assets/studio-tools.js?v=9.29.3';
-import {streamHonor} from '/assets/stream-honor.js?v=9.29.3';
+import {StreamCommunity} from '/assets/community.js?v=9.29.4';
+import {StudioTools} from '/assets/studio-tools.js?v=9.29.4';
+import {streamHonor} from '/assets/stream-honor.js?v=9.29.4';
 const $=id=>document.getElementById(id);
 $('live-player').append($('community-panel'));
 let premiereOnly=false;
