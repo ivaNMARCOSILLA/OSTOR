@@ -8,3 +8,5 @@
 .client-management-controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:16px;margin:20px 0}#admin-members td{vertical-align:top;overflow-wrap:anywhere}#admin-members td:nth-child(2){font-weight:600}#admin-members td:last-child{min-width:180px}
 
 .client-payment-sync-status{max-width:28rem;padding:10px 12px;background:#edf4ff;color:#153a66;border-radius:14px;line-height:1.5;white-space:normal}.client-payment-sync-status:empty{display:none}
+
+#granel-access-title{scroll-margin-top:110px;overflow-wrap:anywhere}#granel-access-link{min-height:44px;max-width:100%;white-space:normal}

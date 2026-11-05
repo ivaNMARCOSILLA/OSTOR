@@ -2,6 +2,10 @@
 (()=>{
  const LANGS=['es','ca','en','fr','pt','de','it'],KEY='electronicama_language';
  const rows={
+ "Acceso privado":["Accés privat","Private access","Accès privé","Acesso privado","Privater Zugang","Accesso privato"],
+ "Entrar a Granel":["Entrar a Granel","Sign in to Granel","Se connecter à Granel","Entrar no Granel","Bei Granel anmelden","Accedi a Granel"],
+ "Abrir Granel":["Obrir Granel","Open Granel","Ouvrir Granel","Abrir Granel","Granel öffnen","Apri Granel"],
+ "Granel · entrar":["Granel · entrar","Granel · sign in","Granel · connexion","Granel · entrar","Granel · anmelden","Granel · accedi"],
  "Triunfador":["Triomfador", "Champion", "Champion", "Campeão", "Champion", "Campione"],
  "Apodo de triunfador en el directo de Flores (@rosas).":["Àlies de triomfador al directe de Flores (@rosas).", "Champion nickname in Flores’s live stream (@rosas).", "Surnom de champion dans le direct de Flores (@rosas).", "Apelido de campeão na transmissão de Flores (@rosas).", "Champion-Spitzname im Livestream von Flores (@rosas).", "Soprannome da campione nella diretta di Flores (@rosas)."],
  "Abrir el canal de Flores":["Obrir el canal de Flores", "Open Flores’s channel", "Ouvrir la chaîne de Flores", "Abrir o canal de Flores", "Kanal von Flores öffnen", "Apri il canale di Flores"],

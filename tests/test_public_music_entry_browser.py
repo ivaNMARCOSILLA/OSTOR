@@ -10,6 +10,8 @@ def run():
    page.locator('#library').wait_for();page.wait_for_function("document.querySelector('.header-account').getAttribute('href')==='/account'")
    assert page.locator('#main-nav a[href="/account"],#mobile-nav a[href="/account"]').count()==2
    page.goto(BASE_URL+'/account');assert page.locator('#register-form').is_visible();assert page.locator('#login-form').is_visible();assert page.locator('#account-welcome').is_visible()
+   page.locator('#granel-access-link').click()
+   assert page.evaluate('document.activeElement.id')=='granel-access-title'
    assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
   page.goto(BASE_URL+'/account#reset-password=example');assert page.locator('#password-reset-form').is_visible()
   page.goto(BASE_URL+'/live');assert 'Ol Live' in page.title()
