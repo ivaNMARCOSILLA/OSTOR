@@ -106,15 +106,16 @@ def _notice_members(conn,row):
 
 def clear_history_except_flores(conn):
     """Caller holds BEGIN IMMEDIATE. Remove notification rows, never accounts."""
-    keep=conn.execute('SELECT id FROM members WHERE username=?',('rosas',)).fetchone()
-    if not keep:raise ValueError('No se encuentra la cuenta de Flores (rosas). No se ha borrado ningún aviso.')
+    from streamers import flores_identity_member_id
+    keep=conn.execute('SELECT id,username FROM members WHERE id=?',(flores_identity_member_id(conn),)).fetchone()
+    if not keep:raise ValueError('No se encuentra la cuenta de Flores. No se ha borrado ningún aviso.')
     rows=conn.execute('SELECT id,event_key FROM admin_notifications').fetchall()
     deleted=retained=0
     for row in rows:
         if keep['id'] in _notice_members(conn,row):retained+=1
         else:
             deleted+=conn.execute('DELETE FROM admin_notifications WHERE id=?',(row['id'],)).rowcount
-    return {'ok':True,'deleted':deleted,'retained':retained,'kept_username':'rosas','kept_label':'Flores'}
+    return {'ok':True,'deleted':deleted,'retained':retained,'kept_username':keep['username'],'kept_label':'Flores'}
 
 
 def apply_owner_history_cleanup():
@@ -172,13 +173,15 @@ def list_notifications():
 
 def _list_notifications():
     from membership import database
+    from streamers import flores_identity_member_id
     try:page=max(1,int(request.args.get('page','1')))
     except ValueError:page=1
     with database() as conn:
         total=conn.execute('SELECT COUNT(*) AS n FROM admin_notifications').fetchone()['n'];pages=max(1,(total+24)//25);page=min(page,pages)
         rows=conn.execute('SELECT id,kind,title,detail,created_at,status,attempts,sent_at FROM admin_notifications ORDER BY created_at DESC,id DESC LIMIT 25 OFFSET ?',((page-1)*25,)).fetchall()
         pending=conn.execute("SELECT COUNT(*) AS n FROM admin_notifications WHERE status!='sent'").fetchone()['n']
-    return jsonify(notifications=[dict(row) for row in rows],total=total,page=page,pages=pages,pending=pending,email_ready=mail_ready(),recipient=RECIPIENT,history_keep={'username':'rosas','label':'Flores'})
+        keep=conn.execute('SELECT username FROM members WHERE id=?',(flores_identity_member_id(conn),)).fetchone()
+    return jsonify(notifications=[dict(row) for row in rows],total=total,page=page,pages=pages,pending=pending,email_ready=mail_ready(),recipient=RECIPIENT,history_keep={'username':keep['username'] if keep else 'rosas','label':'Flores'})
 
 
 @bp.post('/api/admin/notifications/retry')

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+  <url>
+    <loc>https://electronicama.com/</loc>
+    <image:image><image:loc>https://electronicama.com/assets/electronicama-social.png</image:loc></image:image>
+  </url>
+  <url><loc>https://electronicama.com/live</loc></url>
+  <url><loc>https://electronicama.com/legal/aviso-legal.html</loc></url>
+  <url><loc>https://electronicama.com/legal/privacidad.html</loc></url>
+  <url><loc>https://electronicama.com/legal/cookies.html</loc></url>
+</urlset>

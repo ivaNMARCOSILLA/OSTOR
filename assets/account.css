@@ -7,9 +7,26 @@
 
 .client-management-controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:16px;margin:20px 0}#admin-members td{vertical-align:top;overflow-wrap:anywhere}#admin-members td:nth-child(2){font-weight:600}#admin-members td:last-child{min-width:180px}
 
-.client-payment-sync-status{max-width:28rem;padding:10px 12px;background:#edf4ff;color:#153a66;border-radius:14px;line-height:1.5;white-space:normal}.client-payment-sync-status:empty{display:none}
+.client-payment-sync-status,.client-account-archive-status{max-width:28rem;padding:10px 12px;background:#edf4ff;color:#153a66;border-radius:14px;line-height:1.5;white-space:normal}.client-payment-sync-status:empty,.client-account-archive-status:empty{display:none}
 
 #granel-access-title{scroll-margin-top:110px;overflow-wrap:anywhere}#granel-access-link{min-height:44px;max-width:100%;white-space:normal}
 #account-welcome.granel-welcome{display:grid;grid-template-columns:minmax(0,1fr) minmax(160px,220px);gap:24px;align-items:center}
 .granel-welcome-copy{min-width:0}.granel-poster{width:100%;max-width:220px;margin:0;justify-self:center}.granel-poster img{display:block;width:100%;height:auto;max-height:330px;object-fit:contain;border:1px solid #8a7447;border-radius:14px;background:#000}
 @media(max-width:600px){#account-welcome.granel-welcome{grid-template-columns:minmax(0,1fr);gap:16px}.granel-poster{max-width:180px}.granel-poster img{max-height:270px}}
+
+/* Administrator updates and account naming keep comfortable touch targets. */
+body.electronicama-theme .admin-refresh-controls{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;margin:18px 0;padding:12px 14px;border:1px solid #79663f;border-radius:12px;background:#0c0b09;min-width:0}
+body.electronicama-theme .admin-refresh-controls p{margin:0;color:#e5d8bd;font-size:13px;line-height:1.55;overflow-wrap:anywhere}
+body.electronicama-theme .admin-refresh-controls button{min-height:44px;min-width:0;max-width:100%;padding:10px 14px;white-space:normal;overflow-wrap:anywhere;font-size:13px}
+body.electronicama-theme .member-rename{width:100%;max-width:26rem;min-width:0;margin:10px 0;padding:0 10px;border:1px solid #79663f;border-radius:12px;background:#0c0b09;color:#f3dbac}
+body.electronicama-theme .member-rename>summary{min-height:44px;padding:10px 0;line-height:1.55;white-space:normal;overflow-wrap:anywhere;color:#f3dbac;cursor:pointer}
+body.electronicama-theme .member-rename-form{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;min-width:0;margin:0;padding:0 0 12px}
+body.electronicama-theme .member-rename-form label{min-width:0;margin:0;color:#eee4d1;font-size:13px;line-height:1.5}
+body.electronicama-theme .member-rename-form input{box-sizing:border-box;min-width:0;min-height:44px;width:100%;margin:5px 0 0;padding:10px 12px;border:1px solid #897348;border-radius:9px;background:#111;color:#f4eedf;font-size:16px;line-height:1.4}
+body.electronicama-theme .member-rename-form button{min-width:0;min-height:44px;width:100%;padding:10px 12px;background:#e2c389;color:#101010;border-color:#e2c389;font-size:13px;line-height:1.5;white-space:normal;overflow-wrap:anywhere}
+body.electronicama-theme .member-rename-form small,body.electronicama-theme .member-rename-form p{margin:0;color:#d8cbb0;font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+body.electronicama-theme .admin-refresh-controls button:disabled,body.electronicama-theme .member-rename-form :disabled{cursor:wait}
+body.electronicama-theme .admin-refresh-controls button:focus-visible,body.electronicama-theme .member-rename :is(summary,input,button):focus-visible{outline:2px solid #ffe4ad;outline-offset:3px}
+@media(max-width:600px){body.electronicama-theme .admin-refresh-controls{grid-template-columns:minmax(0,1fr)}body.electronicama-theme .admin-refresh-controls button{width:100%}body.electronicama-theme .member-rename{max-width:100%}}
+
+body.electronicama-theme .client-account-archive-status{background:#222;color:#d0eee5;border-color:#78a79e}

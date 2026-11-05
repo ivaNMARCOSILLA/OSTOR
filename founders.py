@@ -13,11 +13,11 @@ def limit_requests():
 
 @bp.get('/api/live/founders')
 def status():
- from founder_slots import cleanup,reservation
+ from founder_slots import cleanup,reservation,ownership
  cleanup()
  user=get_user()
  with database() as conn:
-  claimed=conn.execute('SELECT COUNT(*) AS n FROM live_founders').fetchone()['n']
+  claimed=conn.execute('SELECT COUNT(*) AS n FROM founder_ownership').fetchone()['n']
   mine=conn.execute('SELECT number,claimed_at,revoked_at FROM live_founders WHERE member_id=?',(user['id'],)).fetchone() if user else None
  if mine:
   with database() as conn:preferences=conn.execute('SELECT mode AS badge_mode,letter AS badge_letter,caption AS badge_caption,audio_json AS badge_audio FROM founder_signatures WHERE member_id=?',(user['id'],)).fetchone()
@@ -26,15 +26,18 @@ def status():
   from live_access import founder_activity
   with database() as conn:mine['activity']=founder_activity(user['id'],conn)
   mine['signature']=signature_from_row(preferences or {})
+  with database() as conn:owner=ownership(conn,user['id'])
+  mine['ownership_permanent']=bool(owner)
+  mine['ownership']={'number':owner['number'],'assigned_at':owner['assigned_at'],'permanent':True,'exclusive':True} if owner else None
  if mine:mine['future_transfer_eligible']=mine['number']==1
- return jsonify(limit=LIMIT,claimed=claimed,remaining=max(0,LIMIT-claimed),mine=mine if mine else None,lifetime=False,transfer_sales_open=False,activity_required=True,payment_required=True,trial_months=0,trial_days=0,billing_period='year')
+ return jsonify(limit=LIMIT,claimed=claimed,remaining=max(0,LIMIT-claimed),mine=mine if mine else None,ownership_permanent=True,lifetime=False,transfer_sales_open=False,activity_required=True,payment_required=True,trial_months=0,trial_days=0,billing_period='year')
 
 @bp.post('/api/live/founders/claim')
 def claim():
  from operations import premiere
  if premiere():return jsonify(error='Ol Live · próximo estreno. Las plazas aún no están abiertas.'),409
  user=get_user()
- if not user:return jsonify(error='Crea una cuenta gratuita o inicia sesión para reservar tu plaza.'),401
+ if not user:return jsonify(error='Crea una cuenta gratuita o inicia sesión para obtener tu insignia.'),401
  if not allow_attempt('founder-claim',12):return jsonify(error='Demasiados intentos. Espera unos minutos.'),429
  with database() as conn:
   conn.execute('BEGIN IMMEDIATE')
@@ -43,15 +46,15 @@ def claim():
   existing=conn.execute('SELECT number,revoked_at FROM live_founders WHERE member_id=?',(user['id'],)).fetchone()
   if existing:
    if existing['revoked_at']:return jsonify(error='Esta plaza fue revocada. Contacta con administración; no se puede reclamar otra.'),403
-   return jsonify(ok=True,number=existing['number'],already_claimed=True,lifetime=False,payment_required=True)
+   return jsonify(ok=True,number=existing['number'],already_claimed=True,ownership_permanent=True,lifetime=False,payment_required=True)
   from human_check import verify
-  if not verify(conn):return jsonify(error='Completa la comprobación visual antes de reservar. El código caduca y solo se usa una vez.'),400
+  if not verify(conn):return jsonify(error='Completa la comprobación visual antes de obtener tu insignia. El código caduca y solo se usa una vez.'),400
   from membership import user_public
   if not user_public(user).get('full_service') and not user_public(user).get('live_annual') and not user_public(user).get('live_lifetime'):return jsonify(error='Primero contrata Ol Live por 25 € al año. Las plazas requieren un pago confirmado.'),409
   number=reserve(conn,user['id'])
   if number is None:return jsonify(error='Las 100 plazas de fundador están ocupadas. Ol Live sigue disponible con acceso anual ordinario, sin beneficios de fundador.'),409
- notify('founder','Nueva plaza Ol Live fundadores',f'Se ha reservado la plaza {number} de 100. Acceso anual confirmado. Para conservarla se debe renovar el acceso de 25 € al año y mantener la actividad indicada. Consulta la cuenta en administración.',event_key='founder:'+user['id'],member_ids=[user['id']])
- return jsonify(ok=True,number=number,already_claimed=False,lifetime=False,payment_required=True)
+ notify('founder','Nueva insignia Ol Live fundadores',f'Se ha asignado la insignia personal n.º {number} de 100. El número pertenece permanentemente a esta cuenta. Emitir y disfrutar de las ventajas activas requiere el acceso anual y la actividad indicados. Consulta la cuenta en administración.',event_key='founder:'+user['id'],member_ids=[user['id']])
+ return jsonify(ok=True,number=number,already_claimed=False,ownership_permanent=True,lifetime=False,payment_required=True)
 
 @bp.post('/api/admin/founders/revoke')
 @require_admin
@@ -59,7 +62,10 @@ def revoke_founder():
  ident=str(payload().get('member_id',''))
  with database() as conn:
   conn.execute('BEGIN IMMEDIATE')
+  from founder_slots import seed_ownership
+  seed_ownership(conn)
   conn.execute('UPDATE live_founders SET revoked_at=? WHERE member_id=?',(stamp(now_utc()),ident))
+  conn.execute('UPDATE founder_ownership SET revoked_at=? WHERE member_id=?',(stamp(now_utc()),ident))
   conn.execute("UPDATE members SET session_version=session_version+1 WHERE id=? AND role!='admin'",(ident,))
  return jsonify(ok=True)
 
@@ -75,14 +81,23 @@ def signature_from_row(row):
  return {'mode':row['badge_mode'] if 'badge_mode' in keys and row['badge_mode'] else 'numero','letter':row['badge_letter'] if 'badge_letter' in keys and row['badge_letter'] else '', 'caption':row['badge_caption'] if 'badge_caption' in keys and row['badge_caption'] else 'Buen rollo', 'audio':audio}
 
 
+def personal_owner(conn,user):
+ if not user:return None
+ return conn.execute('''SELECT o.number,o.assigned_at FROM founder_ownership o
+  JOIN live_founders f ON f.member_id=o.member_id AND f.number=o.number
+  JOIN members m ON m.id=o.member_id
+  WHERE o.member_id=? AND o.revoked_at IS NULL AND f.revoked_at IS NULL
+  AND NOT EXISTS(SELECT 1 FROM member_archives a WHERE a.member_id=m.id AND a.restored_at IS NULL)''',(user['id'],)).fetchone()
+
+
 @bp.get('/api/live/founders/audio-search')
 def audio_search():
  from flask import current_app,request
- from membership import user_public
  from itsdangerous import URLSafeTimedSerializer
  from concurrent.futures import ThreadPoolExecutor
  user=get_user()
- if not user or not user_public(user)['founder_active']:return jsonify(error='Personalizar una insignia requiere una plaza de fundador activa.'),403
+ with database() as conn:owner=personal_owner(conn,user)
+ if not owner:return jsonify(error='Personalizar una insignia requiere que pertenezca a tu cuenta y no esté revocada.'),403
  limiter=current_app.extensions.get('streamer_rate_limiter')
  if limiter and not limiter('founder-audio-search',20):return jsonify(error='Espera un momento antes de volver a buscar.'),429
  from app import multi_search,search_commons,sanitize_query
@@ -105,10 +120,10 @@ def save_signature():
  import json
  from flask import current_app
  from itsdangerous import URLSafeTimedSerializer,BadSignature,SignatureExpired
- from membership import user_public
  from moderation import validate_public_text
  user=get_user()
- if not user or not user_public(user)['founder_active']:return jsonify(error='Esta personalización requiere tu plaza de fundador activa.'),403
+ with database() as conn:owner=personal_owner(conn,user)
+ if not owner:return jsonify(error='Esta personalización requiere tu insignia personal y no revocada.'),403
  data=payload();mode=data.get('mode');letter=str(data.get('letter','')).strip().upper();caption=str(data.get('caption','')).strip()
  if mode not in {'numero','letra','cancion','sonido'} or len(caption)>40 or (mode=='letra' and (len(letter)!=1 or not letter.isalpha())):
   return jsonify(error='Elige número, una letra, canción o sonido, y una frase de hasta 40 caracteres.'),400
@@ -134,8 +149,11 @@ def save_signature():
   if voice not in {'brisa','aurora','sonrisa','ritmo','estrellas','celebracion'}:return jsonify(error='Elige uno de los sonidos disponibles.'),400
   audio={'kind':'tone','voice':voice}
  with database() as conn:
+  conn.execute('BEGIN IMMEDIATE')
+  owner=personal_owner(conn,user)
+  if not owner:return jsonify(error='Esta personalización requiere tu insignia personal y no revocada.'),403
   conn.execute('INSERT INTO founder_signatures(member_id,mode,letter,caption,audio_json,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(member_id) DO UPDATE SET mode=excluded.mode,letter=excluded.letter,caption=excluded.caption,audio_json=excluded.audio_json,updated_at=excluded.updated_at',(user['id'],mode,letter if mode=='letra' else '',caption,json.dumps(audio,ensure_ascii=False) if audio else None,stamp(now_utc())))
- return jsonify(ok=True,number=user['founder_number'],signature={'mode':mode,'letter':letter if mode=='letra' else '', 'caption':caption or 'Buen rollo','audio':audio})
+ return jsonify(ok=True,number=owner['number'],ownership_permanent=True,signature={'mode':mode,'letter':letter if mode=='letra' else '', 'caption':caption or 'Buen rollo','audio':audio})
 
 @bp.get('/api/admin/founders/activity')
 @require_admin

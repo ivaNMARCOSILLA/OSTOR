@@ -31,7 +31,7 @@ app = Flask(__name__, static_folder=os.path.join(ROOT, "assets"), static_url_pat
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 app.logger.setLevel(logging.INFO)
 
-VERSION = "9.29.4"
+VERSION = "9.29.5"
 AUDIUS_APP_NAME = os.getenv("AUDIUS_APP_NAME", "electronicama")
 SEARCH_CACHE_SECONDS = max(15, min(int(os.getenv("SEARCH_CACHE_SECONDS", "300")), 3600))
 ARCHIVE_CACHE_SECONDS = max(60, min(int(os.getenv("ARCHIVE_CACHE_SECONDS", "3600")), 86400))
@@ -477,6 +477,16 @@ def response_headers(response):
 @app.get("/")
 def homepage():
     return send_from_directory(ROOT, "index.html")
+
+
+@app.get("/robots.txt")
+def search_robots():
+    return send_from_directory(ROOT, "robots.txt", mimetype="text/plain")
+
+
+@app.get("/sitemap.xml")
+def search_sitemap():
+    return send_from_directory(ROOT, "sitemap.xml", mimetype="application/xml")
 
 
 @app.get("/legal/<path:filename>")

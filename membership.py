@@ -72,6 +72,17 @@ def init_database():
           created_at TEXT NOT NULL, access_until TEXT,
           welcome_used INTEGER NOT NULL DEFAULT 0, session_version INTEGER NOT NULL DEFAULT 0
         );
+        CREATE TABLE IF NOT EXISTS member_identity_links (
+          identity TEXT PRIMARY KEY,
+          member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS member_name_history (
+          id TEXT PRIMARY KEY,
+          member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+          actor_id TEXT REFERENCES members(id) ON DELETE SET NULL,
+          former_username TEXT NOT NULL,new_username TEXT NOT NULL,changed_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS member_name_history_member ON member_name_history(member_id,changed_at);
         CREATE TABLE IF NOT EXISTS guest_visits (
           id TEXT PRIMARY KEY,started_at TEXT NOT NULL,last_seen TEXT NOT NULL
         );
@@ -190,6 +201,7 @@ def init_database():
           WHERE m.role='member' AND m.session_version=0
           AND NOT EXISTS (SELECT 1 FROM friend_access f WHERE f.member_id=m.id)
           GROUP BY m.id ON CONFLICT(member_id) DO NOTHING''')
+        conn.execute("INSERT INTO member_identity_links(identity,member_id) SELECT 'flores',id FROM members WHERE username='rosas' ON CONFLICT(identity) DO NOTHING")
 
 
     from notifications import init_database as init_notifications
@@ -200,6 +212,8 @@ def init_database():
     init_operations()
     from visitor_registry import init_database as init_visitor_registry
     init_visitor_registry()
+    from founder_slots import init_database as init_founder_ownership
+    init_founder_ownership()
 
 def create_admin(username, password):
     username = clean_username(username)
@@ -307,6 +321,11 @@ def restrict_music():
     if path.startswith('/api/stickers/') and path.endswith('/phrase'):return None
     if path.endswith('/sound.wav') and path.startswith(('/api/stickers/','/api/live/founders/')):return None
     user=get_user()
+    if path in {'/api/live/founders/signature','/api/live/founders/audio-search'}:
+        # Badge ownership is separate from current paid streaming access. The
+        # founder handlers still verify the account's own non-revoked identity.
+        if not user:return jsonify(error='Inicia sesión para personalizar tu insignia.'),401
+        return None
     if path.startswith(('/api/rewards','/api/stickers/')):
         if not user:return jsonify(error='Inicia sesión con una cuenta gratuita para guardar tu colección.',code='login_required'),401
         return None
@@ -444,6 +463,39 @@ def list_members():
             last=conn.execute("SELECT amount_cents,verified_at,ends_at,reference,plan FROM payments WHERE member_id=? ORDER BY verified_at DESC LIMIT 1",(member['id'],)).fetchone()
             member['last_payment']=dict(last) if last else None
     return jsonify(members=users, payments=payments)
+
+
+@bp.post('/api/admin/members/rename')
+@require_admin
+def rename_member():
+    data=payload()
+    ident=data.get('member_id')
+    if not isinstance(ident,str) or not re.fullmatch(r'[a-f0-9]{32}',ident) or not isinstance(data.get('username'),str):
+        return jsonify(error='Selecciona una cuenta y escribe su nuevo usuario.'),400
+    try:
+        name=clean_username(data['username'])
+    except ValueError as error:
+        return jsonify(error=str(error)),400
+    try:
+        with database() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            member=conn.execute('SELECT id,username FROM members WHERE id=?',(ident,)).fetchone()
+            if not member:return jsonify(error='No existe esta cuenta.'),404
+            if conn.execute('SELECT 1 FROM member_archives WHERE member_id=? AND restored_at IS NULL',(ident,)).fetchone():
+                return jsonify(error='Restaura la cuenta antes de renombrarla.'),409
+            previous=member['username']
+            changed=previous!=name
+            if changed:
+                if conn.execute('SELECT 1 FROM members WHERE LOWER(username)=? AND id<>?',(name,ident)).fetchone():
+                    return jsonify(error='Este nombre de usuario ya está ocupado.'),409
+                if previous=='rosas':
+                    conn.execute("INSERT INTO member_identity_links(identity,member_id) VALUES('flores',?) ON CONFLICT(identity) DO NOTHING",(ident,))
+                conn.execute('UPDATE members SET username=? WHERE id=?',(name,ident))
+                conn.execute('INSERT INTO member_name_history(id,member_id,actor_id,former_username,new_username,changed_at) VALUES(?,?,?,?,?,?)',
+                             (secrets.token_hex(16),ident,get_user()['id'],previous,name,stamp(now_utc())))
+    except INTEGRITY_ERRORS:
+        return jsonify(error='Este nombre de usuario ya está ocupado.'),409
+    return jsonify(ok=True,member_id=ident,username=name,previous_username=previous,changed=changed)
 
 
 @bp.get('/api/admin/invitations')

@@ -31,6 +31,11 @@ def run():
    assert page.locator('#ol-live-premiere').get_attribute('data-announcement-archived')=='true'
    if width==390:page.screenshot(path='/tmp/ol-home-compact-mobile.png')
    if width==1440:page.screenshot(path='/tmp/ol-home-compact-desktop.png')
+   photo=page.locator('#electronicama-image');photo.scroll_into_view_if_needed()
+   photo.locator('img').evaluate('(img)=>img.decode()')
+   assert photo.locator('img').evaluate('(img)=>img.naturalWidth===1536&&img.naturalHeight===1024')
+   bounds=photo.bounding_box();assert bounds['x']>=0 and bounds['x']+bounds['width']<=width+2,(width,bounds)
+   if width in [390,1440]:photo.screenshot(path='/tmp/electronicama-search-photo-'+str(width)+'.png')
   page.locator('#quick-style-picker summary').click();page.locator('#quick-searches [data-query=techno]').click()
   page.wait_for_function("document.querySelector('#search-input').value==='techno'&&!document.querySelector('#search-button').disabled")
   assert any('q=techno' in query for query in queries)

@@ -94,6 +94,25 @@ class NotificationTests(unittest.TestCase):
         self.assertEqual((response.json['deleted'],response.json['retained']),(2,1))
         self.assertEqual(self.listing()['total'],1)
 
+    def test_renamed_flores_keeps_history_and_reused_username_does_not_inherit_exception(self):
+        flores=self.member('rosas','Flores')
+        result=self.admin.post('/api/admin/members/rename',json={'member_id':flores,'username':'flores.original'})
+        self.assertEqual(result.status_code,200,result.json)
+        other=self.member('rosas','Flores')
+        with app.app.app_context():m.init_database()
+        kept={self.notice([flores],event_key='original-linked'),self.old_notice('registration:'+flores)}
+        self.notice([other],event_key='reused-name-linked')
+        self.old_notice('registration:'+other)
+        self.assertEqual(self.listing()['history_keep'],{'username':'flores.original','label':'Flores'})
+        response=self.clear()
+        self.assertEqual(response.status_code,200)
+        self.assertEqual(response.json,{'ok':True,'deleted':2,'retained':2,'kept_username':'flores.original','kept_label':'Flores'})
+        self.assertEqual({row['id'] for row in self.listing()['notifications']},kept)
+        with self.configured(),patch.object(n,'deliver') as delivered:
+            with app.app.app_context():self.assertTrue(n.notify('test','Aviso futuro normal','Resumen',event_key='future-reused-name',member_ids=[other]))
+        delivered.assert_called_once()
+        self.assertEqual(self.listing()['total'],3)
+
     def test_missing_flores_never_causes_a_global_delete(self):
         original=self.old_notice('unknown:old')
         response=self.clear()

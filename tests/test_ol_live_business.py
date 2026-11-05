@@ -35,7 +35,7 @@ class OlLiveBusinessTests(unittest.TestCase):
   self.assertEqual(client.get('/api/account/me').json['payments'],[])
   self.assertEqual(client.get('/api/resolve/audius_test').status_code,200)
   self.assertEqual(client.get('/api/rewards').status_code,200)
- def test_last_founder_place_is_atomic_and_revocation_releases_annual_place(self):
+ def test_last_founder_place_is_atomic_and_revocation_keeps_number_exclusive(self):
   with app.app.app_context(),m.database() as conn:
    for number in range(1,100):
     ident='seed-founder-'+str(number);conn.execute('INSERT INTO members(id,username,created_at) VALUES(?,?,?)',(ident,ident,m.stamp(m.now_utc())))
@@ -46,12 +46,27 @@ class OlLiveBusinessTests(unittest.TestCase):
    responses=[future.result() for future in results]
   self.assertEqual(sorted(result.status_code for result in responses),[200,409])
   winner=first if responses[0].status_code==200 else second
+  loser=second if winner is first else first
   info=winner.get('/api/account/me').json
   self.assertTrue(info['user']['founder_active']);self.assertTrue(info['user']['streamer_active']);self.assertEqual(info['user']['founder_number'],100);self.assertEqual(info['payments'],[])
   self.assertEqual(self.post(winner,'/api/live/founders/claim',{}).json['number'],100)
-  self.post(self.admin,'/api/admin/revoke',{'member_id':info['user']['id']})
+  self.assertEqual(self.post(self.admin,'/api/admin/revoke',{'member_id':info['user']['id']}).status_code,200)
   state=app.app.test_client().get('/api/live/founders').json
-  self.assertEqual(state['remaining'],1);self.assertEqual(state['claimed'],99)
+  self.assertEqual(state['remaining'],0);self.assertEqual(state['claimed'],100);self.assertTrue(state['ownership_permanent'])
+  self.assertEqual(self.post(loser,'/api/live/founders/claim',{}).status_code,409)
+  # Revoking service removes broadcasting and editing rights, not the number's
+  # permanent ownership. The other paying customer keeps ordinary annual access.
+  self.assertEqual(self.post(winner,'/api/account/login',{'username':info['user']['username'],'password':'ol-live-user-password-123'}).status_code,200)
+  revoked=winner.get('/api/account/me').json['user']
+  self.assertEqual(revoked['founder_number'],100);self.assertFalse(revoked['founder_active']);self.assertFalse(revoked['streamer_active'])
+  self.assertEqual(self.post(winner,'/api/live/founders/signature',{'mode':'numero','caption':'Mi número'}).status_code,403)
+  mine=winner.get('/api/live/founders').json['mine']
+  self.assertEqual(mine['ownership']['number'],100);self.assertTrue(mine['ownership']['exclusive']);self.assertIsNotNone(mine['revoked_at'])
+  ordinary=loser.get('/api/account/me').json['user']
+  self.assertIsNone(ordinary['founder_number']);self.assertTrue(ordinary['streamer_active'])
+  with app.app.app_context(),m.database() as conn:
+   self.assertEqual(conn.execute('SELECT COUNT(DISTINCT number) AS n FROM founder_ownership').fetchone()['n'],100)
+   self.assertIsNotNone(conn.execute('SELECT revoked_at FROM founder_ownership WHERE member_id=?',(info['user']['id'],)).fetchone()['revoked_at'])
  def test_founder_signature_keeps_official_number_and_public_category_is_real(self):
   owner=self.member('founder-art');result=self.post(owner,'/api/live/founders/claim',{})
   self.assertEqual(result.json['number'],1)

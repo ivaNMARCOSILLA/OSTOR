@@ -61,11 +61,11 @@ def comments(channel_id):
     from rewards import catalog
     designs={item['id']:item for item in catalog(0)} if any(row['kind']=='sticker' for row in rows) else {}
     comments=[dict(row) for row in reversed(rows)]
-    from streamers import stream_alias
+    from streamers import stream_alias_for_member
     for comment in comments:
         author=comment.pop('member_id')
         comment['subscriber_badge']=author in badge_members
-        comment['stream_alias']=stream_alias(comment['username']) if author==channel['member_id'] else None
+        comment['stream_alias']=stream_alias_for_member(author) if author==channel['member_id'] else None
         if comment.get('founder_number'):
             from founders import signature_from_row
             comment['founder_signature']=signature_from_row(comment)

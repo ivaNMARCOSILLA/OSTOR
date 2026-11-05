@@ -28,7 +28,8 @@ class VercelConfigurationTests(unittest.TestCase):
         client=Client(vercel_app,Response)
         with client.get('/api/index.py',environ_overrides={'REQUEST_URI':'/account'}) as response:
             self.assertEqual(response.status_code,200)
-            self.assertIn('Iniciar sesión',response.get_data(as_text=True))
+            self.assertIn('id="login-form"',response.get_data(as_text=True))
+            self.assertIn('Entrar a Granel',response.get_data(as_text=True))
         with client.get('/api/index.py',environ_overrides={'REQUEST_URI':'/'}) as response:
             self.assertEqual(response.status_code,200)
             self.assertIn('preview-banner',response.get_data(as_text=True))

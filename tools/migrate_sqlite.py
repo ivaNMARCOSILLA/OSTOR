@@ -12,6 +12,8 @@ TABLES={
     'members':['id','username','password_hash','role','created_at','access_until','welcome_used','session_version'],
     'member_archives':['member_id','archived_at','archived_by','reason','restored_at'],
     'member_archive_events':['id','member_id','actor_id','action','created_at'],
+    'member_name_history':['id','member_id','actor_id','former_username','new_username','changed_at'],
+    'member_identity_links':['identity','member_id'],
     'sticker_voice_audio':['cache_key','audio_base64','created_at'],
     'member_legal_names':['member_id','legal_name','updated_at'],
     'stripe_order_names':['order_id','legal_name'],
@@ -32,6 +34,7 @@ TABLES={
     'creator_daily_activity':['member_id','day','seconds'],
     'promotion_metrics':['day','event','amount'],
     'live_founders':['member_id','number','claimed_at','revoked_at'],
+    'founder_ownership':['member_id','number','assigned_at','revoked_at'],
     'founder_slot_history':['id','member_id','number','claimed_at','trial_until','released_at','reason','signature_json'],
     'founder_signatures':['member_id','mode','letter','caption','audio_json','updated_at'],
     'sticker_designs':['id','name','points','image_data','updated_at'],
@@ -85,7 +88,7 @@ def migrate(source,app):
         rows={}
         for table,columns in TABLES.items():
             actual=[row['name'] for row in original.execute('PRAGMA table_info('+table+')')]
-            if not actual and table in {'admin_notification_members','member_archives','member_archive_events','visitor_public_totals','visitor_public_history','visitor_public_days','visitor_devices','visitor_sessions','live_channel_thumbnails','live_broadcast_sessions','live_guest_invites','community_likes','community_report_details','live_recordings','adult_channel_rules','adult_age_declarations','interface_revisions','live_channel_views','community_retention_clock','sticker_voice_audio','member_legal_names','stripe_order_names','member_profiles','email_tokens','fan_aliases','stripe_orders','stripe_accounts','stripe_connect_states','stripe_events','stripe_reversals','ol_operations','ol_supervisors','moderator_permissions','member_two_factor','two_factor_recovery','pricing_moderators','subscription_agreements','subscription_approvals','channel_subscription_settings','creator_subscriptions','community_audiences','founder_slot_history','live_launch','live_entitlements','founder_activity','creator_daily_activity','promotion_metrics','founder_signatures','live_founders','sticker_designs','member_rewards','friend_access','streamer_access','streamer_channels','community_messages','admin_notifications','live_channel_settings'}:
+            if not actual and table in {'admin_notification_members','member_archives','member_archive_events','member_name_history','member_identity_links','founder_ownership','visitor_public_totals','visitor_public_history','visitor_public_days','visitor_devices','visitor_sessions','live_channel_thumbnails','live_broadcast_sessions','live_guest_invites','community_likes','community_report_details','live_recordings','adult_channel_rules','adult_age_declarations','interface_revisions','live_channel_views','community_retention_clock','sticker_voice_audio','member_legal_names','stripe_order_names','member_profiles','email_tokens','fan_aliases','stripe_orders','stripe_accounts','stripe_connect_states','stripe_events','stripe_reversals','ol_operations','ol_supervisors','moderator_permissions','member_two_factor','two_factor_recovery','pricing_moderators','subscription_agreements','subscription_approvals','channel_subscription_settings','creator_subscriptions','community_audiences','founder_slot_history','live_launch','live_entitlements','founder_activity','creator_daily_activity','promotion_metrics','founder_signatures','live_founders','sticker_designs','member_rewards','friend_access','streamer_access','streamer_channels','community_messages','admin_notifications','live_channel_settings'}:
                 rows[table]=[];continue
             if set(actual)!=set(columns):raise ValueError('La estructura SQLite no es compatible: '+table)
             rows[table]=[dict(row) for row in original.execute('SELECT '+','.join(columns)+' FROM '+table)]

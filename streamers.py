@@ -12,7 +12,7 @@ import time
 import requests
 from datetime import timedelta
 from urllib.parse import urlparse
-from flask import Blueprint, current_app, jsonify, request, Response
+from flask import Blueprint, current_app, g, has_request_context, jsonify, request, Response
 from membership import database, get_user, now_utc, stamp, user_public,allow_attempt,require_admin
 
 bp=Blueprint('streamers',__name__)
@@ -23,8 +23,27 @@ FLORES_STREAM_ALIAS={'alias':'(primitivo)*ovelix','title':'Triunfador'}
 
 
 def stream_alias(username):
-    """A display-only distinction for Flores; no account or access changes."""
+    """Legacy presentation helper; request data uses the stable member identity."""
     return dict(FLORES_STREAM_ALIAS) if username=='rosas' else None
+
+
+def flores_identity_member_id(conn=None):
+    """Resolve the original account independently of later username changes."""
+    cache='flores_stream_identity'
+    if has_request_context() and cache in g:return g.get(cache)
+    if conn is None:
+        with database() as connection:return flores_identity_member_id(connection)
+    linked=conn.execute("SELECT member_id FROM member_identity_links WHERE identity='flores'").fetchone()
+    # Before the first rename or a restart initializes the link, the original
+    # username remains a read-only fallback. A stored link always takes priority.
+    member=linked or conn.execute("SELECT id AS member_id FROM members WHERE username='rosas'").fetchone()
+    ident=member['member_id'] if member else None
+    if has_request_context():setattr(g,cache,ident)
+    return ident
+
+
+def stream_alias_for_member(member_id,conn=None):
+    return dict(FLORES_STREAM_ALIAS) if member_id and member_id==flores_identity_member_id(conn) else None
 
 
 def video_configuration_checks():
@@ -80,7 +99,7 @@ def paypal_link(value):
 
 def channel_public(row):
     from founders import signature_from_row
-    return {key:row[key] for key in ['id','title','bio','username']} | {'paypal_url':'' if os.getenv('VERCEL_ENV') in {'production','preview'} or os.getenv('OL_PAYMENT_PROVIDER','stripe')=='stripe' else row['paypal_url']} | {'thumbnail_url':'/api/streamers/'+row['id']+'/thumbnail','live':bool(row['live_until'] and row['live_until']>stamp(now_utc())),'adult_content':bool(row['adult_content']) if 'adult_content' in row.keys() else False,'view_count':row['view_count'] if 'view_count' in row.keys() else 0,'category':row['category'] if 'category' in row.keys() and row['category'] else 'entretenimiento','featured':bool(row['featured']) if 'featured' in row.keys() else False,'founder_number':row['founder_number'] if 'founder_number' in row.keys() else None,'founder_signature':signature_from_row(row) if 'founder_number' in row.keys() and row['founder_number'] else None,'stream_alias':stream_alias(row['username'])}
+    return {key:row[key] for key in ['id','title','bio','username']} | {'paypal_url':'' if os.getenv('VERCEL_ENV') in {'production','preview'} or os.getenv('OL_PAYMENT_PROVIDER','stripe')=='stripe' else row['paypal_url']} | {'thumbnail_url':'/api/streamers/'+row['id']+'/thumbnail','live':bool(row['live_until'] and row['live_until']>stamp(now_utc())),'adult_content':bool(row['adult_content']) if 'adult_content' in row.keys() else False,'view_count':row['view_count'] if 'view_count' in row.keys() else 0,'category':row['category'] if 'category' in row.keys() and row['category'] else 'entretenimiento','featured':bool(row['featured']) if 'featured' in row.keys() else False,'founder_number':row['founder_number'] if 'founder_number' in row.keys() else None,'founder_signature':signature_from_row(row) if 'founder_number' in row.keys() and row['founder_number'] else None,'stream_alias':stream_alias_for_member(row['member_id']) if 'member_id' in row.keys() else None}
 
 
 def own_channel():
@@ -118,12 +137,12 @@ def sign_token(claims):
 @require_admin
 def flores_alias():
     with database() as conn:
-        member=conn.execute("SELECT m.id,m.username,COALESCE(NULLIF(p.nickname,''),m.username) AS display_name,CASE WHEN EXISTS(SELECT 1 FROM member_archives a WHERE a.member_id=m.id AND a.restored_at IS NULL) THEN 1 ELSE 0 END AS archived FROM members m LEFT JOIN member_profiles p ON p.member_id=m.id WHERE m.username=?",('rosas',)).fetchone()
+        member=conn.execute("SELECT m.id,m.username,COALESCE(NULLIF(p.nickname,''),m.username) AS display_name,CASE WHEN EXISTS(SELECT 1 FROM member_archives a WHERE a.member_id=m.id AND a.restored_at IS NULL) THEN 1 ELSE 0 END AS archived FROM members m LEFT JOIN member_profiles p ON p.member_id=m.id WHERE m.id=?",(flores_identity_member_id(conn),)).fetchone()
         channel=conn.execute('SELECT id,title,live_until FROM streamer_channels WHERE member_id=?',(member['id'],)).fetchone() if member else None
     account=dict(member) if member else None
     if account:account['archived']=bool(account['archived'])
     info={'id':channel['id'],'title':channel['title'],'live':bool(not account['archived'] and channel['live_until'] and channel['live_until']>stamp(now_utc()))} if channel else None
-    response=jsonify(stream_alias=stream_alias('rosas'),account=account,channel=info)
+    response=jsonify(stream_alias=dict(FLORES_STREAM_ALIAS),account=account,channel=info)
     response.headers['Cache-Control']='no-store'
     return response
 

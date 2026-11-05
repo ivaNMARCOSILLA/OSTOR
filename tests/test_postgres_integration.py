@@ -31,7 +31,7 @@ class PostgresMembershipTests(unittest.TestCase):
         ready=patch('streamers.streamer_sales_ready',return_value=True);ready.start();self.addCleanup(ready.stop)
         self.app=application.app
         with self.app.app_context(),m.database() as connection:
-            for table in ['admin_notification_members','member_archive_events','member_archives','visitor_public_days','visitor_public_history','visitor_public_totals','visitor_sessions','visitor_devices','live_channel_thumbnails','community_likes','live_guest_invites','live_broadcast_sessions','live_recordings','community_report_details','interface_revisions','adult_age_declarations','adult_channel_rules','live_channel_views','community_retention_clock','stripe_order_names','annual_access_emails','fan_aliases','stripe_reversals','stripe_events','stripe_orders','stripe_connect_states','stripe_accounts','ol_supervisors','ol_operations','moderator_permissions','two_factor_recovery','member_two_factor','community_audiences','creator_subscriptions','channel_subscription_settings','subscription_approvals','subscription_agreements','pricing_moderators','founder_slot_history','live_launch','creator_daily_activity','founder_activity','live_entitlements','human_challenges','promotion_metrics','online_presence','founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:
+            for table in ['founder_ownership','member_name_history','member_identity_links','admin_notification_members','member_archive_events','member_archives','visitor_public_days','visitor_public_history','visitor_public_totals','visitor_sessions','visitor_devices','live_channel_thumbnails','community_likes','live_guest_invites','live_broadcast_sessions','live_recordings','community_report_details','interface_revisions','adult_age_declarations','adult_channel_rules','live_channel_views','community_retention_clock','stripe_order_names','annual_access_emails','fan_aliases','stripe_reversals','stripe_events','stripe_orders','stripe_connect_states','stripe_accounts','ol_supervisors','ol_operations','moderator_permissions','two_factor_recovery','member_two_factor','community_audiences','creator_subscriptions','channel_subscription_settings','subscription_approvals','subscription_agreements','pricing_moderators','founder_slot_history','live_launch','creator_daily_activity','founder_activity','live_entitlements','human_challenges','promotion_metrics','online_presence','founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:
                 connection.execute('DELETE FROM '+table)
         with self.app.app_context():
             m.create_admin('pg-admin','postgres-admin-password-123')
@@ -64,7 +64,7 @@ class PostgresMembershipTests(unittest.TestCase):
             c.execute('INSERT INTO live_entitlements(member_id,paid_at) VALUES(?,?) ON CONFLICT(member_id) DO UPDATE SET paid_at=excluded.paid_at',(ident,m.stamp(m.now_utc())))
         return ident
 
-    def test_retired_trial_rejected_and_paid_founder_expiry_reallocated(self):
+    def test_retired_trial_rejected_and_founder_identity_survives_annual_expiry(self):
         self.assertEqual(self.post(self.client,'/api/account/live-trial',{}).status_code,410)
         self.assertEqual(self.post(self.client,'/api/live/founders/claim',{}).status_code,409)
         self.annual_fixture(self.client)
@@ -77,11 +77,55 @@ class PostgresMembershipTests(unittest.TestCase):
         self.annual_fixture(second)
         next_claim=self.post(second,'/api/live/founders/claim',{})
         self.assertEqual(next_claim.status_code,200,next_claim.json)
-        self.assertEqual(next_claim.json['number'],1)
-        self.assertIsNone(self.client.get('/api/account/me').json['user']['founder_number'])
+        self.assertEqual(claim.json['number'],1)
+        self.assertEqual(next_claim.json['number'],2)
+        expired=self.client.get('/api/account/me').json['user']
+        self.assertEqual(expired['founder_number'],1)
+        self.assertFalse(expired['live_annual'])
+        self.assertFalse(expired['founder_active'])
+        self.assertFalse(expired['streamer_active'])
+        mine=self.client.get('/api/live/founders').json['mine']
+        self.assertTrue(mine['ownership']['permanent'])
+        self.assertTrue(mine['ownership']['exclusive'])
+        self.assertEqual(mine['ownership']['number'],1)
+        self.assertEqual(self.post(self.client,'/api/live/founders/signature',{'mode':'letra','letter':'P','caption':'Mi insignia'}).status_code,200)
+        self.assertFalse(self.client.get('/api/account/me').json['user']['streamer_active'])
         history=self.admin.get('/api/admin/founders/history').json
-        self.assertEqual(history['total'],1)
-        self.assertEqual(history['history'][0]['reason'],'annual_expired')
+        self.assertEqual(history['total'],0)
+        with self.app.app_context(),m.database() as conn:
+            owners=conn.execute('SELECT member_id,number FROM founder_ownership ORDER BY number').fetchall()
+        self.assertEqual([(row['member_id'],row['number']) for row in owners],[(self.member['id'],1),(second.get('/api/account/me').json['user']['id'],2)])
+
+    def test_administrator_rename_keeps_permanent_badge_payments_and_session(self):
+        ident=self.annual_fixture(self.client)
+        claim=self.post(self.client,'/api/live/founders/claim',{})
+        self.assertEqual(claim.status_code,200,claim.json)
+        admin_id=self.admin.get('/api/account/me').json['user']['id']
+        with self.app.app_context(),m.database() as conn:
+            original=dict(conn.execute('SELECT * FROM members WHERE id=?',(ident,)).fetchone())
+            at=m.stamp(m.now_utc())
+            conn.execute('INSERT INTO payments VALUES(?,?,?,?,?,?,?,?,?)',('pg-rename-payment',ident,'annual',2500,at,original['access_until'],at,admin_id,'pg-rename-receipt'))
+            payment=dict(conn.execute('SELECT * FROM payments WHERE member_id=?',(ident,)).fetchone())
+            ownership=dict(conn.execute('SELECT * FROM founder_ownership WHERE member_id=?',(ident,)).fetchone())
+        renamed=self.post(self.admin,'/api/admin/members/rename',{'member_id':ident,'username':'PG.NEW.HOLDER'})
+        self.assertEqual(renamed.status_code,200,renamed.json)
+        self.assertTrue(renamed.json['changed'])
+        self.assertEqual(renamed.json['username'],'pg.new.holder')
+        session=self.client.get('/api/account/me').json['user']
+        self.assertEqual(session['id'],ident)
+        self.assertEqual(session['username'],'pg.new.holder')
+        self.assertEqual(session['founder_number'],claim.json['number'])
+        self.assertTrue(session['live_annual'])
+        with self.app.app_context(),m.database() as conn:
+            self.assertEqual(dict(conn.execute('SELECT * FROM members WHERE id=?',(ident,)).fetchone()),dict(original,username='pg.new.holder'))
+            self.assertEqual(dict(conn.execute('SELECT * FROM payments WHERE member_id=?',(ident,)).fetchone()),payment)
+            self.assertEqual(dict(conn.execute('SELECT * FROM founder_ownership WHERE member_id=?',(ident,)).fetchone()),ownership)
+            audit=conn.execute('SELECT * FROM member_name_history WHERE member_id=?',(ident,)).fetchall()
+        self.assertEqual(len(audit),1)
+        self.assertEqual((audit[0]['actor_id'],audit[0]['former_username'],audit[0]['new_username']),(admin_id,'pg-client','pg.new.holder'))
+        fresh=self.app.test_client()
+        self.assertEqual(self.post(fresh,'/api/account/login',{'username':'pg.new.holder','password':'postgres-client-password-123'}).status_code,200)
+        self.assertEqual(fresh.get('/api/account/me').json['user']['id'],ident)
 
     def test_managed_platform_payment_signed_receipt_survives_retries(self):
         import payments as gateway
@@ -277,7 +321,7 @@ class PostgresMembershipTests(unittest.TestCase):
                 legacy_payment(source,admin,ident,'welcome','SQLITE-MIGRATE-001')
                 expected=client.get('/api/account/me').json['user']['access_until']
             with self.app.app_context(),m.database() as connection:
-                for table in ['admin_notification_members','member_archive_events','member_archives','visitor_public_days','visitor_public_history','visitor_public_totals','visitor_sessions','visitor_devices','live_channel_thumbnails','community_likes','live_guest_invites','live_broadcast_sessions','live_recordings','community_report_details','interface_revisions','adult_age_declarations','adult_channel_rules','live_channel_views','community_retention_clock','stripe_order_names','annual_access_emails','fan_aliases','stripe_reversals','stripe_events','stripe_orders','stripe_connect_states','stripe_accounts','ol_supervisors','ol_operations','moderator_permissions','two_factor_recovery','member_two_factor','community_audiences','creator_subscriptions','channel_subscription_settings','subscription_approvals','subscription_agreements','pricing_moderators','founder_slot_history','live_launch','creator_daily_activity','founder_activity','live_entitlements','human_challenges','promotion_metrics','founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:connection.execute('DELETE FROM '+table)
+                for table in ['founder_ownership','member_name_history','member_identity_links','admin_notification_members','member_archive_events','member_archives','visitor_public_days','visitor_public_history','visitor_public_totals','visitor_sessions','visitor_devices','live_channel_thumbnails','community_likes','live_guest_invites','live_broadcast_sessions','live_recordings','community_report_details','interface_revisions','adult_age_declarations','adult_channel_rules','live_channel_views','community_retention_clock','stripe_order_names','annual_access_emails','fan_aliases','stripe_reversals','stripe_events','stripe_orders','stripe_connect_states','stripe_accounts','ol_supervisors','ol_operations','moderator_permissions','two_factor_recovery','member_two_factor','community_audiences','creator_subscriptions','channel_subscription_settings','subscription_approvals','subscription_agreements','pricing_moderators','founder_slot_history','live_launch','creator_daily_activity','founder_activity','live_entitlements','human_challenges','promotion_metrics','founder_signatures','live_founders','live_channel_settings','sticker_designs','member_rewards','admin_notifications','community_messages','streamer_channels','streamer_access','friend_access','payments','invitations','login_attempts','members']:connection.execute('DELETE FROM '+table)
             counts=migrate(Path(folder)/'members.sqlite3',self.app)
             self.assertEqual(counts['members'],2);self.assertEqual(counts['payments'],1)
             migrated=self.app.test_client()

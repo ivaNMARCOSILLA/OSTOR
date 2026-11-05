@@ -1,0 +1,7 @@
+/* A visible home-page photograph, also used by search and link previews. */
+.search-brand-image{display:grid;grid-template-columns:minmax(0,280px) minmax(0,1fr);align-items:center;gap:24px;max-width:780px;margin:24px auto;padding:14px;border:1px solid #b7995c66;border-radius:20px;background:#101010;color:#f2e8cf;overflow:hidden}
+.search-brand-image img{display:block;width:100%;height:auto;aspect-ratio:3/2;border-radius:12px}
+.search-brand-image figcaption{display:grid;gap:10px;min-width:0;padding:8px 10px;line-height:1.5;overflow-wrap:anywhere}
+.search-brand-image figcaption strong{color:#e7c98d;font-size:clamp(20px,3vw,28px);letter-spacing:-.02em}
+.search-brand-image figcaption span{color:#d5d5d5;font-size:15px}
+@media(max-width:600px){.search-brand-image{grid-template-columns:minmax(0,1fr);gap:8px;padding:10px;margin:20px 0}.search-brand-image figcaption{padding:8px 6px}.search-brand-image figcaption strong{font-size:22px}}

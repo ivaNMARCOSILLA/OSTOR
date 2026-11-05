@@ -174,6 +174,9 @@ def delete_unpaid_member(conn, member_id, actor_id=None):
 
     conn.execute('SAVEPOINT delete_unpaid_account')
     try:
+        if {'founder_ownership', 'live_founders'} <= tables:
+            from founder_slots import seed_ownership
+            seed_ownership(conn)
         if 'stripe_orders' in tables:
             for table in ('stripe_order_context', 'stripe_order_names', 'annual_access_emails'):
                 delete(table, 'order_id IN (SELECT id FROM stripe_orders WHERE '+scope+')', scope_args)
