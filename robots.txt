@@ -1,5 +1,9 @@
 User-agent: *
 Allow: /assets/
+Allow: /api/locale$
+Allow: /api/status$
+Allow: /api/search$
+Allow: /api/search?
 Disallow: /api/
 
 Sitemap: https://electronicama.com/sitemap.xml

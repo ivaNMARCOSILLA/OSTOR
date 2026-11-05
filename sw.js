@@ -1,7 +1,7 @@
-/* ELECTRONICAMA PRO 9.29.5 · caché de interfaz, NO de música ni APIs.
+/* ELECTRONICAMA PRO 9.29.6 · caché de interfaz, NO de música ni APIs.
    © 2026 Iván Marcos Illa, edición de esta aplicación. */
-const CACHE = 'electronicama-shell-v9-29-5';
-const STATIC = ['/assets/botanical-interface.css?v=9.29.5', '/assets/botanical-interface.js?v=9.29.5', '/assets/botanical-flower.svg', '/assets/mobile-shell.css?v=9.29.5', '/assets/mobile-shell.js?v=9.29.5', '/assets/platform-theme.css?v=9.29.5', '/assets/session.js?v=9.29.5', '/assets/styles.css?v=9.29.5', '/assets/ol-theme.css?v=9.29.5', '/assets/app.js?v=9.29.5', '/manifest.webmanifest', '/assets/favicon.svg', '/assets/app-icon-192.png'];
+const CACHE = 'electronicama-shell-v9-29-6';
+const STATIC = ['/assets/botanical-interface.css?v=9.29.6', '/assets/botanical-interface.js?v=9.29.6', '/assets/botanical-flower.svg', '/assets/mobile-shell.css?v=9.29.6', '/assets/mobile-shell.js?v=9.29.6', '/assets/platform-theme.css?v=9.29.6', '/assets/session.js?v=9.29.6', '/assets/styles.css?v=9.29.6', '/assets/ol-theme.css?v=9.29.6', '/assets/app.js?v=9.29.6', '/manifest.webmanifest', '/assets/favicon.svg', '/assets/app-icon-192.png'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(STATIC)).then(() => self.skipWaiting()));
 });

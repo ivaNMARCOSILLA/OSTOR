@@ -100,7 +100,7 @@ let floresAliasRevision=0;
 async function loadFloresStreamAlias(){
  const revision=++floresAliasRevision;
  try{
-  const [data,{streamHonor}]=await Promise.all([api('/api/streamers/admin/flores-alias'),import('/assets/stream-honor.js?v=9.29.5')]);
+  const [data,{streamHonor}]=await Promise.all([api('/api/streamers/admin/flores-alias'),import('/assets/stream-honor.js?v=9.29.6')]);
   if(revision!==floresAliasRevision||current?.role!=='admin')return;
   const container=$('flores-stream-alias-badge'),honor=streamHonor(data.stream_alias);container.replaceChildren();if(honor)container.append(honor);
   if(data.account)$('flores-stream-alias-description').textContent='Apodo de triunfador en el directo de '+data.account.display_name+' (@'+data.account.username+').';
@@ -409,7 +409,7 @@ async function refreshAdminImages(force=false){
  emblemRefreshPending=true;emblemRefreshForce=emblemRefreshForce||force;
  if(emblemRefreshBusy)return;
  const requestedForce=emblemRefreshForce;emblemRefreshForce=false;emblemRefreshPending=false;emblemRefreshBusy=true;paintAdminRefresh();
- try{const {refreshAdminEmblems}=await import('/assets/admin-emblems.js?v=9.29.5');const result=await refreshAdminEmblems({force:requestedForce});adminImageFailed=result.failed||0;}
+ try{const {refreshAdminEmblems}=await import('/assets/admin-emblems.js?v=9.29.6');const result=await refreshAdminEmblems({force:requestedForce});adminImageFailed=result.failed||0;}
  catch{adminImageFailed=1;}
  finally{emblemRefreshBusy=false;paintAdminRefresh();if(emblemRefreshPending&&!document.hidden)queueMicrotask(()=>refreshAdminImages(emblemRefreshForce));}
 }

@@ -31,7 +31,7 @@ app = Flask(__name__, static_folder=os.path.join(ROOT, "assets"), static_url_pat
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 app.logger.setLevel(logging.INFO)
 
-VERSION = "9.29.5"
+VERSION = "9.29.6"
 AUDIUS_APP_NAME = os.getenv("AUDIUS_APP_NAME", "electronicama")
 SEARCH_CACHE_SECONDS = max(15, min(int(os.getenv("SEARCH_CACHE_SECONDS", "300")), 3600))
 ARCHIVE_CACHE_SECONDS = max(60, min(int(os.getenv("ARCHIVE_CACHE_SECONDS", "3600")), 86400))
@@ -469,6 +469,7 @@ def response_headers(response):
         response.headers["Cache-Control"] = "public, max-age=3600"
     elif request.path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Robots-Tag"] = "noindex"
     elif request.path == "/":
         response.headers["Cache-Control"] = "no-store"
     return response
