@@ -1,0 +1,13 @@
+/* Small botanical separators occupy their own row, outside interactive panels. */
+.botanical-interface{display:flex;align-items:center;justify-content:flex-end;gap:10px;box-sizing:border-box;min-width:0;max-width:100%;height:36px;max-height:40px;margin:0 12px 8px;padding:2px 0;overflow:hidden;pointer-events:none;user-select:none;line-height:0}
+.botanical-interface .botanical-flower{display:block;flex:0 1 24px;min-width:0;width:24px;height:32px;max-width:100%;max-height:100%;margin:0;padding:0;border:0;border-radius:0;background:none;object-fit:contain;opacity:1}
+.botanical-interface .botanical-flower-rose{filter:sepia(.12) saturate(.8) hue-rotate(330deg);opacity:.9}
+.botanical-caption-host{display:flex!important;align-items:center;justify-content:space-between;gap:10px;min-width:0}
+.botanical-interface.botanical-interface-inline{display:inline-flex;flex:none;width:auto;height:22px;max-height:22px;margin:0;padding:0;gap:6px}
+.botanical-interface-inline .botanical-flower{flex-basis:15px;width:15px;height:22px}
+@media(max-width:800px){
+ .botanical-interface{height:26px;max-height:28px;margin:0 8px 6px;gap:8px;padding:1px 0}
+ .botanical-interface .botanical-flower{flex-basis:16px;width:16px;height:24px}
+ .botanical-interface.botanical-interface-inline{height:22px;max-height:22px;gap:5px}
+ .botanical-interface-inline .botanical-flower{flex-basis:15px;width:15px;height:22px}
+}

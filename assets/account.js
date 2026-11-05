@@ -83,7 +83,7 @@ let floresAliasRevision=0;
 async function loadFloresStreamAlias(){
  const revision=++floresAliasRevision;
  try{
-  const [data,{streamHonor}]=await Promise.all([api('/api/streamers/admin/flores-alias'),import('/assets/stream-honor.js?v=9.29.1')]);
+  const [data,{streamHonor}]=await Promise.all([api('/api/streamers/admin/flores-alias'),import('/assets/stream-honor.js?v=9.29.2')]);
   if(revision!==floresAliasRevision||current?.role!=='admin')return;
   const container=$('flores-stream-alias-badge'),honor=streamHonor(data.stream_alias);container.replaceChildren();if(honor)container.append(honor);
   const link=$('flores-stream-alias-link');link.hidden=!data.channel||Boolean(data.account?.archived);

@@ -304,6 +304,16 @@ body.electronicama-theme .live-screen-source select{width:100%;max-width:100%;mi
 #flores-stream-alias-admin{border-top-color:#c5a76a;background:radial-gradient(ellipse at 95% 5%,#826b3020,transparent 55%),#0c0b09}
 .live-stage-heading{min-width:0}.live-stage-heading #stage-stream-alias{margin:6px 0 0}.live-stage-heading #stage-stream-alias[hidden]{display:none}#live-comments .stream-honor{margin:4px 4px 4px 0;padding:3px 7px;font-size:11px}
 
-/* Natural flowers inspire the shared visual accent, independently of accounts. */
-body.electronicama-theme h1::after{content:"";display:inline-block;width:36px;height:54px;margin-left:12px;vertical-align:middle;background:url('/assets/botanical-bloom.svg') center/contain no-repeat;opacity:.82;pointer-events:none}
-@media(max-width:600px){body.electronicama-theme h1::after{width:27px;height:41px;margin-left:8px}}
+/* Entry copy has its own baseline; ornaments use separate reserved spaces. */
+.entry-heading{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px}
+.entry-heading .entry-motto{color:#dfd2b8;font-size:.57em;line-height:1.35;letter-spacing:.01em;font-weight:500}
+.live-stage-heading{flex:1 1 auto;min-width:0}
+@media(max-width:800px){
+ body.electronicama-theme #live-stage>.heading{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 10px}
+ body.electronicama-theme #live-stage>.heading .live-stage-heading{grid-column:1/-1;display:flex;align-items:center;gap:6px 10px;min-width:0}
+ body.electronicama-theme #stage-title{min-width:0;margin:0;flex:1 1 auto}
+ body.electronicama-theme #stage-stream-alias{flex:0 1 auto;min-width:0;max-width:60%;margin:0}
+ body.electronicama-theme #live-stage>.heading button{min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere}
+ body.electronicama-theme #mobile-live-controls{justify-self:start}
+ body.electronicama-theme #leave-room{justify-self:end}
+}
