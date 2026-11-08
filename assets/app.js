@@ -8,7 +8,7 @@
 await window.MaggySession.ready;
 const storageKey = name => window.MaggySession ? window.MaggySession.key(name) : name;
 
-const VERSION = '9.9.4';
+const VERSION = '9.29.7';
 const KEY = Object.freeze({ favorites: storageKey('electronicama_v7_favorites'), history: storageKey('electronicama_v7_history'), ads: storageKey('electronicama_ads_consent_v1') });
 const MAX_FAVORITES = 160;
 const MAX_HISTORY = 75;
@@ -16,15 +16,18 @@ const SEARCH_TARGET = 120;
 const AUTO_SEARCH_PAGES = 4;
 const SOURCE_NAMES = { YOUTUBE: 'YOUTUBE · VÍDEO', AUDIUS: 'AUDIUS', ARCHIVE: 'ARCHIVE', COMMONS: 'MEZCLA · COMMONS', RADIO: 'MEZCLA · RADIO EN DIRECTO' };
 const byId = id => document.getElementById(id);
+const renderedText=new WeakMap(),trackCardState=new WeakMap();
+function quietText(node,value){value=String(value);if(node&&renderedText.get(node)!==value){node.textContent=value;renderedText.set(node,value);}}
 
 const supportedTrack = track => ['ARCHIVE', 'AUDIUS', 'COMMONS', 'RADIO', 'YOUTUBE'].includes(track?.source) && (track.source !== 'YOUTUBE' || /^[A-Za-z0-9_-]{11}$/.test(track.video_id || track.id?.slice(8)));
 
 const state = {
-  view: 'discover', source: 'ALL', query: 'electronic music', page: 1,
+  view: 'discover', source: 'ALL', query: 'pop español', page: 1,
   results: [], favorites: readList(KEY.favorites), history: readList(KEY.history),
   mixResults: [], mixQuery: 'piano', mixPage: 1, mixLoading: false, mixRequest: null, mixLoaded: false,
   loading: false, request: null, currentTrack: null, queue: [], currentIndex: -1,
-  audio: null, youtube: null, youtubeReady:false, youtubeLoading:false, playSerial: 0
+  audio: null, youtube: null, youtubeReady:false, youtubeLoading:false, playSerial: 0,
+  youtubeFallbackQuery: '', youtubeFallbackRevision: 0
 };
 
 function readList(key) {
@@ -43,8 +46,8 @@ function filteredTracks() {
   return state.source === 'ALL' ? available : available.filter(track => track.source === state.source);
 }
 function isFavorite(id) { return state.favorites.some(track => track.id === id); }
-function message(text) { byId('result-status').textContent = text; }
-function setStatus(text) { byId('player-message').textContent = text || ''; }
+function message(text) { quietText(byId('result-status'),text); }
+function setStatus(text) { quietText(byId('player-message'),text || ''); }
 function emptyNode(tag, className, text) { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = String(text); return node; }
 function compactTrack(track) {
   const result = {};
@@ -85,22 +88,23 @@ function cover(src, alt) {
 }
 function trackCard(track, list) {
   const card = emptyNode('article', 'track-card');
+  const entry={track,list,signature:JSON.stringify(compactTrack(track))};
   const main = emptyNode('button', 'cover-button'); main.type = 'button';
   main.setAttribute('aria-label', `${window.MaggySession?.active === false ? 'Desbloquear' : 'Reproducir'} ${track.title} de ${track.channel || 'artista desconocido'}`);
   main.append(cover(track.thumbnail, `Portada de ${track.title}`), emptyNode('span', 'play-overlay', window.MaggySession?.active === false ? '🔒' : '▶'));
-  main.addEventListener('click', () => playTrack(track, list));
+  main.addEventListener('click', () => playTrack(entry.track, entry.list));
   const details = emptyNode('div', 'track-body');
   const top = emptyNode('div', 'track-top');
   top.append(emptyNode('span', 'source-tag', SOURCE_NAMES[track.source] || 'MÚSICA'));
   const fav = emptyNode('button', `save-button${isFavorite(track.id) ? ' saved' : ''}`, window.MaggySession?.active === false ? '🔒' : isFavorite(track.id) ? '♥' : '♡');
   fav.type = 'button'; fav.title = 'Guardar / quitar de favoritos';
   fav.setAttribute('aria-label', isFavorite(track.id) ? `Quitar ${track.title} de favoritos` : `Guardar ${track.title} en favoritos`);
-  fav.addEventListener('click', () => toggleFavorite(track));
+  fav.addEventListener('click', () => toggleFavorite(entry.track));
   top.append(fav);
   if (safeImage(track.url)) { const link = emptyNode('a', 'track-origin', 'Fuente ↗'); link.href = safeImage(track.url); link.target = '_blank'; link.rel = 'noopener noreferrer'; details.append(link); }
   const title = emptyNode('button', 'track-title', track.title);
   title.type = 'button'; title.title = track.title;
-  title.addEventListener('click', () => playTrack(track, list));
+  title.addEventListener('click', () => playTrack(entry.track, entry.list));
   const artist = emptyNode('p', 'track-artist', track.channel || 'Artista desconocido');
   details.append(top, title, artist);
   if (['COMMONS', 'RADIO'].includes(track.source)) {
@@ -113,31 +117,53 @@ function trackCard(track, list) {
     details.append(credit);
   }
   card.append(main, details);
+  trackCardState.set(card,entry);
   return card;
+}
+function syncTrackCards(grid,list){
+  const existing=new Map();
+  for(const node of grid.children){const entry=trackCardState.get(node);if(entry)existing.set(entry.track.source+':'+entry.track.id,node);}
+  let cursor=grid.firstChild;
+  for(const track of list){
+    let card=existing.get(track.source+':'+track.id),entry=card&&trackCardState.get(card);
+    if(!entry||entry.signature!==JSON.stringify(compactTrack(track))){card=trackCard(track,list);entry=trackCardState.get(card);}
+    else{
+      entry.track=track;entry.list=list;
+      const favorite=isFavorite(track.id),button=card.querySelector('.save-button');
+      button.classList.toggle('saved',favorite);quietText(button,favorite?'♥':'♡');
+      const label=favorite?`Quitar ${track.title} de favoritos`:`Guardar ${track.title} en favoritos`;
+      if(button.getAttribute('aria-label')!==label)button.setAttribute('aria-label',label);
+    }
+    if(card!==cursor)grid.insertBefore(card,cursor);
+    cursor=card.nextSibling;
+  }
+  while(cursor){const next=cursor.nextSibling;cursor.remove();cursor=next;}
+  delete grid.dataset.emptyKey;
 }
 function render() {
   if (window.MaggySession?.active === false && state.view !== 'discover') state.view = 'discover';
   document.querySelectorAll('[data-view]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.view===state.view)));
   const list = filteredTracks();
   const grid = byId('track-grid');
-  grid.replaceChildren();
   grid.classList.toggle('mix-list', state.source === 'MIX');
   byId('mix-intro').classList.toggle('hidden', state.source !== 'MIX');
   byId('play-mix').disabled = list.length === 0;
   const titles = {
-    discover: ['Explora el ', 'sonido', 'Explora los sonidos que marcan tu ritmo.'],
-    favorites: ['Tus ', 'favoritos', 'Guardados únicamente en este navegador.'],
-    history: ['Tu ', 'historial', 'Tu música escuchada recientemente.']
+    discover: ['Descubre tu ', 'música', 'Temas de siempre y nuevas historias por escuchar.'],
+    favorites: ['Tus ', 'favoritos', 'Conservados solo en este navegador.'],
+    history: ['Tu ', 'historial', 'Tus escuchas más recientes.']
   };
   const [first, emph, subtitle] = state.view === 'discover' && state.source === 'MIX' ? ['TU ', 'MEZCLA', 'Otras fuentes: grabaciones libres y radios en directo · solo audio.'] : titles[state.view];
   const heading = byId('section-title');
-  heading.replaceChildren(document.createTextNode(first), emptyNode('em', '', emph));
-  byId('section-subtitle').textContent = subtitle;
-  byId('results-meta').textContent = `${list.length} ${list.length === 1 ? 'PISTA' : 'PISTAS'}`;
+  const headingKey=first+'|'+emph;
+  if(heading.dataset.renderedTitle!==headingKey){heading.replaceChildren(document.createTextNode(first), emptyNode('em', '', emph));heading.dataset.renderedTitle=headingKey;}
+  quietText(byId('section-subtitle'),subtitle);
+  quietText(byId('results-meta'),`${list.length} ${list.length === 1 ? 'PISTA' : 'PISTAS'}`);
   byId('clear-history').classList.toggle('hidden', state.view !== 'history' || state.history.length === 0);
   byId('quick-searches').classList.toggle('hidden', state.view !== 'discover');
   byId('quick-style-picker').classList.toggle('hidden',state.view!=='discover');
   byId('hero').classList.toggle('hidden', state.view !== 'discover');
+  byId('music-memory')?.classList.toggle('hidden', state.view !== 'discover');
   document.querySelectorAll('[data-view]').forEach(button => {
     button.classList.toggle('active', button.dataset.view === state.view);
   });
@@ -146,15 +172,18 @@ function render() {
     button.setAttribute('aria-pressed', String(button.dataset.source === state.source));
   });
   byId('result-status').classList.toggle('hidden', state.source === 'MIX');
+  const fallback=byId('youtube-search-fallback');
+  if(fallback){const visible=state.view==='discover'&&state.source==='YOUTUBE'&&state.youtubeFallbackQuery===state.query;fallback.hidden=!visible;if(visible)fallback.href='https://www.youtube.com/results?search_query='+encodeURIComponent(state.query);}
   if (!list.length && !(state.source === 'MIX' ? state.mixLoading : state.loading)) {
-    const empty = emptyNode('div', 'empty-state');
-    const title = state.view === 'favorites' ? 'TODAVÍA NO HAY FAVORITOS' : state.view === 'history' ? 'TODAVÍA NO HAY HISTORIAL' : 'SIN RESULTADOS';
-    empty.append(emptyNode('strong', '', title), emptyNode('p', '', state.view === 'discover' ? 'Prueba con otro artista, canción o estilo.' : 'Elige una canción y vuelve aquí.'));
-    grid.append(empty);
+    const emptyKey=state.view+'|'+state.source;
+    if(grid.dataset.emptyKey!==emptyKey){
+      const empty = emptyNode('div', 'empty-state');
+      const title = state.view === 'favorites' ? 'TODAVÍA NO HAY FAVORITOS' : state.view === 'history' ? 'TODAVÍA NO HAY HISTORIAL' : 'SIN RESULTADOS';
+      empty.append(emptyNode('strong', '', title), emptyNode('p', '', state.view === 'discover' ? 'Busca otro intérprete, tema o género.' : 'Escoge una canción y regresa a este apartado.'));
+      grid.replaceChildren(empty);grid.dataset.emptyKey=emptyKey;
+    }
   } else {
-    const frag = document.createDocumentFragment();
-    for (const track of list) frag.append(trackCard(track, list));
-    grid.append(frag);
+    syncTrackCards(grid,list);
   }
   byId('load-more').classList.toggle('hidden', state.source === 'MIX' ? !list.length || state.mixPage >= 10 : state.view !== 'discover' || state.results.length === 0 || state.page >= (state.source==='YOUTUBE'?3:10));
   if (state.source === 'MIX') byId('load-more').disabled = state.mixLoading;
@@ -165,18 +194,24 @@ function closeMobileMenu(){
   byId('mobile-menu').setAttribute('aria-label','Abrir menú de navegación');
   byId('mobile-menu-label').textContent='Menú';
 }
+function clearYouTubeSearchFallback(){
+  state.youtubeFallbackRevision++;state.youtubeFallbackQuery='';
+  const fallback=byId('youtube-search-fallback');if(fallback)fallback.hidden=true;
+}
 function goView(view) {
   if (!['discover', 'favorites', 'history'].includes(view)) return;
   if (view !== 'discover' && window.MaggySession && !window.MaggySession.requireAccess()) return;
+  if(view!==state.view)clearYouTubeSearchFallback();
   state.view = view;
   if (view !== 'discover' && state.source === 'MIX') state.source = 'ALL';
   closeMobileMenu();
-  message(view === 'favorites' ? 'Tus canciones guardadas en este dispositivo.' : view === 'history' ? 'Las últimas canciones que has escuchado.' : `Explorando: ${state.query}`);
+  message(view === 'favorites' ? 'Las canciones que conservas en este dispositivo.' : view === 'history' ? 'Tus reproducciones más recientes.' : `Explorando: ${state.query}`);
   render();
   byId('library').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 const searchMemory = new Map();
 async function requestSearch(query, append = false) {
+  clearYouTubeSearchFallback();const fallbackRevision=state.youtubeFallbackRevision;
   if (state.source === 'MIX') return requestMixSearch(query, append);
   query = String(query || '').trim().replace(/\s+/g, ' ').slice(0, 90);
   if (!query) { message('Escribe un artista o una canción.'); return; }
@@ -225,12 +260,13 @@ async function requestSearch(query, append = false) {
   if (!youtubeOnly && state.results.length < SEARCH_TARGET && received > 0 && !failures && state.page < AUTO_SEARCH_PAGES) {
     state.page += 1; return requestSearch(query, true);
   }
-  if(youtubeOnly){message(failures?providerError:`${state.results.length} vídeos de YouTube para «${query}». ${state.page<3?'Pulsa Cargar más para ampliar la búsqueda.':'Fin de las páginas disponibles en esta búsqueda.'}`);render();return;}
+  if(youtubeOnly){if(fallbackRevision===state.youtubeFallbackRevision&&state.view==='discover'&&state.source==='YOUTUBE'&&state.query===query&&(failures||state.results.length===0))state.youtubeFallbackQuery=query;message(failures?providerError:`${state.results.length} vídeos de YouTube para «${query}». ${state.page<3?'Pulsa Cargar más para ampliar la búsqueda.':'Fin de las páginas disponibles en esta búsqueda.'}`);render();return;}
   message(`${state.results.length} resultados para «${query}»${failures ? '. Una plataforma no respondió; puedes volver a buscar.' : state.results.length < SEARCH_TARGET ? '. No se han encontrado 120 resultados disponibles; puedes ampliar la búsqueda.' : ''}`);
   render();
 }
 
 async function requestMixSearch(query = 'piano', append = false) {
+  clearYouTubeSearchFallback();
   query = String(query).trim().replace(/\s+/g, ' ').slice(0, 90);
   if (!query) return;
   state.mixRequest?.abort();
@@ -294,6 +330,8 @@ function updateMediaPosition() {
 }
 function destroyMedia() {
   clearTimeout(nativeWatchdog);
+  window.OlRadioVisualizer?.setMedia(null);
+  window.OlRadioVisualizer?.setPlayback({playing:false,source:'AUDIO'});
   state.youtubeReady=false;state.youtubeLoading=false;
   if(state.youtube){state.youtube.destroy();state.youtube=null;}
   byId('player').classList.remove('youtube-mode');
@@ -314,6 +352,7 @@ function playTrack(track, queue = filteredTracks()) {
   if(track.source==='YOUTUBE'||state.youtube||state.youtubeLoading)destroyMedia();
   state.audio?.pause();
   state.currentTrack = track;
+  window.OlRadioVisualizer?.setPlayback({playing:false,source:track.source==='YOUTUBE'?'YOUTUBE':'AUDIO'});
   state.queue = queue.filter(supportedTrack);
   state.currentIndex = Math.max(0, state.queue.findIndex(x => x.id === track.id));
   byId('player').classList.remove('hidden');
@@ -369,13 +408,13 @@ async function startYouTube(track,serial){
     byId('toggle-play').textContent=playing?'Ⅱ':'▶';byId('toggle-play').setAttribute('aria-label',playing?'Pausar':'Reproducir');
     if(playing){rememberTrack(track);setStatus('Reproduciendo en YouTube');mediaSessionPlayback('playing');updateMediaPosition();}
     else if(event.data===2){setStatus('YouTube en pausa. Usa ▶ o los controles multimedia para reanudar si el navegador lo permite.');mediaSessionPlayback('paused');updateMediaPosition();}
-    else if(event.data===3)setStatus('Cargando vídeo…');
+    else if(event.data===3){window.OlRadioVisualizer?.setPlayback({playing:false,source:'YOUTUBE'});setStatus('Cargando vídeo…');}
     else if(event.data===0){mediaSessionPlayback('none');const expired=sleepDeadline&&Date.now()>=sleepDeadline;updateSleepTimer();if(!expired)playNext();}
    },
    onAutoplayBlocked:()=>{if(serial===state.playSerial){traceYouTube('El navegador ha bloqueado el inicio automático.');mediaSessionPlayback('paused');setStatus('Pulsa ▶ directamente en el vídeo para empezar.');}},
    onError:event=>{if(serial!==state.playSerial)return;state.youtubeLoading=false;traceYouTube('Error del reproductor: '+String(event.data));mediaSessionPlayback('paused');setStatus([101,150].includes(event.data)?'El creador no permite reproducir este vídeo aquí. Usa «Abrir este vídeo en YouTube».':event.data===100?'Vídeo retirado o privado. Elige otro o ábrelo en YouTube.':event.data===153?'YouTube no reconoce este navegador. Abre el vídeo en YouTube o prueba otro navegador.':'Este vídeo no se puede reproducir aquí. Usa el enlace a YouTube o elige otro.');}
   }});
- }catch(error){if(serial===state.playSerial){state.youtubeLoading=false;traceYouTube('No se pudo preparar YouTube: '+error.message);setStatus(error.message);}}
+ }catch(error){if(serial===state.playSerial){state.youtubeLoading=false;window.OlRadioVisualizer?.setPlayback({playing:false,source:'YOUTUBE'});traceYouTube('No se pudo preparar YouTube: '+error.message);setStatus(error.message);}}
 }
 // Keep the real browser visibility state. Only explicit controls and the sleep timer request a pause.
 const youtubeTrace=[];
@@ -413,8 +452,8 @@ function startAudio(url) {
       if (state.currentTrack) rememberTrack(state.currentTrack);
       setStatus('Reproduciendo'); mediaSessionPlayback('playing');
     });
-    audio.addEventListener('waiting', () => {if(state.audio!==audio)return;setStatus('Cargando audio…');watchNativeAudio(audio);});
-    audio.addEventListener('stalled',()=>watchNativeAudio(audio));
+    audio.addEventListener('waiting', () => {if(state.audio!==audio)return;window.OlRadioVisualizer?.setPlayback({playing:false,source:'AUDIO'});setStatus('Cargando audio…');watchNativeAudio(audio);});
+    audio.addEventListener('stalled',()=>{if(state.audio===audio)window.OlRadioVisualizer?.setPlayback({playing:false,source:'AUDIO'});watchNativeAudio(audio);});
     audio.addEventListener('pause', () => {
       if(state.audio!==audio)return;
       clearTimeout(nativeWatchdog);
@@ -426,11 +465,13 @@ function startAudio(url) {
     byId('player-media').replaceChildren(audio);
   }
   state.audioRetries = 0;
+  window.OlRadioVisualizer?.setMedia(audio);
   audio.src = url;
   setupPlaybackMediaSession(state.currentTrack);
   audio.play().catch(playbackRejected);watchNativeAudio(audio);
 }
 function playbackRejected(error) {
+  window.OlRadioVisualizer?.setPlayback({playing:false,source:state.currentTrack?.source==='YOUTUBE'?'YOUTUBE':'AUDIO'});
   if (error.name === 'NotAllowedError') setStatus('El navegador necesita tu permiso: pulsa ▶ para escuchar.');
   else if(!['AbortError','NotSupportedError'].includes(error.name))setStatus('No se pudo iniciar el audio. Pulsa ▶ para reintentar.');
   // AbortError is expected when switching tracks quickly; media errors retry above.
@@ -447,6 +488,7 @@ function setCompactPlayer(compact){
  if(compact){byId('player').classList.remove('expanded');byId('player-expand').setAttribute('aria-expanded','false');byId('player-expand').textContent='Ampliar reproductor ↑';}
 }
 function mediaSessionPlayback(value) {
+  window.OlRadioVisualizer?.setPlayback({playing:value==='playing',source:state.currentTrack?.source==='YOUTUBE'?'YOUTUBE':'AUDIO'});
   if (!('mediaSession' in navigator)) return;
   try { navigator.mediaSession.playbackState = value; } catch { /* no compatible */ }
 }
@@ -504,9 +546,10 @@ function consentInit(){let stored=null;try{stored=localStorage.getItem('electron
 function init() {
   byId('favorites-count').textContent = String(state.favorites.filter(supportedTrack).length);
   document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => goView(button.dataset.view)));
-  document.querySelectorAll('[data-source]').forEach(button => button.addEventListener('click', () => { const previous=state.source;state.source = button.dataset.source; if (state.source === 'MIX') { state.view = 'discover'; if (!state.mixLoaded && !state.mixLoading) requestMixSearch(state.mixQuery); } else if(state.view==='discover'&&(state.source==='YOUTUBE'||previous==='YOUTUBE')){requestSearch(state.query);} render(); }));
+  document.querySelectorAll('[data-source]').forEach(button => button.addEventListener('click', () => { clearYouTubeSearchFallback();const previous=state.source;state.source = button.dataset.source; if (state.source === 'MIX') { state.view = 'discover'; if (!state.mixLoaded && !state.mixLoading) requestMixSearch(state.mixQuery); } else if(state.view==='discover'&&(state.source==='YOUTUBE'||previous==='YOUTUBE')){requestSearch(state.query);} render(); }));
   document.querySelectorAll('[data-query]').forEach(button => button.addEventListener('click', () => {
     byId('library').scrollIntoView({ behavior: 'smooth' });
+    if(button.dataset.searchSource==='YOUTUBE')state.source='YOUTUBE';
     requestSearch(button.dataset.query);
   }));
   byId('mobile-menu').addEventListener('click', () => {

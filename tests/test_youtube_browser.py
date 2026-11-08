@@ -58,6 +58,10 @@ def run():
   racing=context.new_page();pending=[];racing.route('https://www.youtube.com/iframe_api',lambda r:pending.append(r));racing.goto(BASE_URL+'/')
   if racing.locator('#consent-dialog').is_visible():racing.locator('#consent-decline').click()
   racing.locator('[data-source="YOUTUBE"]').click();racing.wait_for_function("document.querySelector('.track-title')?.textContent==='Piano video'");racing.locator('.cover-button').first.click();racing.wait_for_timeout(100)
+  # Scroll the catalogue into the strip above the fixed mobile player before
+  # switching sources; the delayed provider request must remain in flight.
+  racing.evaluate("""()=>{const button=document.querySelector('[data-source="ALL"]'),header=document.querySelector('.topbar');window.scrollBy({top:button.getBoundingClientRect().top-header.getBoundingClientRect().bottom-8,behavior:'instant'});}""")
+  racing.wait_for_function("""()=>{const button=document.querySelector('[data-source="ALL"]').getBoundingClientRect(),header=document.querySelector('.topbar').getBoundingClientRect(),player=document.querySelector('#player').getBoundingClientRect();return button.top>=header.bottom&&button.bottom<=player.top;}""")
   racing.locator('[data-source="ALL"]').click();racing.wait_for_function("document.querySelector('.track-title')?.textContent==='Native audio'");racing.locator('.cover-button').first.click();racing.wait_for_function("document.querySelector('audio')?.currentTime>0")
   for request in pending:request.fulfill(body=FAKE_API,content_type='application/javascript')
   racing.wait_for_timeout(100);assert racing.locator('iframe').count()==0;assert racing.locator('#player-title').inner_text()=='Native audio'

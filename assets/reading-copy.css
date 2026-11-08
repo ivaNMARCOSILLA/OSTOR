@@ -1,0 +1,4 @@
+/* Paragraph boundaries stay visible inside legacy notices and compact panels. */
+p.copy-paragraph{white-space:normal;overflow-wrap:break-word}
+p.copy-paragraph+p.copy-paragraph{margin-block-start:.85em!important}
+@media print{p.copy-paragraph+p.copy-paragraph{margin-block-start:9pt!important}}

@@ -8,6 +8,10 @@
  const PUBLIC_REFRESH_MS=3000,REQUEST_TIMEOUT_MS=8000;
  let csrf='',allowed=preference()==='accepted'&&!privacySignal(),active=null,generation=0,lastAccount,identityReady=false;
  let publicBusy=false,publicQueued=false,publicTimer=null,publicController=null,writeRevision=0,historyPage=1,lastPublicTotal=null;
+ let historyRows=new Map(),recentRows=new Map();
+ const desiredText=new WeakMap();
+ const setText=(node,value)=>{if(desiredText.get(node)===value)return;desiredText.set(node,value);if(node.textContent!==value)node.textContent=value;};
+ function placeRows(parent,rows){let cursor=parent.firstElementChild;for(const row of rows){if(row===cursor)cursor=cursor.nextElementSibling;else parent.insertBefore(row,cursor);}while(cursor){const next=cursor.nextElementSibling;cursor.remove();cursor=next;}}
  const t=text=>window.OlLocale?.t(text)||text;
  async function fetchJson(path,options={},controller=new AbortController()){
   const deadline=setTimeout(()=>controller.abort(),REQUEST_TIMEOUT_MS);
@@ -52,9 +56,10 @@
   const origin=since.toISOString();
   if(lastPublicTotal?.since===origin&&total<lastPublicTotal.sessions)return false;
   lastPublicTotal={sessions:total,since:origin};
-  const locale=document.documentElement.lang||'es',value=document.createElement('strong'),caption=document.createElement('span');
-  value.className='public-visit-total';value.textContent=new Intl.NumberFormat(locale).format(total);caption.textContent=t(total===1?'entrada acumulada':'entradas acumuladas');count.replaceChildren(value,caption);
-  document.getElementById('public-visit-since').textContent=`${t('Desde el')} ${new Intl.DateTimeFormat(locale,{timeZone:'Europe/Madrid',dateStyle:'long'}).format(since)} · ${t('total compartido entre dispositivos')}`;
+  const locale=document.documentElement.lang||'es';let value=count.querySelector('.public-visit-total'),caption=count.querySelector('.public-visit-caption');
+  if(!value||!caption){value=document.createElement('strong');caption=document.createElement('span');value.className='public-visit-total';caption.className='public-visit-caption';count.replaceChildren(value,caption);}
+  setText(value,new Intl.NumberFormat(locale).format(total));setText(caption,t(total===1?'entrada acumulada':'entradas acumuladas'));
+  setText(document.getElementById('public-visit-since'),`${t('Desde el')} ${new Intl.DateTimeFormat(locale,{timeZone:'Europe/Madrid',dateStyle:'long'}).format(since)} · ${t('total compartido entre dispositivos')}`);
   return true;
  }
  function renderHistory(history){
@@ -62,24 +67,36 @@
   if(!Array.isArray(history.days)||!Number.isSafeInteger(history.page)||!Number.isSafeInteger(history.pages))throw Error('Invalid history');
   const locale=document.documentElement.lang||'es',number=new Intl.NumberFormat(locale),date=new Intl.DateTimeFormat(locale,{timeZone:'Europe/Madrid',day:'numeric',month:'short',year:'numeric'});
   const maximum=Math.max(1,...history.days.map(day=>Number.isSafeInteger(day.sessions)?day.sessions:0));
-  const rows=document.createDocumentFragment();
+  for(const day of history.days)if(!/^\d{4}-\d{2}-\d{2}$/.test(day.day)||!(day.sessions===null||Number.isSafeInteger(day.sessions)&&day.sessions>=0))throw Error('Invalid day');
+  const nextRows=new Map(),rows=[];
   for(const day of history.days){
-   if(!/^\d{4}-\d{2}-\d{2}$/.test(day.day)||!(day.sessions===null||Number.isSafeInteger(day.sessions)&&day.sessions>=0))throw Error('Invalid day');
-   const row=document.createElement('tr'),when=document.createElement('th'),time=document.createElement('time'),value=document.createElement('td'),label=document.createElement('span');
-   when.scope='row';time.dateTime=day.day;time.textContent=date.format(new Date(day.day+'T12:00:00+00:00'));when.append(time);
-   label.textContent=day.sessions===null?t('Sin datos disponibles'):day.complete?number.format(day.sessions):`${t('Al menos')} ${number.format(day.sessions)}`;
-   if(!day.complete){row.className='public-visit-partial';label.title=t('Desglose anterior incompleto');}
-   value.append(label);
-   if(day.sessions!==null){const bar=document.createElement('span'),fill=document.createElement('span');bar.className='public-visit-day-bar';bar.setAttribute('aria-hidden','true');fill.style.width=(100*day.sessions/maximum)+'%';bar.append(fill);value.append(bar);}
-   row.append(when,value);rows.append(row);
+   let record=historyRows.get(day.day);
+   if(!record){const row=document.createElement('tr'),when=document.createElement('th'),time=document.createElement('time'),value=document.createElement('td'),label=document.createElement('span'),bar=document.createElement('span'),fill=document.createElement('span');when.scope='row';time.dateTime=day.day;when.append(time);bar.className='public-visit-day-bar';bar.setAttribute('aria-hidden','true');bar.append(fill);value.append(label);row.append(when,value);record={row,time,value,label,bar,fill};}
+   const {row,time,value,label,bar,fill}=record,partial=day.complete?'':'public-visit-partial';
+   if(row.className!==partial)row.className=partial;
+   setText(time,date.format(new Date(day.day+'T12:00:00+00:00')));
+   setText(label,day.sessions===null?t('Sin datos disponibles'):day.complete?number.format(day.sessions):`${t('Al menos')} ${number.format(day.sessions)}`);
+   const title=day.complete?'':t('Desglose anterior incompleto');if(label.title!==title)label.title=title;
+   if(day.sessions!==null){const width=(100*day.sessions/maximum)+'%';if(fill.style.width!==width)fill.style.width=width;if(bar.parentNode!==value)value.append(bar);}else if(bar.parentNode)bar.remove();
+   nextRows.set(day.day,record);rows.push(row);
   }
-  body.replaceChildren(rows);historyPage=history.page;
-  document.getElementById('public-visit-older').disabled=history.page>=history.pages;
-  document.getElementById('public-visit-newer').disabled=history.page<=1;
-  document.getElementById('public-visit-range').textContent=`${history.page} / ${history.pages}`;
-  const unassigned=document.getElementById('public-visit-unassigned');unassigned.hidden=!history.unassigned;
-  unassigned.textContent=history.unassigned?`${number.format(history.unassigned)} · ${t('entradas anteriores sin desglose diario')}`:'';
+  placeRows(body,rows);historyRows=nextRows;historyPage=history.page;
+  const older=document.getElementById('public-visit-older'),newer=document.getElementById('public-visit-newer');
+  if(older.disabled!==(history.page>=history.pages))older.disabled=history.page>=history.pages;
+  if(newer.disabled!==(history.page<=1))newer.disabled=history.page<=1;
+  setText(document.getElementById('public-visit-range'),`${history.page} / ${history.pages}`);
+  const unassigned=document.getElementById('public-visit-unassigned');if(unassigned.hidden!==!history.unassigned)unassigned.hidden=!history.unassigned;
+  setText(unassigned,history.unassigned?`${number.format(history.unassigned)} · ${t('entradas anteriores sin desglose diario')}`:'');
  }
+ function renderRecent(list,visits){
+  const labels={desktop:'Ordenador',mobile:'Móvil',tablet:'Tableta',bot:'Automatizado',unknown:'Sin identificar'},pages={'/':'Música','/live':'Ol Live','/account':'Cuenta','/legal/cookies.html':'Información legal','/legal/privacidad.html':'Información legal','/legal/aviso-legal.html':'Información legal'};
+  const nextRows=new Map(),rows=[],occurrences=new Map(),date=new Intl.DateTimeFormat(document.documentElement.lang||'es',{timeZone:'Europe/Madrid',hour:'2-digit',minute:'2-digit'});
+  for(const visit of visits){const base=JSON.stringify([visit.at,visit.page,visit.device]),number=occurrences.get(base)||0,key=base+':'+number;occurrences.set(base,number+1);let record=recentRows.get(key);if(!record){const row=document.createElement('li'),device=document.createElement('strong'),time=document.createElement('time'),where=document.createElement('span');time.dateTime=visit.at;row.append(device,where,time);record={row,device,time,where};}
+   setText(record.device,t(labels[visit.device]||visit.device||'Sin identificar'));setText(record.time,date.format(new Date(visit.at)));setText(record.where,t(pages[visit.page]||visit.page||'Web'));nextRows.set(key,record);rows.push(record.row);
+  }
+  placeRows(list,rows);recentRows=nextRows;
+ }
+
  function schedulePublic(delay=PUBLIC_REFRESH_MS){
   clearTimeout(publicTimer);if(document.getElementById('public-visit-count')&&!document.hidden)publicTimer=setTimeout(()=>refreshPublic(),delay);
  }
@@ -98,14 +115,12 @@
    if(revision!==writeRevision){publicQueued=true;return;}
    if(!renderTotal(data.cumulative))return;
    if(requestedPage===historyPage)renderHistory(data.history);
-   const updateStatus=document.getElementById('public-visit-update-status');if(updateStatus){updateStatus.hidden=true;updateStatus.textContent='';}
+   const updateStatus=document.getElementById('public-visit-update-status');if(updateStatus){if(!updateStatus.hidden)updateStatus.hidden=true;setText(updateStatus,'');}
    if(!requestedRecent||!recentOpen())return;
-   const list=document.getElementById('public-visit-list');list.replaceChildren();
-   const labels={desktop:'Ordenador',mobile:'Móvil',tablet:'Tableta',bot:'Automatizado',unknown:'Sin identificar'},pages={'/':'Música','/live':'Ol Live','/account':'Cuenta','/legal/cookies.html':'Información legal','/legal/privacidad.html':'Información legal','/legal/aviso-legal.html':'Información legal'};
-   for(const visit of data.visits){const row=document.createElement('li'),device=document.createElement('strong'),time=document.createElement('time'),where=document.createElement('span');device.textContent=t(labels[visit.device]||visit.device||'Sin identificar');time.dateTime=visit.at;time.textContent=new Intl.DateTimeFormat(document.documentElement.lang||'es',{timeZone:'Europe/Madrid',hour:'2-digit',minute:'2-digit'}).format(new Date(visit.at));where.textContent=t(pages[visit.page]||visit.page||'Web');row.append(device,where,time);list.append(row);}
-   document.getElementById('public-visit-status').textContent=t(data.visits.length?'Horas de Madrid · datos actualizados.':'No hay actividad reciente compartida. El total acumulado se mantiene.');
+   renderRecent(document.getElementById('public-visit-list'),data.visits);
+   setText(document.getElementById('public-visit-status'),t(data.visits.length?'Horas de Madrid · datos actualizados.':'No hay actividad reciente compartida. El total acumulado se mantiene.'));
   }catch{
-   if(!document.hidden){const status=document.getElementById('public-visit-update-status');status.textContent=t('No se ha podido actualizar el recuento. Volveremos a intentarlo.');status.hidden=false;}
+   if(!document.hidden){const status=document.getElementById('public-visit-update-status');setText(status,t('No se ha podido actualizar el recuento. Volveremos a intentarlo.'));if(status.hidden)status.hidden=false;}
   }finally{
    publicBusy=false;publicController=null;
    if(publicQueued&&!document.hidden){publicQueued=false;queueMicrotask(()=>refreshPublic(true));}else schedulePublic();

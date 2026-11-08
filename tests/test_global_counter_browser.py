@@ -178,7 +178,8 @@ def run():
         # Observe every rendered value: checking only the final nine would miss
         # a brief regression to eight followed by the automatic fresh GET.
         observe_totals="""() => {
-            window.counterSnapshots=[];
+            const initial=document.querySelector('#public-visit-count .public-visit-total')?.textContent;
+            window.counterSnapshots=initial?[Number(initial.replace(/\\D/g,''))]:[];
             new MutationObserver(() => {
                 const text=document.querySelector('#public-visit-count .public-visit-total')?.textContent;
                 if(text)window.counterSnapshots.push(Number(text.replace(/\\D/g,'')));
@@ -187,8 +188,11 @@ def run():
             });
         }"""
         post_page.evaluate(observe_totals)
+        post_page.evaluate("window.counterWriteHandled=false;window.addEventListener('electronicama:visit-recorded',()=>window.counterWriteHandled=true,{once:true})")
         held_posts[0][0].fulfill(response=held_posts[0][1])
-        wait_callback(post_page,lambda:bool(post_page.evaluate('window.counterSnapshots.length')))
+        # An unchanged confirmed value should not require any DOM mutation.
+        # Wait for the actual write handler, then inspect all observed values.
+        wait_callback(post_page,lambda:post_page.evaluate('window.counterWriteHandled'))
         expect_total(post_page,9)
         assert all(value>=9 for value in post_page.evaluate('window.counterSnapshots')),'a delayed confirmed POST must never lower a newer confirmed global total'
 
@@ -209,7 +213,6 @@ def run():
         stalled.evaluate("window.dispatchEvent(new Event('focus'))")
         old_routes[0].fulfill(json=older_snapshot)
         wait_callback(stalled,lambda:len(old_reads)>=2)
-        wait_callback(stalled,lambda:bool(stalled.evaluate('window.counterSnapshots.length')))
         expect_total(stalled,9)
         assert all(value>=9 for value in stalled.evaluate('window.counterSnapshots')),'an older same-origin GET must never lower a confirmed global total'
         assert not errors,errors

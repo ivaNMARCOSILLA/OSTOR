@@ -1,4 +1,4 @@
-"""Free registration, premium gate, private invitations and admin layout."""
+"""Free listening/viewing, paid publishing, invitations and admin layout."""
 import secrets
 from playwright.sync_api import sync_playwright
 from browser_support import BASE_URL,login_context
@@ -11,7 +11,12 @@ def run():
   page.locator('#register-form [name=username]').fill(name);page.locator('#register-form [name=password]').fill(password);page.locator('#registration-human-id').wait_for(state='attached');page.wait_for_function("document.querySelector('#registration-human-id').value.length===32");page.locator('#registration-human-answer').fill('OL234');page.locator('#registration-submit').click();page.locator('#member-panel').wait_for(state='visible')
   assert page.locator('#enter-maggy').is_visible();assert 'gratuita' in page.locator('#access-status').inner_text()
   assert context.request.get(BASE_URL+'/api/rewards').status==200
-  assert context.request.get(BASE_URL+'/api/streamers').status==402
+  channels=context.request.get(BASE_URL+'/api/streamers')
+  assert channels.status==200
+  assert not channels.json()['streamer_active']
+  csrf=context.request.get(BASE_URL+'/api/account/me').json()['csrf']
+  publish=context.request.post(BASE_URL+'/api/streamers/me',data={'title':'Paid creator access required'},headers={'X-CSRF-Token':csrf})
+  assert publish.status==402
   assert page.locator('#pay-lifetime').count()==0
   admin_context=browser.new_context();login_context(admin_context);admin=admin_context.new_page();admin.goto(BASE_URL+'/account');admin.locator('#admin-panel').wait_for()
   admin.locator('#create-invite [name=username]').fill('invited-'+secrets.token_hex(4));admin.locator('#create-invite button').click();link=admin.locator('#invite-result a');link.wait_for();path=link.get_attribute('href')
@@ -19,8 +24,8 @@ def run():
   assert invited.locator('#enter-maggy').is_visible();assert 'invitación' in invited.locator('#access-status').inner_text().lower();assert not invited.locator('#pricing').is_visible();assert not invited.locator('#admin-panel').is_visible()
   for width in [1440,768,390,320]:
    admin.set_viewport_size({'width':width,'height':900});assert admin.evaluate('document.documentElement.scrollWidth<=innerWidth+2'),width
-  admin.set_viewport_size({'width':1440,'height':1000});admin.locator('#invite-result').evaluate("node=>node.textContent='Invitación gratuita de Ol Live creada. Enlace privado oculto en esta captura.'");admin.screenshot(path='docs/maggy-admin.png',full_page=True)
+  admin.set_viewport_size({'width':1440,'height':1000});admin.locator('#invite-result').evaluate("node=>node.textContent='Invitación gratuita de Ol Live creada. Enlace privado oculto en esta captura.'");admin.screenshot(path='/tmp/maggy-admin-copy.png',full_page=True)
   assert not errors,errors;browser.close()
- print('OK: free music/account collection, premium-only Ol Live, no premature billing, free friend invitations, 4 widths')
+ print('OK: free music/account collection, free live viewing with paid publishing, no premature billing, free friend invitations, 4 widths')
 
 if __name__=='__main__':run()
