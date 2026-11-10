@@ -1,9 +1,9 @@
 import {openSubscription} from '/assets/subscriptions.js?v=9.13.0';
 import {founderBadge} from '/assets/badges.js?v=9.15.0';
 'use strict';
-import {StreamCommunity} from '/assets/community.js?v=9.29.7';
-import {StudioTools} from '/assets/studio-tools.js?v=9.29.7';
-import {streamHonor} from '/assets/stream-honor.js?v=9.29.7';
+import {StreamCommunity} from '/assets/community.js?v=9.29.8';
+import {StudioTools} from '/assets/studio-tools.js?v=9.29.8';
+import {streamHonor} from '/assets/stream-honor.js?v=9.29.8';
 const $=id=>document.getElementById(id);
 $('live-player').append($('community-panel'));
 let premiereOnly=false;
@@ -72,7 +72,7 @@ function renderCatalogue(){
  const channels=directory?.video_ready?directory.channels:[];
  const rail=$('livis-channel-rail');if(rail){rail.replaceChildren();for(const channel of channels.slice(0,8)){const link=node('button');link.type='button';link.className='rail-channel';const avatar=node('span',channel.username.slice(0,2).toUpperCase());avatar.className='rail-channel-avatar';const label=node('span',channel.username),live=node('small','EN DIRECTO');link.append(avatar,label,live);link.addEventListener('click',()=>{if(window.MaggySession.authenticated)connect(channel,false);else navigateSection('#stream-access');});rail.append(link);}if(!channels.length)rail.append(node('p','Sin emisiones en este momento.'));}
  const query=normalizeChannel($('channel-filter').value.trim());
- const matches=channels.filter(channel=>(liveCategory==='all'||(liveCategory==='featured'?channel.featured:channel.category===liveCategory))&&normalizeChannel([channel.title,channel.username,channel.bio,channel.stream_alias?.alias].filter(Boolean).join(' ')).includes(query));
+ const matches=channels.filter(channel=>(liveCategory==='all'||(liveCategory==='featured'?channel.featured:channel.category===liveCategory))&&normalizeChannel([channel.title,channel.username,channel.bio,channel.stream_alias?.title].filter(Boolean).join(' ')).includes(query));
  const mode=$('channel-order').value;
  matches.sort((a,b)=>{const prefix=c=>normalizeChannel(c.title).startsWith(query)||normalizeChannel(c.username).startsWith(query)?1:0;const recent=c=>{const i=recentChannels.indexOf(c.id);return i<0?-1:20-i;};return (query?prefix(b)-prefix(a):0)||(mode==='recent'?recent(b)-recent(a):mode==='featured'?Number(Boolean(b.featured))-Number(Boolean(a.featured)):(b.view_count||0)-(a.view_count||0))||a.title.localeCompare(b.title,'es');});
  const suggestions=$('channel-suggestions');suggestions.replaceChildren();for(const channel of matches.slice(0,12)){const option=document.createElement('option');option.value=channel.title;option.label=channel.username; suggestions.append(option);}

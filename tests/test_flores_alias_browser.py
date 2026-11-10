@@ -8,7 +8,7 @@ from browser_support import BASE_URL, login_context
 from test_stream_continuity_browser import SDK
 
 
-HONOR={'alias':'(primitivo)*ovelix','title':'Triunfador'}
+HONOR={'title':'Triunfador'}
 FLORES='a'*32
 OTHER='b'*32
 
@@ -16,8 +16,8 @@ OTHER='b'*32
 def expect_honor(container):
     expect(container.locator('.stream-honor')).to_have_count(1)
     expect(container.locator('.stream-honor-title')).to_have_text(HONOR['title'])
-    expect(container.locator('.stream-honor-alias')).to_have_text(HONOR['alias'])
-    expect(container.locator('.stream-honor-alias')).to_have_attribute('translate','no')
+    expect(container.locator('.stream-honor-alias')).to_have_count(0)
+    expect(container.locator('.stream-honor')).to_have_text(HONOR['title'])
 
 
 def check_widths(page, selectors):
@@ -55,7 +55,7 @@ def run():
         section=page.locator('#flores-stream-alias-admin')
         expect(section).to_be_visible()
         expect_honor(page.locator('#flores-stream-alias-badge'))
-        expect(section.locator('h3')).to_have_text('(primitivo)*ovelix · Flores')
+        expect(section.locator('h3')).to_have_text('Triunfador · Flores')
         expect(section).to_contain_text('Flores (@rosas)')
         expect(page.locator('#flores-stream-alias-status')).to_have_text('Flores está en directo.')
         expect(page.locator('#flores-stream-alias-link')).to_have_attribute('href','/live#canal-'+FLORES)
@@ -121,7 +121,7 @@ def run():
         expect(flores.locator('h3')).to_have_text('Flores en directo')
         expect(flores.locator(':scope > p').first).to_have_text('Flores')
         expect(other.locator('.stream-honor')).to_have_count(0)
-        page.locator('#channel-filter').fill('ovelix')
+        page.locator('#channel-filter').fill('triunfador')
         expect(page.locator('.live-channel')).to_have_count(1)
         expect(page.locator('.live-channel')).to_have_attribute('id','canal-'+FLORES)
         page.locator('#channel-filter').fill('')
@@ -149,16 +149,17 @@ def run():
         expect(page.locator('#live-comments p[data-message-id="flores-message"] > strong')).to_have_text('Flores: ')
         assert len(token_calls)==2
 
-        # Alias punctuation is literal text, and untrusted strings cannot become
-        # executable markup through the shared rendering component.
+        # The removed nickname cannot leak from cached payloads, and untrusted
+        # titles cannot become executable markup through the shared component.
         escaped=page.evaluate("""async () => {
             const {streamHonor}=await import('/assets/stream-honor.js');
             const data={alias:'<img src=x onerror="window.aliasInjected=true">',title:'<script>window.aliasInjected=true</script>'};
             const badge=streamHonor(data);
             return {text:badge.textContent,elements:badge.querySelectorAll('img,script').length,
-                injected:window.aliasInjected===true,invalid:streamHonor({alias:7,title:'Triunfador'})===null};
+                injected:window.aliasInjected===true,invalid:streamHonor({title:7})===null,
+                legacy:streamHonor({alias:'removed nickname',title:'Triunfador'}).textContent};
         }""")
-        assert escaped=={'text':'<script>window.aliasInjected=true</script> · <img src=x onerror="window.aliasInjected=true">','elements':0,'injected':False,'invalid':True}
+        assert escaped=={'text':'<script>window.aliasInjected=true</script>','elements':0,'injected':False,'invalid':True,'legacy':'Triunfador'}
         page.locator('#leave-room').click()
 
         # A normal account does not request or expose the admin-only section.

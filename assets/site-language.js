@@ -2,6 +2,13 @@
 (()=>{
  const LANGS=['es','ca','en','fr','pt','de','it'],KEY='electronicama_language';
  const rows={
+ "Un lugar para cuidar lo que crece.":["Un lloc per cuidar allò que creix.","A place to care for what grows.","Un lieu pour prendre soin de ce qui grandit.","Um lugar para cuidar do que cresce.","Ein Ort, um zu pflegen, was wächst.","Un luogo dove prendersi cura di ciò che cresce."],
+ "RECUERDOS DE ADMIN":["RECORDS D’ADMIN","ADMIN MEMORIES","SOUVENIRS D’ADMIN","MEMÓRIAS DE ADMIN","ADMIN-ERINNERUNGEN","RICORDI DI ADMIN"],
+ "Raíces, música y recuerdos compartidos.":["Arrels, música i records compartits.","Roots, music and shared memories.","Des racines, de la musique et des souvenirs partagés.","Raízes, música e memórias compartilhadas.","Wurzeln, Musik und gemeinsame Erinnerungen.","Radici, musica e ricordi condivisi."],
+ "ESPACIO CONMEMORATIVO":["ESPAI COMMEMORATIU","COMMEMORATIVE SPACE","ESPACE COMMÉMORATIF","ESPAÇO COMEMORATIVO","GEDENKBEREICH","SPAZIO COMMEMORATIVO"],
+ "Un nombre que permanece en nuestra historia.":["Un nom que perdura en la nostra història.","A name that lives on in our story.","Un nom qui demeure dans notre histoire.","Um nome que permanece na nossa história.","Ein Name, der in unserer Geschichte bleibt.","Un nome che rimane nella nostra storia."],
+ "Distinción de triunfador en el directo de Flores (@rosas).":["Distinció de triomfador al directe de Flores (@rosas).","Winner distinction on Flores’s live stream (@rosas).","Distinction de gagnant sur le direct de Flores (@rosas).","Distinção de vencedor na transmissão de Flores (@rosas).","Siegerauszeichnung im Livestream von Flores (@rosas).","Riconoscimento di vincitore nella diretta di Flores (@rosas)."],
+ "Sesión de administración":["Sessió d’administració","Administrator session","Session d’administration","Sessão de administração","Administratorsitzung","Sessione di amministrazione"],
  "En pausa":["En pausa","Paused","En pause","Em pausa","Pausiert","In pausa"],
  "Selecciona música":["Selecciona música","Choose music","Choisis de la musique","Escolha música","Musik auswählen","Scegli la musica"],
 

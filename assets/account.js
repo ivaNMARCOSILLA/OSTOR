@@ -41,6 +41,7 @@ async function refresh({automatic=false}={}) {
   $('credentials').classList.toggle('hidden', Boolean(current) || Boolean(inviteToken));
   $('member-panel').classList.toggle('hidden', !current);
   $('admin-panel').classList.toggle('hidden', current?.role !== 'admin');
+  const adminIdentity=$('admin-session-username');if(adminIdentity)adminIdentity.textContent=current?.role==='admin'?'@'+current.username:'';
   const granel=$('granel-access-link');granel.hidden=Boolean(inviteToken&&!current);granel.href=current?'#member-panel':'#granel-access-title';granel.textContent=current?'Abrir Granel':'Entrar a Granel';
   window.dispatchEvent(new Event('ol:account-refreshed'));
   const videoReady=Boolean(data.live_video_ready)&&!data.live_premiere;
@@ -100,13 +101,13 @@ let floresAliasRevision=0;
 async function loadFloresStreamAlias(){
  const revision=++floresAliasRevision;
  try{
-  const [data,{streamHonor}]=await Promise.all([api('/api/streamers/admin/flores-alias'),import('/assets/stream-honor.js?v=9.29.7')]);
+  const [data,{streamHonor}]=await Promise.all([api('/api/streamers/admin/flores-alias'),import('/assets/stream-honor.js?v=9.29.8')]);
   if(revision!==floresAliasRevision||current?.role!=='admin')return;
   const container=$('flores-stream-alias-badge'),honor=streamHonor(data.stream_alias);container.replaceChildren();if(honor)container.append(honor);
-  if(data.account)$('flores-stream-alias-description').textContent='Apodo de triunfador en el directo de '+data.account.display_name+' (@'+data.account.username+').';
+  if(data.account)$('flores-stream-alias-description').textContent='Distinción de triunfador en el directo de '+data.account.display_name+' (@'+data.account.username+').';
   const link=$('flores-stream-alias-link');link.hidden=!data.channel||Boolean(data.account?.archived);
   if(data.channel)link.href='/live#canal-'+encodeURIComponent(data.channel.id);
-  $('flores-stream-alias-status').textContent=!data.account?'La cuenta @rosas todavía no existe en este entorno.':data.account.archived?'La cuenta de Flores está dada de baja.':data.channel?(data.channel.live?'Flores está en directo.':'El apodo está preparado para el próximo directo de Flores.'):'El apodo está preparado. Flores todavía no ha publicado su canal.';
+  $('flores-stream-alias-status').textContent=!data.account?'La cuenta @rosas todavía no existe en este entorno.':data.account.archived?'La cuenta de Flores está dada de baja.':data.channel?(data.channel.live?'Flores está en directo.':'La distinción está preparada para el próximo directo de Flores.'):'La distinción está preparada. Flores todavía no ha publicado su canal.';
  }catch(error){if(revision===floresAliasRevision&&current?.role==='admin')$('flores-stream-alias-status').textContent='No se pudo comprobar el canal de Flores: '+error.message;}
 }
 const paymentSyncResults=new Map(),paymentSyncBusy=new Set();
@@ -409,7 +410,7 @@ async function refreshAdminImages(force=false){
  emblemRefreshPending=true;emblemRefreshForce=emblemRefreshForce||force;
  if(emblemRefreshBusy)return;
  const requestedForce=emblemRefreshForce;emblemRefreshForce=false;emblemRefreshPending=false;emblemRefreshBusy=true;paintAdminRefresh();
- try{const {refreshAdminEmblems}=await import('/assets/admin-emblems.js?v=9.29.7');const result=await refreshAdminEmblems({force:requestedForce});adminImageFailed=result.failed||0;}
+ try{const {refreshAdminEmblems}=await import('/assets/admin-emblems.js?v=9.29.8');const result=await refreshAdminEmblems({force:requestedForce});adminImageFailed=result.failed||0;}
  catch{adminImageFailed=1;}
  finally{emblemRefreshBusy=false;paintAdminRefresh();if(emblemRefreshPending&&!document.hidden)queueMicrotask(()=>refreshAdminImages(emblemRefreshForce));}
 }

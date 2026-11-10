@@ -12,7 +12,7 @@ from auth_support import authenticated_client
 
 class FloresStreamAliasTests(unittest.TestCase):
     endpoint='/api/streamers/admin/flores-alias'
-    expected={'alias':'(primitivo)*ovelix','title':'Triunfador'}
+    expected={'title':'Triunfador'}
 
     def setUp(self):
         self.admin=authenticated_client(app.app,self.addCleanup)

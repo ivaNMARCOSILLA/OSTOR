@@ -14,8 +14,8 @@ HTML='''<!doctype html><html><head>
 <link id="icon" rel="icon" href="/assets/favicon.svg?keep=icon">
 </head><body>
 <form><input id="draft" value="Mi borrador"><input id="password" type="password" value="private-browser-fixture"></form>
-<img id="poster-a" width="32" height="48" src="/assets/granel-72-horas.png?v=9.29.5&amp;keep=poster#art">
-<img id="poster-b" width="32" height="48" src="/assets/granel-72-horas.png?v=9.29.5&amp;keep=poster#art">
+<img id="poster-a" width="32" height="48" src="/assets/electronicama-social.png?v=9.29.5&amp;keep=poster#art">
+<img id="poster-b" width="32" height="48" src="/assets/electronicama-social.png?v=9.29.5&amp;keep=poster#art">
 <img id="badge" width="20" height="20" src="/assets/founder-badge.svg?keep=badge">
 <img id="broken" width="20" height="20" src="/assets/broken-emblem.svg?v=9.29.5">
 <img id="private" width="20" height="20" src="/api/emblem-fixture.svg?token=private">
@@ -35,7 +35,7 @@ def callbacks(page,predicate):
 
 
 def run():
-    png=(Path(__file__).resolve().parents[1]/'assets/granel-72-horas.png').read_bytes()
+    png=(Path(__file__).resolve().parents[1]/'assets/electronicama-social.png').read_bytes()
     with sync_playwright() as p:
         browser=p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox'])
         page=browser.new_page(viewport={'width':900,'height':700});errors=[];navigations=[]
@@ -101,7 +101,7 @@ def run():
         assert first_token
         # A component can recreate the poster even before the next deployment.
         # It must inherit the manual refresh revision on the following cycle.
-        page.locator('#poster-a').evaluate("e=>{const next=e.cloneNode();next.setAttribute('src','/assets/granel-72-horas.png?v=9.29.5&keep=poster#art');e.replaceWith(next)}")
+        page.locator('#poster-a').evaluate("e=>{const next=e.cloneNode();next.setAttribute('src','/assets/electronicama-social.png?v=9.29.5&keep=poster#art');e.replaceWith(next)}")
         before_probes=page.evaluate('probeCount')
         assert page.evaluate('refreshAdminEmblems()')=={'version':'9.29.5','changed':1,'failed':0}
         assert page.locator('#poster-a').evaluate("e=>new URL(e.src).searchParams.get('refresh')")==first_token

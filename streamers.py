@@ -19,7 +19,7 @@ bp=Blueprint('streamers',__name__)
 LIVE_PRICE_CENTS=2500
 GIFT_COMMISSION_BPS=0
 LIVE_CATEGORIES={'videojuegos':'Videojuegos','musica':'Música','entretenimiento':'Entretenimiento','actualidad':'Actualidad'}
-FLORES_STREAM_ALIAS={'alias':'(primitivo)*ovelix','title':'Triunfador'}
+FLORES_STREAM_ALIAS={'title':'Triunfador'}
 
 
 def stream_alias(username):

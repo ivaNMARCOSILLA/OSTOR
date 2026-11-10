@@ -10,10 +10,6 @@
 .client-payment-sync-status,.client-account-archive-status{max-width:28rem;padding:10px 12px;background:#edf4ff;color:#153a66;border-radius:14px;line-height:1.5;white-space:normal}.client-payment-sync-status:empty,.client-account-archive-status:empty{display:none}
 
 #granel-access-title{scroll-margin-top:110px;overflow-wrap:anywhere}#granel-access-link{min-height:44px;max-width:100%;white-space:normal}
-#account-welcome.granel-welcome{display:grid;grid-template-columns:minmax(0,1fr) minmax(160px,220px);gap:24px;align-items:center}
-.granel-welcome-copy{min-width:0}.granel-poster{width:100%;max-width:220px;margin:0;justify-self:center}.granel-poster img{display:block;width:100%;height:auto;max-height:330px;object-fit:contain;border:1px solid #8a7447;border-radius:14px;background:#000}
-@media(max-width:600px){#account-welcome.granel-welcome{grid-template-columns:minmax(0,1fr);gap:16px}.granel-poster{max-width:180px}.granel-poster img{max-height:270px}}
-
 /* Administrator updates and account naming keep comfortable touch targets. */
 body.electronicama-theme .admin-refresh-controls{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;margin:18px 0;padding:12px 14px;border:1px solid #79663f;border-radius:12px;background:#0c0b09;min-width:0}
 body.electronicama-theme .admin-refresh-controls p{margin:0;color:#e5d8bd;font-size:13px;line-height:1.55;overflow-wrap:anywhere}

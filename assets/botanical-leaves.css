@@ -1,0 +1,78 @@
+/* Original leaf branches, inspired by the gold botanical welcome artwork.
+   Decorative separators keep their own space in the normal document flow. */
+body.electronicama-theme .botanical-interface:not(.botanical-interface-inline)::before{
+ content:"";display:block;flex:1 1 120px;align-self:stretch;min-width:0;max-width:210px;
+ background:url('/assets/botanical-leaf.svg') left center/contain no-repeat;
+ opacity:.74;pointer-events:none;
+}
+body.electronicama-theme .botanical-interface:not(.botanical-interface-inline){
+ justify-content:space-between;
+}
+/* The leaf drawing occupies a separate side of the administrator's title. */
+body.electronicama-theme .admin-botanical-hero{
+ display:block;position:relative;isolation:isolate;box-sizing:border-box;min-width:0;overflow:hidden;
+ min-height:230px;margin:0 0 24px;padding:34px clamp(220px,24vw,300px) 34px 30px;
+ border:1px solid #987b48;border-radius:22px;
+ background:linear-gradient(115deg,#11120e,#090b09);color:#f1d7a3;
+}
+body.electronicama-theme .admin-botanical-hero::before{
+ content:"";position:absolute;z-index:-1;inset:0 0 0 auto;width:250px;
+ background:url('/assets/botanical-leaf.svg') center/270px auto no-repeat;
+ opacity:.9;pointer-events:none;
+}
+body.electronicama-theme .admin-botanical-hero>.eyebrow{
+ display:block;margin:0 0 16px;color:#b8dacf;font-size:11px;line-height:1.65;letter-spacing:2px;
+}
+body.electronicama-theme .admin-botanical-hero :is(h2,h3){
+ margin:0 0 18px;color:#f1d7a3;font-size:clamp(32px,5vw,56px);font-weight:600;
+ line-height:1.1;letter-spacing:-1px;overflow-wrap:anywhere;
+}
+body.electronicama-theme .admin-botanical-hero :is(h2,h3)::before{content:none}
+body.electronicama-theme .admin-botanical-hero>p:not(.eyebrow){
+ max-width:43rem;margin:0;color:#e1d5be;line-height:1.7;overflow-wrap:anywhere;
+}
+body.electronicama-theme .admin-memory-grid{
+ display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;
+ min-width:0;margin:0 0 28px;
+}
+body.electronicama-theme .admin-memory-card{
+ box-sizing:border-box;min-width:0;margin:0;padding:76px 22px 24px;
+ border:1px solid #6c6045;border-radius:18px;
+ background:#0c0f0c url('/assets/botanical-leaf.svg') right 12px top 3px/110px 68px no-repeat;
+ color:#eddbb7;
+}
+body.electronicama-theme .admin-memory-card :is(h3,h4){
+ margin:0 0 12px;color:#f1d7a3;font-size:clamp(20px,2.4vw,27px);
+ line-height:1.25;font-weight:600;overflow-wrap:anywhere;
+}
+body.electronicama-theme .admin-memory-card>p{
+ margin:0;color:#d6ccba;font-size:14px;line-height:1.7;overflow-wrap:anywhere;
+}
+body.electronicama-theme .admin-memory-card>.eyebrow{
+ display:block;margin:0 0 12px;color:#b8dacf;font-size:10px;letter-spacing:1.4px;
+}
+body.electronicama-theme .admin-memory-card :is(a,button){
+ max-width:100%;min-height:44px;white-space:normal;overflow-wrap:anywhere;
+}
+@media(max-width:800px){
+ body.electronicama-theme .admin-memory-grid{grid-template-columns:minmax(0,1fr)}
+ body.electronicama-theme .admin-memory-card{padding:26px 132px 26px 22px;background-position:right 10px center}
+}
+@media(max-width:600px){
+ body.electronicama-theme .botanical-interface:not(.botanical-interface-inline)::before{
+  flex-basis:60px;max-width:100px;background-size:contain;
+ }
+ body.electronicama-theme .admin-botanical-hero{min-height:0;padding:124px 20px 26px;border-radius:18px}
+ body.electronicama-theme .admin-botanical-hero::before{inset:0 12px auto auto;width:190px;height:116px;background-size:190px auto}
+ body.electronicama-theme .admin-botanical-hero :is(h2,h3){font-size:clamp(30px,9vw,42px)}
+ body.electronicama-theme .admin-memory-grid{gap:12px}
+ body.electronicama-theme .admin-memory-card{padding:70px 20px 22px;background-position:right 12px top 3px}
+}
+@media(forced-colors:active){
+ body.electronicama-theme .botanical-interface:not(.botanical-interface-inline)::before,
+ body.electronicama-theme .admin-botanical-hero::before{display:none}
+ body.electronicama-theme .admin-botanical-hero{padding:24px}
+ body.electronicama-theme .admin-memory-card{background-image:none;padding:22px}
+}
+
+body.electronicama-theme .admin-botanical-hero .admin-session-identity{margin-top:14px;font-size:13px;color:#b8dacf}
