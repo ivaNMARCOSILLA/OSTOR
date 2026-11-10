@@ -1,7 +1,7 @@
-/* ELECTRONICAMA PRO 9.29.9 · caché de interfaz, NO de música ni APIs.
+/* ELECTRONICAMA PRO 9.29.10 · caché de interfaz, NO de música ni APIs.
    © 2026 Iván Marcos Illa, edición de esta aplicación. */
-const CACHE = 'electronicama-shell-v9-29-9';
-const STATIC = ['/assets/botanical-leaf-border.svg', '/assets/botanical-leaves.css?v=9.29.9', '/assets/botanical-leaf.svg', '/assets/reading-copy.css?v=9.29.9', '/assets/music-memory.css?v=9.29.9', '/assets/radio-visualizer.css?v=9.29.9', '/assets/radio-visualizer.js?v=9.29.9', '/assets/botanical-interface.css?v=9.29.9', '/assets/botanical-interface.js?v=9.29.9', '/assets/botanical-flower.svg', '/assets/mobile-shell.css?v=9.29.9', '/assets/mobile-shell.js?v=9.29.9', '/assets/platform-theme.css?v=9.29.9', '/assets/session.js?v=9.29.9', '/assets/styles.css?v=9.29.9', '/assets/ol-theme.css?v=9.29.9', '/assets/app.js?v=9.29.9', '/manifest.webmanifest', '/assets/favicon.svg', '/assets/app-icon-192.png'];
+const CACHE = 'electronicama-shell-v9-29-10';
+const STATIC = ['/assets/botanical-leaf-border.svg?v=9.29.10', '/assets/botanical-leaves.css?v=9.29.10', '/assets/botanical-leaf.svg?v=9.29.10', '/assets/reading-copy.css?v=9.29.10', '/assets/music-memory.css?v=9.29.10', '/assets/radio-visualizer.css?v=9.29.10', '/assets/radio-visualizer.js?v=9.29.10', '/assets/botanical-interface.css?v=9.29.10', '/assets/botanical-interface.js?v=9.29.10', '/assets/botanical-flower.svg?v=9.29.10', '/assets/mobile-shell.css?v=9.29.10', '/assets/mobile-shell.js?v=9.29.10', '/assets/platform-theme.css?v=9.29.10', '/assets/session.js?v=9.29.10', '/assets/styles.css?v=9.29.10', '/assets/ol-theme.css?v=9.29.10', '/assets/app.js?v=9.29.10', '/manifest.webmanifest', '/assets/favicon.svg', '/assets/app-icon-192.png'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(STATIC)).then(() => self.skipWaiting()));
 });

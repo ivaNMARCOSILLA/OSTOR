@@ -37,7 +37,7 @@
    for(let number=0;number<base+(index<extra?1:0);number++){
     const flower=document.createElement('img');flower.className='botanical-flower';
     if((index+number)%4===2)flower.classList.add('botanical-flower-rose');
-    flower.src='/assets/botanical-flower.svg';flower.alt='';flower.width=24;flower.height=36;
+    flower.src='/assets/botanical-flower.svg?v=9.29.10';flower.alt='';flower.width=24;flower.height=36;
     flower.draggable=false;flower.setAttribute('aria-hidden','true');flower.setAttribute('role','presentation');
     group.append(flower);
    }

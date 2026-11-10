@@ -27,3 +27,14 @@ El fondo lateral compartido de música, cuenta, Ol Live y páginas legales pasa 
 usar ramas de hojas doradas en lugar de las figuras geométricas decorativas.
 El dibujo conserva sus proporciones en móvil y ordenador y deja espacio entre
 ramas. Los controles y las figuras interactivas de Hologramas siguen disponibles.
+
+## Flores y hojas de fuego · 9.29.10
+
+Los tres dibujos botánicos se trazan de nuevo con curvas vectoriales originales:
+flores abiertas con pétalos distintos y hojas onduladas que evocan llamas, en
+oro, ámbar y cobre. Esta composición sustituye las ramas regulares de hojas.
+El panel de administración acompaña el dibujo con acentos cálidos y conserva
+espacios separados para textos, formularios y adornos.
+
+Las imágenes tienen una URL de versión nueva para que la caché no conserve
+el dibujo anterior después de actualizar la aplicación.

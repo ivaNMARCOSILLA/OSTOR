@@ -123,7 +123,7 @@ body.electronicama-theme #holograms-title{color:#f5d397;text-shadow:none}
 @media(max-width:600px){.electronicama-theme .platform-header nav{flex-wrap:wrap}}
 /* Granel-inspired leaves sit on the black canvas around opaque content panels. */
 body.electronicama-theme :is(#hero,#hologramas,.account-shell>.intro)::before{content:none!important;display:none!important}
-body.electronicama-theme,body.electronicama-theme:has(>.back){background-color:#000;background-image:url('/assets/botanical-leaf-border.svg'),url('/assets/botanical-leaf-border.svg');background-position:left 100px,right 460px;background-size:140px 840px,110px 660px;background-repeat:repeat-y}
+body.electronicama-theme,body.electronicama-theme:has(>.back){background-color:#000;background-image:url('/assets/botanical-leaf-border.svg?v=9.29.10'),url('/assets/botanical-leaf-border.svg?v=9.29.10');background-position:left 100px,right 460px;background-size:140px 840px,110px 660px;background-repeat:repeat-y}
 /* Sparse branches preserve the artwork proportions at every screen size. */
 @media(max-width:600px){body.electronicama-theme,body.electronicama-theme:has(>.back){background-size:58px 348px,66px 396px}}
 @media(forced-colors:active){body.electronicama-theme,body.electronicama-theme:has(>.back){background-image:none}}

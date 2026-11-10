@@ -1,27 +1,27 @@
-/* Original leaf branches, inspired by the gold botanical welcome artwork.
+/* Hand-drawn blossoms and flame-shaped gold foliage.
    Decorative separators keep their own space in the normal document flow. */
 body.electronicama-theme .botanical-interface:not(.botanical-interface-inline)::before{
  content:"";display:block;flex:1 1 120px;align-self:stretch;min-width:0;max-width:210px;
- background:url('/assets/botanical-leaf.svg') left center/contain no-repeat;
- opacity:.74;pointer-events:none;
+ background:url('/assets/botanical-leaf.svg?v=9.29.10') left center/contain no-repeat;
+ opacity:.95;pointer-events:none;
 }
 body.electronicama-theme .botanical-interface:not(.botanical-interface-inline){
  justify-content:space-between;
 }
-/* The leaf drawing occupies a separate side of the administrator's title. */
+/* Blossoms have reserved space beside the title, never above controls. */
 body.electronicama-theme .admin-botanical-hero{
  display:block;position:relative;isolation:isolate;box-sizing:border-box;min-width:0;overflow:hidden;
- min-height:230px;margin:0 0 24px;padding:34px clamp(220px,24vw,300px) 34px 30px;
- border:1px solid #987b48;border-radius:22px;
- background:linear-gradient(115deg,#11120e,#090b09);color:#f1d7a3;
+ min-height:250px;margin:0 0 24px;padding:34px 320px 34px 30px;
+ border:1px solid #b68243;border-radius:22px;
+ background:linear-gradient(115deg,#1a100a,#090706);color:#f1d7a3;
 }
 body.electronicama-theme .admin-botanical-hero::before{
- content:"";position:absolute;z-index:-1;inset:0 0 0 auto;width:250px;
- background:url('/assets/botanical-leaf.svg') center/270px auto no-repeat;
- opacity:.9;pointer-events:none;
+ content:"";position:absolute;z-index:-1;inset:0 0 0 auto;width:290px;
+ background:url('/assets/botanical-leaf.svg?v=9.29.10') center/300px auto no-repeat;
+ opacity:1;pointer-events:none;
 }
 body.electronicama-theme .admin-botanical-hero>.eyebrow{
- display:block;margin:0 0 16px;color:#b8dacf;font-size:11px;line-height:1.65;letter-spacing:2px;
+ display:block;margin:0 0 16px;color:#e9c18a;font-size:11px;line-height:1.65;letter-spacing:2px;
 }
 body.electronicama-theme .admin-botanical-hero :is(h2,h3){
  margin:0 0 18px;color:#f1d7a3;font-size:clamp(32px,5vw,56px);font-weight:600;
@@ -36,9 +36,9 @@ body.electronicama-theme .admin-memory-grid{
  min-width:0;margin:0 0 28px;
 }
 body.electronicama-theme .admin-memory-card{
- box-sizing:border-box;min-width:0;margin:0;padding:76px 22px 24px;
- border:1px solid #6c6045;border-radius:18px;
- background:#0c0f0c url('/assets/botanical-leaf.svg') right 12px top 3px/110px 68px no-repeat;
+ box-sizing:border-box;min-width:0;margin:0;padding:96px 22px 24px;
+ border:1px solid #98652f;border-radius:18px;
+ background:#100b08 url('/assets/botanical-leaf.svg?v=9.29.10') right 12px top 3px/140px 86px no-repeat;
  color:#eddbb7;
 }
 body.electronicama-theme .admin-memory-card :is(h3,h4){
@@ -49,24 +49,26 @@ body.electronicama-theme .admin-memory-card>p{
  margin:0;color:#d6ccba;font-size:14px;line-height:1.7;overflow-wrap:anywhere;
 }
 body.electronicama-theme .admin-memory-card>.eyebrow{
- display:block;margin:0 0 12px;color:#b8dacf;font-size:10px;letter-spacing:1.4px;
+ display:block;margin:0 0 12px;color:#e9c18a;font-size:10px;letter-spacing:1.4px;
 }
 body.electronicama-theme .admin-memory-card :is(a,button){
  max-width:100%;min-height:44px;white-space:normal;overflow-wrap:anywhere;
 }
 @media(max-width:800px){
+ body.electronicama-theme .admin-botanical-hero{min-height:0;padding:154px 24px 28px}
+ body.electronicama-theme .admin-botanical-hero::before{inset:0 16px auto auto;width:230px;height:142px;background-size:230px auto}
  body.electronicama-theme .admin-memory-grid{grid-template-columns:minmax(0,1fr)}
- body.electronicama-theme .admin-memory-card{padding:26px 132px 26px 22px;background-position:right 10px center}
+ body.electronicama-theme .admin-memory-card{padding:26px 164px 26px 22px;background-position:right 10px center}
 }
 @media(max-width:600px){
  body.electronicama-theme .botanical-interface:not(.botanical-interface-inline)::before{
   flex-basis:60px;max-width:100px;background-size:contain;
  }
- body.electronicama-theme .admin-botanical-hero{min-height:0;padding:124px 20px 26px;border-radius:18px}
- body.electronicama-theme .admin-botanical-hero::before{inset:0 12px auto auto;width:190px;height:116px;background-size:190px auto}
+ body.electronicama-theme .admin-botanical-hero{min-height:0;padding:154px 20px 26px;border-radius:18px}
+ body.electronicama-theme .admin-botanical-hero::before{inset:0 12px auto auto;width:230px;height:142px;background-size:230px auto}
  body.electronicama-theme .admin-botanical-hero :is(h2,h3){font-size:clamp(30px,9vw,42px)}
  body.electronicama-theme .admin-memory-grid{gap:12px}
- body.electronicama-theme .admin-memory-card{padding:70px 20px 22px;background-position:right 12px top 3px}
+ body.electronicama-theme .admin-memory-card{padding:98px 20px 22px;background-position:right 12px top 3px}
 }
 @media(forced-colors:active){
  body.electronicama-theme .botanical-interface:not(.botanical-interface-inline)::before,
@@ -75,4 +77,37 @@ body.electronicama-theme .admin-memory-card :is(a,button){
  body.electronicama-theme .admin-memory-card{background-image:none;padding:22px}
 }
 
-body.electronicama-theme .admin-botanical-hero .admin-session-identity{margin-top:14px;font-size:13px;color:#b8dacf}
+body.electronicama-theme .admin-botanical-hero .admin-session-identity{margin-top:14px;font-size:13px;color:#e9c18a}
+
+/* The administrator's workspace keeps a still ember palette from top to bottom. */
+body.electronicama-theme #admin-panel{
+ --neon:#f5cf86;--neon-rgb:245,207,134;
+ background:#090706!important;border-color:#b98042!important;animation:none;
+ box-shadow:0 0 0 1px #a85f251f,0 0 24px #a853191f;
+}
+body.electronicama-theme #admin-panel :is(h2,h3,h4){
+ color:#ffdc98!important;text-shadow:0 0 14px #d0762430;
+}
+body.electronicama-theme #admin-panel .eyebrow{color:#edc68e}
+body.electronicama-theme #admin-panel :is(summary,.day-heading){color:#f2cc89}
+body.electronicama-theme #admin-panel :is(label,td){color:#e8dccb}
+body.electronicama-theme #admin-panel :is(details,.admin-statistics,.statistics-cards article,.statistics-grid article){
+ background:#100b08;border-color:#98652f;animation:none;
+ box-shadow:inset 0 1px 0 #d9954621;
+}
+body.electronicama-theme #admin-panel :is(.admin-refresh-controls,.stream-alias-admin,.admin-counters){
+ background:#130d08;border-color:#ad7538;color:#f0dfc3;
+}
+body.electronicama-theme #admin-panel :is(th,td){border-color:#815b35}
+body.electronicama-theme #admin-panel th{background:#26180c;color:#ffe5b2}
+body.electronicama-theme #admin-panel :is(.statistics-cards strong,.statistics-grid strong){color:#ffdb91}
+body.electronicama-theme #admin-panel :is(.statistics-cards span,.statistics-grid span){color:#e3d5c0}
+body.electronicama-theme #admin-panel .day{background:#160f09;border-color:#815b35;color:#e8dccb}
+body.electronicama-theme #admin-panel :is(button,a,input,select,textarea,summary):focus-visible{
+ outline:3px solid #ffe3a1;outline-offset:4px;
+}
+@media(forced-colors:active){
+ body.electronicama-theme #admin-panel,
+ body.electronicama-theme #admin-panel :is(details,.admin-statistics,.statistics-cards article,.statistics-grid article){box-shadow:none}
+ body.electronicama-theme #admin-panel :is(h2,h3,h4){text-shadow:none}
+}
