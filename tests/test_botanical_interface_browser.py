@@ -1,4 +1,4 @@
-"""Twenty decorative flowers preserve navigation, account states and live controls."""
+"""Sparse floral accents preserve navigation, account states and live controls."""
 import secrets
 
 from playwright.sync_api import expect, sync_playwright
@@ -27,8 +27,11 @@ def close_preferences(page):
 def check_flowers(page, width):
     page.set_viewport_size({'width':width,'height':900})
     settle(page)
-    expect(page.locator(FLOWERS)).to_have_count(20)
-    expect(page.locator(FLOWERS+':visible')).to_have_count(20)
+    flowers=page.locator(FLOWERS)
+    expect(flowers.first).to_be_visible()
+    count=flowers.count()
+    assert 1<=count<=6,(page.url,width,count)
+    expect(page.locator(FLOWERS+':visible')).to_have_count(count)
     assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+2'),width
     issues=page.evaluate('''() => {
         const groups=[...document.querySelectorAll('.botanical-interface')],issues=[];
@@ -65,14 +68,17 @@ def check_flowers(page, width):
 
 
 def assert_no_duplicates(page):
+    count=page.locator(FLOWERS).count()
     page.evaluate('''() => {
+        window.botanicalNodesBeforeRefresh=[...document.querySelectorAll('.botanical-interface .botanical-flower')];
         for(let i=0;i<5;i++){
             window.dispatchEvent(new Event('ol:account-refreshed'));
             window.dispatchEvent(new CustomEvent('ol:interface-update',{detail:{public:true,account:true}}));
         }
     }''')
     settle(page)
-    expect(page.locator(FLOWERS)).to_have_count(20)
+    expect(page.locator(FLOWERS)).to_have_count(count)
+    assert page.evaluate("[...document.querySelectorAll('.botanical-interface .botanical-flower')].every((flower,index)=>flower===window.botanicalNodesBeforeRefresh[index])"),'unchanged refresh replaced floral accents'
 
 
 def check_stage_controls(page, width):
@@ -199,7 +205,7 @@ def run():
         check_flowers(live,390)
         assert not errors,errors
         browser.close()
-    print('OK: literal Flores entry phrase, twenty decorative flowers, no covered controls, guest/member/admin states, working search/menu, live heading and 320/390/768/1440 layouts')
+    print('OK: literal Flores entry phrase, sparse stable floral accents, no covered controls, guest/member/admin states, working search/menu, live heading and 320/390/768/1440 layouts')
 
 
 if __name__=='__main__':run()

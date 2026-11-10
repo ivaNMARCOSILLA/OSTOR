@@ -38,3 +38,15 @@ espacios separados para textos, formularios y adornos.
 
 Las imágenes tienen una URL de versión nueva para que la caché no conserve
 el dibujo anterior después de actualizar la aplicación.
+
+## Margaritas libres · 9.29.11
+
+La composición cambia a margaritas de pétalos redondeados y centros amarillos,
+con flores blancas, rosas, violetas, azules y coral. Los dibujos tienen tamaños,
+ángulos y posiciones diferentes. Se retiran las veinte flores distribuidas en
+filas y los fondos repetidos; quedan pequeños grupos asimétricos que conservan
+su posición durante las actualizaciones.
+
+El panel adopta superficies oscuras, texto claro, acentos de colores y rayas
+finas multicolor. El ramo de la cabecera tiene su propio espacio y las tarjetas
+conmemorativas dejan de repetir el mismo adorno floral.

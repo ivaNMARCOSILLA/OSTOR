@@ -121,11 +121,11 @@ body.electronicama-theme :is(#hero,#hologramas,.account-shell>.intro){position:r
 body.electronicama-theme #hologramas{border-width:2px}
 body.electronicama-theme #holograms-title{color:#f5d397;text-shadow:none}
 @media(max-width:600px){.electronicama-theme .platform-header nav{flex-wrap:wrap}}
-/* Granel-inspired leaves sit on the black canvas around opaque content panels. */
+/* Loose floral drawings sit at different positions on the black canvas. */
 body.electronicama-theme :is(#hero,#hologramas,.account-shell>.intro)::before{content:none!important;display:none!important}
-body.electronicama-theme,body.electronicama-theme:has(>.back){background-color:#000;background-image:url('/assets/botanical-leaf-border.svg?v=9.29.10'),url('/assets/botanical-leaf-border.svg?v=9.29.10');background-position:left 100px,right 460px;background-size:140px 840px,110px 660px;background-repeat:repeat-y}
-/* Sparse branches preserve the artwork proportions at every screen size. */
-@media(max-width:600px){body.electronicama-theme,body.electronicama-theme:has(>.back){background-size:58px 348px,66px 396px}}
+body.electronicama-theme,body.electronicama-theme:has(>.back){background-color:#000;background-image:url('/assets/botanical-leaf-border.svg?v=9.29.11'),url('/assets/botanical-leaf.svg?v=9.29.11');background-position:left 170px,right 68%;background-size:150px 900px,140px auto;background-repeat:no-repeat}
+/* Floral accents keep their proportions and never tile into a pattern. */
+@media(max-width:600px){body.electronicama-theme,body.electronicama-theme:has(>.back){background-size:78px 468px,88px auto}}
 @media(forced-colors:active){body.electronicama-theme,body.electronicama-theme:has(>.back){background-image:none}}
 .mobile-live-only{display:none}
 @media(max-width:600px){

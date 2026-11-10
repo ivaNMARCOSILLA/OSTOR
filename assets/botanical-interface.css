@@ -1,13 +1,19 @@
-/* Hand-drawn floral separators occupy their own row, outside interactive panels. */
-.botanical-interface{display:flex;align-items:center;justify-content:flex-end;gap:10px;box-sizing:border-box;min-width:0;max-width:100%;height:48px;max-height:50px;margin:0 12px 8px;padding:2px 0;overflow:hidden;pointer-events:none;user-select:none;line-height:0}
-.botanical-interface .botanical-flower{display:block;flex:0 1 28px;min-width:0;width:28px;height:40px;max-width:100%;max-height:100%;margin:0;padding:0;border:0;border-radius:0;background:none;object-fit:contain;opacity:1}
-.botanical-interface .botanical-flower-rose{filter:brightness(.94) saturate(1.08);opacity:.96}
-.botanical-caption-host{display:flex!important;align-items:center;justify-content:space-between;gap:10px;min-width:0}
-.botanical-interface.botanical-interface-inline{display:inline-flex;flex:none;width:auto;height:22px;max-height:22px;margin:0;padding:0;gap:6px}
-.botanical-interface-inline .botanical-flower{flex-basis:15px;width:15px;height:22px}
+/* Loose, sparse flower compositions have their own space outside controls. */
+.botanical-interface.botanical-interface-free{display:flex;align-items:center;gap:13px;box-sizing:border-box;min-width:0;max-width:100%;height:64px;max-height:64px;margin:3px 12px 13px;padding:7px 12px;overflow:hidden;pointer-events:none;user-select:none;line-height:0}
+.botanical-interface-free[data-composition=meadow]{justify-content:flex-start;padding-left:clamp(15px,9vw,140px);gap:19px}
+.botanical-interface-free[data-composition=drift]{justify-content:flex-end;padding-right:clamp(28px,17vw,220px);margin-top:9px;margin-bottom:3px}
+.botanical-interface-free[data-composition=solo]{justify-content:flex-start;padding-left:clamp(22px,27vw,340px);margin-top:0;margin-bottom:17px}
+.botanical-interface-free .botanical-flower{display:block;flex:0 0 32px;min-width:0;width:32px;height:44px;max-width:100%;max-height:100%;margin:0;padding:0;border:0;border-radius:0;background:none;object-fit:contain;opacity:1}
+.botanical-interface-free .botanical-flower[data-flower-gesture=lean]{transform:translateY(3px) rotate(-13deg)}
+.botanical-interface-free .botanical-flower[data-flower-gesture=lift]{flex-basis:24px;width:24px;height:34px;transform:translateY(-6px) rotate(19deg)}
+.botanical-interface-free[data-composition=drift] .botanical-flower[data-flower-gesture=lean]{transform:translateY(1px) rotate(11deg)}
+.botanical-interface-free[data-composition=solo] .botanical-flower[data-flower-gesture=lean]{transform:translateY(-2px) rotate(-6deg)}
+.botanical-flower[data-flower-tone=blue]{filter:hue-rotate(215deg)}
+.botanical-flower[data-flower-tone=violet]{filter:hue-rotate(275deg)}
+.botanical-flower[data-flower-tone=lemon]{filter:hue-rotate(48deg) saturate(.85)}
+.botanical-flower[data-flower-tone=white]{filter:saturate(.45) brightness(1.12)}
 @media(max-width:800px){
- .botanical-interface{height:38px;max-height:40px;margin:0 8px 6px;gap:8px;padding:1px 0}
- .botanical-interface .botanical-flower{flex-basis:23px;width:23px;height:32px}
- .botanical-interface.botanical-interface-inline{height:22px;max-height:22px;gap:5px}
- .botanical-interface-inline .botanical-flower{flex-basis:15px;width:15px;height:22px}
+ .botanical-interface.botanical-interface-free{height:58px;max-height:58px;margin-right:8px;margin-left:8px;padding-top:6px;padding-bottom:6px}
+ .botanical-interface-free .botanical-flower{flex-basis:29px;width:29px;height:40px}
+ .botanical-interface-free .botanical-flower[data-flower-gesture=lift]{flex-basis:22px;width:22px;height:31px}
 }

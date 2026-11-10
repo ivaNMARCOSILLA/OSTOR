@@ -1,51 +1,89 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 220" fill="none">
   <defs>
-    <linearGradient id="petal-gold" x1="201" y1="145" x2="290" y2="24" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#ad542a"/>
-      <stop offset=".45" stop-color="#e6a846"/>
-      <stop offset="1" stop-color="#ffe2a0"/>
-    </linearGradient>
-    <linearGradient id="leaf-gold" x1="28" y1="196" x2="202" y2="120" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#b56631"/>
-      <stop offset=".52" stop-color="#f2c469"/>
-      <stop offset="1" stop-color="#d78b38"/>
-    </linearGradient>
+    <path id="petal-open" d="M-3-7C-15-15-13-37-4-40C7-43 13-17 4-7Z"/>
+    <path id="petal-soft" d="M-4-7C-15-11-19-29-10-35C1-43 13-19 4-7Z"/>
+    <path id="petal-long" d="M-3-7C-10-19-8-43 1-44C12-42 10-18 4-7Z"/>
   </defs>
   <g stroke-linecap="round" stroke-linejoin="round">
-    <path d="M18 211C78 221 105 201 151 184C190 169 225 139 245 98" stroke="url(#leaf-gold)" stroke-width="2"/>
-    <path d="M24 211C86 216 116 195 154 183" stroke="#f9d68d" stroke-width=".75" opacity=".65"/>
-    <g fill="url(#leaf-gold)" fill-opacity=".17" stroke="url(#leaf-gold)" stroke-width="1.5">
-      <path d="M91 188C71 183 56 158 24 157C46 139 78 149 93 169C104 182 121 177 131 165C124 185 111 196 91 188Z"/>
-      <path d="M140 168C138 147 143 130 120 112C145 111 164 128 164 148C166 161 178 164 186 154C174 175 157 182 140 168Z"/>
-      <path d="M173 173C197 164 211 174 226 188C238 199 251 200 264 192C253 214 226 213 210 198C196 185 183 190 166 184Z"/>
-    </g>
-    <g stroke="#f5ce78" stroke-width=".85" opacity=".8">
-      <path d="M119 184C78 183 77 153 34 157M157 170C151 144 151 134 125 116M177 181C209 174 221 207 254 200"/>
-      <path d="M79 171L67 157M91 181L87 166M145 147L136 139M153 159L160 144M206 184L216 184M222 198L230 194" opacity=".7"/>
-    </g>
-    <g fill="url(#petal-gold)" fill-opacity=".15" stroke="url(#petal-gold)" stroke-width="1.55">
-      <path d="M247 79C225 64 243 41 235 14C263 26 276 51 252 79Z"/>
-      <path d="M251 80C254 52 282 54 300 27C308 62 286 85 258 88Z"/>
-      <path d="M257 88C281 74 307 84 335 73C321 106 290 117 258 95Z"/>
-      <path d="M255 94C282 98 291 121 314 134C283 139 261 121 248 100Z"/>
-      <path d="M244 98C241 125 215 132 203 156C193 127 208 102 238 94Z"/>
-      <path d="M238 89C214 100 193 90 173 99C182 69 209 72 241 83Z"/>
-      <path d="M240 82C215 72 219 49 203 32C232 35 250 53 246 79Z"/>
-    </g>
-    <g stroke="#ffd790" stroke-width=".8" opacity=".85">
-      <path d="M248 76C254 53 245 37 240 25M256 82C276 70 287 56 296 39M262 90C286 94 306 88 324 79M254 100C273 113 285 126 303 131M239 101C218 115 209 135 205 145M236 86C211 84 194 86 181 94M241 77C230 60 224 47 210 38"/>
-      <path d="M250 60C257 53 258 44 255 39M278 67L287 65M294 94L305 99M276 118L282 117M222 119L222 130M208 84L202 79M228 58L220 57" opacity=".65"/>
-    </g>
-    <path d="M239 84C243 77 252 78 257 85C261 91 253 99 247 99C240 99 235 91 239 84Z" fill="#c8742f" stroke="#ffdd93" stroke-width="1.35"/>
-    <path d="M245 91L239 74M249 90L254 70M251 93L266 83M245 94L232 102" stroke="#f4bd61" stroke-width="1"/>
-    <g fill="#ffe4a8">
-      <circle cx="239" cy="74" r="2.2"/>
-      <circle cx="254" cy="70" r="1.8"/>
-      <circle cx="266" cy="83" r="2.1"/>
-      <circle cx="232" cy="102" r="1.6"/>
-      <circle cx="247" cy="89" r="2.5"/>
-    </g>
-    <path d="M282 151C279 143 286 139 286 132C292 142 295 148 288 155" stroke="#cb7936" stroke-width="1.1" opacity=".7"/>
-    <path d="M190 53C185 47 190 42 188 37" stroke="#f0bc63" stroke-width="1" opacity=".6"/>
+    <path d="M156 212C164 166 198 135 219 81" stroke="#66d4a2" stroke-width="2.3"/>
+    <path d="M153 210C154 171 144 150 133 123" stroke="#45b997" stroke-width="1.9"/>
+    <path d="M164 211C209 202 258 182 302 144" stroke="#66ccbd" stroke-width="1.8"/>
+    <path d="M152 207C122 163 96 132 77 86" stroke="#82c790" stroke-width="1.8"/>
+    <path d="M161 209C217 158 264 109 280 40" stroke="#83d4b7" stroke-width="1.5"/>
+    <path d="M169 185C190 165 220 172 237 161C232 183 202 193 169 185Z" fill="#258e72" stroke="#7bdbab" stroke-width="1.2"/>
+    <path d="M145 178C125 173 105 151 88 157C97 178 119 188 145 178Z" fill="#267f74" stroke="#74c9bc" stroke-width="1.1"/>
+    <path d="M184 149C178 128 189 110 183 96C206 110 202 135 184 149Z" fill="#398c61" stroke="#a2dda5" stroke-width="1.1"/>
+    <path d="M176 182C197 180 220 173 233 164M139 177C122 169 109 162 94 160M185 142C189 125 188 111 185 101" stroke="#b4ead0" stroke-opacity=".65" stroke-width=".8"/>
   </g>
+  <g transform="translate(77 86) rotate(-22) scale(0.63)">
+<use href="#petal-open" transform="rotate(-2.0) scale(1 1)" fill="#a798ff" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-soft" transform="rotate(43.0) scale(1 0.93)" fill="#c7baff" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-long" transform="rotate(79.0) scale(1 1.04)" fill="#9279f5" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-open" transform="rotate(122.0) scale(1 0.97)" fill="#a798ff" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-soft" transform="rotate(157.0) scale(1 1.08)" fill="#c7baff" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-open" transform="rotate(201.0) scale(1 0.94)" fill="#9279f5" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-soft" transform="rotate(244.0) scale(1 1.02)" fill="#a798ff" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-long" transform="rotate(278.0) scale(1 0.9)" fill="#c7baff" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-open" transform="rotate(321.0) scale(1 1.06)" fill="#9279f5" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<path d="M-10-1C-11-9-4-13 3-11C11-10 13-3 10 4C8 12-3 12-8 7C-10 5-11 1-10-1Z" fill="#ffcf3d" stroke="#ffe994" stroke-width="1.1"/>
+<g fill="#94720c"><circle cx="-4" cy="-4" r="1.2"/><circle cx="3" cy="-5" r="1"/><circle cx="6" cy="1" r="1.1"/><circle cx="0" cy="4" r="1.2"/><circle cx="-5" cy="3" r=".9"/></g>
+</g>
+<g transform="translate(280 40) rotate(17) scale(0.51)">
+<use href="#petal-open" transform="rotate(-2.0) scale(1 1)" fill="#ff9675" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-soft" transform="rotate(48.0) scale(1 0.93)" fill="#ffb26c" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-long" transform="rotate(89.0) scale(1 1.04)" fill="#ff806c" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-open" transform="rotate(137.0) scale(1 0.97)" fill="#ff9675" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-soft" transform="rotate(177.0) scale(1 1.08)" fill="#ffb26c" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-open" transform="rotate(226.0) scale(1 0.94)" fill="#ff806c" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-soft" transform="rotate(274.0) scale(1 1.02)" fill="#ff9675" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-long" transform="rotate(313.0) scale(1 0.9)" fill="#ffb26c" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<path d="M-10-1C-11-9-4-13 3-11C11-10 13-3 10 4C8 12-3 12-8 7C-10 5-11 1-10-1Z" fill="#ffcf3d" stroke="#ffe994" stroke-width="1.1"/>
+<g fill="#94720c"><circle cx="-4" cy="-4" r="1.2"/><circle cx="3" cy="-5" r="1"/><circle cx="6" cy="1" r="1.1"/><circle cx="0" cy="4" r="1.2"/><circle cx="-5" cy="3" r=".9"/></g>
+</g>
+<g transform="translate(133 123) rotate(-13) scale(0.81)">
+<use href="#petal-open" transform="rotate(-2.0) scale(1 1)" fill="#ff74b8" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-soft" transform="rotate(39.0) scale(1 0.93)" fill="#ffadd6" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-long" transform="rotate(71.0) scale(1 1.04)" fill="#ef5ba2" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-open" transform="rotate(110.0) scale(1 0.97)" fill="#ff74b8" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-soft" transform="rotate(141.0) scale(1 1.08)" fill="#ffadd6" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-open" transform="rotate(181.0) scale(1 0.94)" fill="#ef5ba2" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-soft" transform="rotate(220.0) scale(1 1.02)" fill="#ff74b8" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-long" transform="rotate(250.0) scale(1 0.9)" fill="#ffadd6" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-open" transform="rotate(289.0) scale(1 1.06)" fill="#ef5ba2" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-soft" transform="rotate(323.0) scale(1 0.96)" fill="#ff74b8" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<path d="M-10-1C-11-9-4-13 3-11C11-10 13-3 10 4C8 12-3 12-8 7C-10 5-11 1-10-1Z" fill="#ffcf3d" stroke="#ffe994" stroke-width="1.1"/>
+<g fill="#94720c"><circle cx="-4" cy="-4" r="1.2"/><circle cx="3" cy="-5" r="1"/><circle cx="6" cy="1" r="1.1"/><circle cx="0" cy="4" r="1.2"/><circle cx="-5" cy="3" r=".9"/></g>
+</g>
+<g transform="translate(302 144) rotate(31) scale(0.65)">
+<use href="#petal-open" transform="rotate(-2.0) scale(1 1)" fill="#75d9ff" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-soft" transform="rotate(43.0) scale(1 0.93)" fill="#b5edff" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-long" transform="rotate(79.0) scale(1 1.04)" fill="#57b9f4" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-open" transform="rotate(122.0) scale(1 0.97)" fill="#75d9ff" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-soft" transform="rotate(157.0) scale(1 1.08)" fill="#b5edff" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-open" transform="rotate(201.0) scale(1 0.94)" fill="#57b9f4" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-soft" transform="rotate(244.0) scale(1 1.02)" fill="#75d9ff" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-long" transform="rotate(278.0) scale(1 0.9)" fill="#b5edff" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-open" transform="rotate(321.0) scale(1 1.06)" fill="#57b9f4" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<path d="M-10-1C-11-9-4-13 3-11C11-10 13-3 10 4C8 12-3 12-8 7C-10 5-11 1-10-1Z" fill="#ffcf3d" stroke="#ffe994" stroke-width="1.1"/>
+<g fill="#94720c"><circle cx="-4" cy="-4" r="1.2"/><circle cx="3" cy="-5" r="1"/><circle cx="6" cy="1" r="1.1"/><circle cx="0" cy="4" r="1.2"/><circle cx="-5" cy="3" r=".9"/></g>
+</g>
+<g transform="translate(219 81) rotate(-5) scale(1)">
+<use href="#petal-open" transform="rotate(-2.0) scale(1 1)" fill="#fffef8" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-soft" transform="rotate(35.73) scale(1 0.93)" fill="#f4f7ff" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-long" transform="rotate(64.45) scale(1 1.04)" fill="#ffffff" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-open" transform="rotate(100.18) scale(1 0.97)" fill="#fffef8" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-soft" transform="rotate(127.91) scale(1 1.08)" fill="#f4f7ff" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-open" transform="rotate(164.64) scale(1 0.94)" fill="#ffffff" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-soft" transform="rotate(200.36) scale(1 1.02)" fill="#fffef8" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-long" transform="rotate(227.09) scale(1 0.9)" fill="#f4f7ff" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-open" transform="rotate(262.82) scale(1 1.06)" fill="#ffffff" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-soft" transform="rotate(293.55) scale(1 0.96)" fill="#fffef8" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<use href="#petal-open" transform="rotate(329.27) scale(1 1)" fill="#f4f7ff" stroke="#fffafa" stroke-opacity=".68" stroke-width=".75"/>
+<path d="M-10-1C-11-9-4-13 3-11C11-10 13-3 10 4C8 12-3 12-8 7C-10 5-11 1-10-1Z" fill="#ffcf3d" stroke="#ffe994" stroke-width="1.1"/>
+<g fill="#94720c"><circle cx="-4" cy="-4" r="1.2"/><circle cx="3" cy="-5" r="1"/><circle cx="6" cy="1" r="1.1"/><circle cx="0" cy="4" r="1.2"/><circle cx="-5" cy="3" r=".9"/></g>
+</g>
+  <path d="M36 146C25 135 25 124 33 126C42 129 45 141 36 146Z" fill="#ff9fd1" transform="rotate(-19 35 136)"/>
+  <path d="M248 202C241 194 244 184 250 187C256 192 255 200 248 202Z" fill="#b8a8ff"/>
+  <path d="M334 78C326 69 331 62 337 65C341 70 340 77 334 78Z" fill="#a1e6ff"/>
+  <path d="M111 45C103 42 103 34 109 34C116 35 116 42 111 45Z" fill="#fff0a8"/>
 </svg>

@@ -20,8 +20,11 @@ def close_preferences(page):
 def check_leaves(page):
     strips = page.locator('.botanical-interface:not(.botanical-interface-inline)')
     expect(strips.first).to_be_visible()
-    assert strips.first.evaluate("node=>getComputedStyle(node,'::before').backgroundImage.includes('botanical-leaf.svg')")
-    assert strips.first.evaluate("node=>getComputedStyle(node,'::before').pointerEvents==='none'")
+    art = strips.first.locator('img').first
+    expect(art).to_be_visible()
+    expect(art).to_have_js_property('complete', True)
+    assert art.evaluate("image=>image.naturalWidth>0")
+    assert strips.first.evaluate("node=>getComputedStyle(node).pointerEvents==='none'")
     assert strips.first.get_attribute('aria-hidden') == 'true'
     assert strips.first.locator('a,button,input,[tabindex]').count() == 0
     assert page.locator('#granel-poster,.search-granel-banner').count() == 0

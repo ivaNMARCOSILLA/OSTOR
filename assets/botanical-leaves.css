@@ -1,113 +1,99 @@
-/* Hand-drawn blossoms and flame-shaped gold foliage.
-   Decorative separators keep their own space in the normal document flow. */
-body.electronicama-theme .botanical-interface:not(.botanical-interface-inline)::before{
- content:"";display:block;flex:1 1 120px;align-self:stretch;min-width:0;max-width:210px;
- background:url('/assets/botanical-leaf.svg?v=9.29.10') left center/contain no-repeat;
- opacity:.95;pointer-events:none;
-}
-body.electronicama-theme .botanical-interface:not(.botanical-interface-inline){
- justify-content:space-between;
-}
-/* Blossoms have reserved space beside the title, never above controls. */
+/* Loose multicolour daisies: one bouquet has its own space beside the title.
+   Small floral accents are placed independently by botanical-interface.js. */
 body.electronicama-theme .admin-botanical-hero{
  display:block;position:relative;isolation:isolate;box-sizing:border-box;min-width:0;overflow:hidden;
- min-height:250px;margin:0 0 24px;padding:34px 320px 34px 30px;
- border:1px solid #b68243;border-radius:22px;
- background:linear-gradient(115deg,#1a100a,#090706);color:#f1d7a3;
+ min-height:250px;margin:0 0 24px;padding:34px 320px 38px 30px;
+ border:1px solid #8777aa;border-radius:22px;
+ background:linear-gradient(90deg,#ff85bf,#b4a0ff 30%,#84d8ef 62%,#c7ec9a) left bottom/100% 4px no-repeat,linear-gradient(115deg,#14101b,#090b10);
+ color:#f8f4ff;
 }
 body.electronicama-theme .admin-botanical-hero::before{
  content:"";position:absolute;z-index:-1;inset:0 0 0 auto;width:290px;
- background:url('/assets/botanical-leaf.svg?v=9.29.10') center/300px auto no-repeat;
+ background:url('/assets/botanical-leaf.svg?v=9.29.11') center/300px auto no-repeat;
  opacity:1;pointer-events:none;
 }
 body.electronicama-theme .admin-botanical-hero>.eyebrow{
- display:block;margin:0 0 16px;color:#e9c18a;font-size:11px;line-height:1.65;letter-spacing:2px;
+ display:block;margin:0 0 16px;color:#cfc1ff;font-size:11px;line-height:1.65;letter-spacing:2px;
 }
 body.electronicama-theme .admin-botanical-hero :is(h2,h3){
- margin:0 0 18px;color:#f1d7a3;font-size:clamp(32px,5vw,56px);font-weight:600;
+ margin:0 0 18px;color:#f8f4ff;font-size:clamp(32px,5vw,56px);font-weight:600;
  line-height:1.1;letter-spacing:-1px;overflow-wrap:anywhere;
 }
 body.electronicama-theme .admin-botanical-hero :is(h2,h3)::before{content:none}
 body.electronicama-theme .admin-botanical-hero>p:not(.eyebrow){
- max-width:43rem;margin:0;color:#e1d5be;line-height:1.7;overflow-wrap:anywhere;
+ max-width:43rem;margin:0;color:#ddd9e7;line-height:1.7;overflow-wrap:anywhere;
 }
 body.electronicama-theme .admin-memory-grid{
  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;
  min-width:0;margin:0 0 28px;
 }
 body.electronicama-theme .admin-memory-card{
- box-sizing:border-box;min-width:0;margin:0;padding:96px 22px 24px;
- border:1px solid #98652f;border-radius:18px;
- background:#100b08 url('/assets/botanical-leaf.svg?v=9.29.10') right 12px top 3px/140px 86px no-repeat;
- color:#eddbb7;
+ box-sizing:border-box;min-width:0;margin:0;padding:28px 22px 26px;
+ border:1px solid #716c88;border-radius:18px;background:#100f17;color:#f1edf8;
 }
+body.electronicama-theme .admin-memory-card:first-child{border-top:3px solid #ed9ac9}
+body.electronicama-theme .admin-memory-card:last-child{border-left:3px solid #8bdaea}
 body.electronicama-theme .admin-memory-card :is(h3,h4){
- margin:0 0 12px;color:#f1d7a3;font-size:clamp(20px,2.4vw,27px);
+ margin:0 0 12px;color:#f5ecff;font-size:clamp(20px,2.4vw,27px);
  line-height:1.25;font-weight:600;overflow-wrap:anywhere;
 }
 body.electronicama-theme .admin-memory-card>p{
- margin:0;color:#d6ccba;font-size:14px;line-height:1.7;overflow-wrap:anywhere;
+ margin:0;color:#d8d4e1;font-size:14px;line-height:1.7;overflow-wrap:anywhere;
 }
 body.electronicama-theme .admin-memory-card>.eyebrow{
- display:block;margin:0 0 12px;color:#e9c18a;font-size:10px;letter-spacing:1.4px;
+ display:block;margin:0 0 12px;color:#cfc1ff;font-size:10px;letter-spacing:1.4px;
 }
 body.electronicama-theme .admin-memory-card :is(a,button){
  max-width:100%;min-height:44px;white-space:normal;overflow-wrap:anywhere;
 }
+body.electronicama-theme .admin-botanical-hero .admin-session-identity{
+ margin-top:14px;font-size:13px;color:#cfc1ff;
+}
+/* Colour stays in the flowers and fine accents; working surfaces remain dark. */
+body.electronicama-theme #admin-panel{
+ --neon:#d5c9fa;--neon-rgb:213,201,250;
+ background:#09090d!important;border-color:#8b7ab4!important;animation:none;
+ box-shadow:0 0 0 1px #aea1dc1a,0 0 24px #8274b617;
+}
+body.electronicama-theme #admin-panel :is(h2,h3,h4){color:#f5efff!important;text-shadow:none}
+body.electronicama-theme #admin-panel .admin-memory-card:first-child h3{color:#f5b6d6!important}
+body.electronicama-theme #admin-panel .admin-memory-card:last-child h3{color:#a5e7ee!important}
+body.electronicama-theme #admin-panel .eyebrow{color:#cfc1ff}
+body.electronicama-theme #admin-panel :is(summary,.day-heading){color:#e5ddff}
+body.electronicama-theme #admin-panel :is(label,td){color:#e3dfed}
+body.electronicama-theme #admin-panel :is(details,.admin-statistics,.statistics-cards article,.statistics-grid article){
+ background:#101016!important;border-color:#79728e;animation:none;box-shadow:none;
+}
+body.electronicama-theme #admin-panel :is(.admin-refresh-controls,.stream-alias-admin,.admin-counters){
+ background:#13121b;border-color:#887aa5;color:#e8e2f6;
+}
+body.electronicama-theme #admin-panel :is(th,td){border-color:#706a82}
+body.electronicama-theme #admin-panel th{background:#242031;color:#f2eaff}
+body.electronicama-theme #admin-panel :is(.statistics-cards strong,.statistics-grid strong){color:#d8efb6}
+body.electronicama-theme #admin-panel :is(.statistics-cards span,.statistics-grid span){color:#ded9e9}
+body.electronicama-theme #admin-panel .day{background:#17151f;border-color:#79728e;color:#e3dfed}
+body.electronicama-theme #admin-panel :is(button,.button){background:#d9c8ff;color:#171225;border-color:#d9c8ff}
+body.electronicama-theme #admin-panel :is(button,.button):hover{background:#eadfff;color:#171225;border-color:#eadfff}
+body.electronicama-theme #admin-panel :is(button,.button):disabled{background:#292632;color:#c6c1d0;border-color:#79728e}
+body.electronicama-theme #admin-panel :is(.secondary,.button.secondary){background:#1b1923;color:#ece6f8;border-color:#9388aa}
+body.electronicama-theme #admin-panel :is(.secondary,.button.secondary):hover{background:#282332;color:#f6f0ff;border-color:#c1addf}
+body.electronicama-theme #admin-panel :is(button,a,input,select,textarea,summary):focus-visible{
+ outline:3px solid #a4e9f2;outline-offset:4px;
+}
 @media(max-width:800px){
- body.electronicama-theme .admin-botanical-hero{min-height:0;padding:154px 24px 28px}
+ body.electronicama-theme .admin-botanical-hero{min-height:0;padding:154px 24px 30px}
  body.electronicama-theme .admin-botanical-hero::before{inset:0 16px auto auto;width:230px;height:142px;background-size:230px auto}
  body.electronicama-theme .admin-memory-grid{grid-template-columns:minmax(0,1fr)}
- body.electronicama-theme .admin-memory-card{padding:26px 164px 26px 22px;background-position:right 10px center}
 }
 @media(max-width:600px){
- body.electronicama-theme .botanical-interface:not(.botanical-interface-inline)::before{
-  flex-basis:60px;max-width:100px;background-size:contain;
- }
- body.electronicama-theme .admin-botanical-hero{min-height:0;padding:154px 20px 26px;border-radius:18px}
+ body.electronicama-theme .admin-botanical-hero{padding:154px 20px 28px;border-radius:18px}
  body.electronicama-theme .admin-botanical-hero::before{inset:0 12px auto auto;width:230px;height:142px;background-size:230px auto}
  body.electronicama-theme .admin-botanical-hero :is(h2,h3){font-size:clamp(30px,9vw,42px)}
  body.electronicama-theme .admin-memory-grid{gap:12px}
- body.electronicama-theme .admin-memory-card{padding:98px 20px 22px;background-position:right 12px top 3px}
+ body.electronicama-theme .admin-memory-card{padding:25px 20px}
 }
 @media(forced-colors:active){
- body.electronicama-theme .botanical-interface:not(.botanical-interface-inline)::before,
  body.electronicama-theme .admin-botanical-hero::before{display:none}
- body.electronicama-theme .admin-botanical-hero{padding:24px}
- body.electronicama-theme .admin-memory-card{background-image:none;padding:22px}
-}
-
-body.electronicama-theme .admin-botanical-hero .admin-session-identity{margin-top:14px;font-size:13px;color:#e9c18a}
-
-/* The administrator's workspace keeps a still ember palette from top to bottom. */
-body.electronicama-theme #admin-panel{
- --neon:#f5cf86;--neon-rgb:245,207,134;
- background:#090706!important;border-color:#b98042!important;animation:none;
- box-shadow:0 0 0 1px #a85f251f,0 0 24px #a853191f;
-}
-body.electronicama-theme #admin-panel :is(h2,h3,h4){
- color:#ffdc98!important;text-shadow:0 0 14px #d0762430;
-}
-body.electronicama-theme #admin-panel .eyebrow{color:#edc68e}
-body.electronicama-theme #admin-panel :is(summary,.day-heading){color:#f2cc89}
-body.electronicama-theme #admin-panel :is(label,td){color:#e8dccb}
-body.electronicama-theme #admin-panel :is(details,.admin-statistics,.statistics-cards article,.statistics-grid article){
- background:#100b08;border-color:#98652f;animation:none;
- box-shadow:inset 0 1px 0 #d9954621;
-}
-body.electronicama-theme #admin-panel :is(.admin-refresh-controls,.stream-alias-admin,.admin-counters){
- background:#130d08;border-color:#ad7538;color:#f0dfc3;
-}
-body.electronicama-theme #admin-panel :is(th,td){border-color:#815b35}
-body.electronicama-theme #admin-panel th{background:#26180c;color:#ffe5b2}
-body.electronicama-theme #admin-panel :is(.statistics-cards strong,.statistics-grid strong){color:#ffdb91}
-body.electronicama-theme #admin-panel :is(.statistics-cards span,.statistics-grid span){color:#e3d5c0}
-body.electronicama-theme #admin-panel .day{background:#160f09;border-color:#815b35;color:#e8dccb}
-body.electronicama-theme #admin-panel :is(button,a,input,select,textarea,summary):focus-visible{
- outline:3px solid #ffe3a1;outline-offset:4px;
-}
-@media(forced-colors:active){
- body.electronicama-theme #admin-panel,
- body.electronicama-theme #admin-panel :is(details,.admin-statistics,.statistics-cards article,.statistics-grid article){box-shadow:none}
- body.electronicama-theme #admin-panel :is(h2,h3,h4){text-shadow:none}
+ body.electronicama-theme .admin-botanical-hero{background-image:none;padding:24px}
+ body.electronicama-theme #admin-panel{box-shadow:none}
 }

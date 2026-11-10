@@ -1,25 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 56" fill="none" stroke-linecap="round" stroke-linejoin="round">
-  <defs>
-    <linearGradient id="small-fire" x1="11" y1="32" x2="28" y2="2" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#ba622d"/>
-      <stop offset=".5" stop-color="#f3bc60"/>
-      <stop offset="1" stop-color="#ffe6af"/>
-    </linearGradient>
-  </defs>
-  <path d="M19 29C14 39 25 44 19 54" stroke="#dba657" stroke-width="1.65"/>
-  <path d="M19 43C11 44 6 39 3 35C13 31 15 40 20 38M21 48C26 39 33 42 37 34C40 46 28 50 21 48" fill="#cf8c3d" fill-opacity=".18" stroke="#e9b65e" stroke-width="1.25"/>
-  <g fill="url(#small-fire)" fill-opacity=".2" stroke="url(#small-fire)" stroke-width="1.35">
-    <path d="M19 18C12 13 19 7 17 1C25 5 26 12 22 18Z"/>
-    <path d="M22 18C23 10 30 11 34 5C37 14 31 20 24 21Z"/>
-    <path d="M24 21C31 18 34 22 39 19C37 28 30 30 24 24Z"/>
-    <path d="M23 24C29 25 29 32 34 35C25 36 20 30 20 26Z"/>
-    <path d="M18 25C17 32 10 33 7 39C3 31 9 24 16 23Z"/>
-    <path d="M16 22C10 26 5 22 1 25C3 16 10 17 17 19Z"/>
-    <path d="M17 19C10 17 12 10 7 6C15 6 20 12 20 17Z"/>
-  </g>
-  <path d="M20 16C24 16 26 20 23 24C20 28 15 24 16 21C16 18 18 17 20 16Z" fill="#db9037" stroke="#ffe3a0" stroke-width="1.2"/>
-  <path d="M20 19L18 12M22 21L29 16M18 23L12 28" stroke="#ffd988" stroke-width=".9"/>
-  <circle cx="18" cy="12" r="1.1" fill="#ffe5a2"/>
-  <circle cx="29" cy="16" r="1.1" fill="#ffe5a2"/>
-  <circle cx="12" cy="28" r="1" fill="#ffe5a2"/>
+  <path d="M19 30C15 39 24 45 18 54" stroke="#65c3a2" stroke-width="1.7"/>
+  <path d="M20 44C12 44 7 39 4 38C8 34 16 36 20 44Z" fill="#359a78" stroke="#8bddac" stroke-width="1"/>
+  <path d="M20 49C27 46 31 40 36 39C37 46 29 52 20 49Z" fill="#368e7f" stroke="#7bd5be" stroke-width="1"/>
+  <path d="M17 17C10 13 12 3 17 2C22 1 23 11 21 17Z" fill="#ff8fc5" stroke="#ffcee5" stroke-width=".8"/>
+  <path d="M21 17C20 10 28 4 31 7C36 11 29 18 23 20Z" fill="#fffefa" stroke="#e8f3ff" stroke-width=".8"/>
+  <path d="M24 20C29 15 38 16 38 21C39 27 29 27 24 24Z" fill="#ffabd7" stroke="#ffdaec" stroke-width=".8"/>
+  <path d="M23 24C30 24 35 32 31 35C26 38 21 30 20 26Z" fill="#fffef8" stroke="#e8f3ff" stroke-width=".8"/>
+  <path d="M19 26C20 32 15 40 11 36C6 32 11 27 16 24Z" fill="#ff76bb" stroke="#ffcee5" stroke-width=".8"/>
+  <path d="M15 23C9 28 1 25 2 21C2 16 10 15 16 19Z" fill="#fffefa" stroke="#e8f3ff" stroke-width=".8"/>
+  <path d="M16 19C10 18 5 10 9 7C14 3 19 11 19 16Z" fill="#f48dd2" stroke="#ffcee5" stroke-width=".8"/>
+  <path d="M20 16C25 16 27 20 24 25C21 29 15 26 15 21C15 18 17 16 20 16Z" fill="#ffcf3d" stroke="#ffe998" stroke-width="1.1"/>
+  <circle cx="19" cy="20" r=".8" fill="#92700c"/><circle cx="22" cy="22" r=".75" fill="#92700c"/><circle cx="18" cy="24" r=".7" fill="#92700c"/>
 </svg>
