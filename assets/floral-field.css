@@ -1,0 +1,13 @@
+/* One passive layer carries every flower; it never changes page dimensions. */
+body.electronicama-theme{position:relative;isolation:isolate}
+body.electronicama-theme>#floral-field{
+ display:block;position:absolute;inset:0;z-index:-1;
+ width:100%;height:100%;max-width:100%;max-height:100%;
+ margin:0;padding:0;border:0;overflow:hidden;
+ pointer-events:none;user-select:none;opacity:.28;
+}
+body.electronicama-theme>#floral-field *{pointer-events:none}
+/* Legal prose sits directly on the page, so its decoration is quieter. */
+body.electronicama-theme:has(>.back)>#floral-field{opacity:.10}
+@media(forced-colors:active){body.electronicama-theme>#floral-field{display:none}}
+@media print{body.electronicama-theme>#floral-field{display:none}}

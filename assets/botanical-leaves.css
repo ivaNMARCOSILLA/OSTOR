@@ -9,7 +9,7 @@ body.electronicama-theme .admin-botanical-hero{
 }
 body.electronicama-theme .admin-botanical-hero::before{
  content:"";position:absolute;z-index:-1;inset:0 0 0 auto;width:290px;
- background:url('/assets/botanical-leaf.svg?v=9.29.11') center/300px auto no-repeat;
+ background:url('/assets/botanical-leaf.svg?v=9.29.12') center/300px auto no-repeat;
  opacity:1;pointer-events:none;
 }
 body.electronicama-theme .admin-botanical-hero>.eyebrow{

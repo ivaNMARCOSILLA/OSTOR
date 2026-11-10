@@ -1,7 +1,7 @@
-/* ELECTRONICAMA PRO 9.29.11 · caché de interfaz, NO de música ni APIs.
+/* ELECTRONICAMA PRO 9.29.12 · caché de interfaz, NO de música ni APIs.
    © 2026 Iván Marcos Illa, edición de esta aplicación. */
-const CACHE = 'electronicama-shell-v9-29-11';
-const STATIC = ['/assets/botanical-leaf-border.svg?v=9.29.11', '/assets/botanical-leaves.css?v=9.29.11', '/assets/botanical-leaf.svg?v=9.29.11', '/assets/reading-copy.css?v=9.29.11', '/assets/music-memory.css?v=9.29.11', '/assets/radio-visualizer.css?v=9.29.11', '/assets/radio-visualizer.js?v=9.29.11', '/assets/botanical-interface.css?v=9.29.11', '/assets/botanical-interface.js?v=9.29.11', '/assets/botanical-flower.svg?v=9.29.11', '/assets/mobile-shell.css?v=9.29.11', '/assets/mobile-shell.js?v=9.29.11', '/assets/platform-theme.css?v=9.29.11', '/assets/session.js?v=9.29.11', '/assets/styles.css?v=9.29.11', '/assets/ol-theme.css?v=9.29.11', '/assets/app.js?v=9.29.11', '/manifest.webmanifest', '/assets/favicon.svg', '/assets/app-icon-192.png'];
+const CACHE = 'electronicama-shell-v9-29-12';
+const STATIC = ['/assets/floral-field.js?v=9.29.12', '/assets/floral-field.css?v=9.29.12', '/assets/founder-fish.css?v=9.29.12', '/assets/founder-fish.svg?v=9.29.12', '/assets/botanical-leaf-border.svg?v=9.29.12', '/assets/botanical-leaves.css?v=9.29.12', '/assets/botanical-leaf.svg?v=9.29.12', '/assets/reading-copy.css?v=9.29.12', '/assets/music-memory.css?v=9.29.12', '/assets/radio-visualizer.css?v=9.29.12', '/assets/radio-visualizer.js?v=9.29.12', '/assets/botanical-interface.css?v=9.29.12', '/assets/botanical-interface.js?v=9.29.12', '/assets/botanical-flower.svg?v=9.29.12', '/assets/mobile-shell.css?v=9.29.12', '/assets/mobile-shell.js?v=9.29.12', '/assets/platform-theme.css?v=9.29.12', '/assets/session.js?v=9.29.12', '/assets/styles.css?v=9.29.12', '/assets/ol-theme.css?v=9.29.12', '/assets/app.js?v=9.29.12', '/manifest.webmanifest', '/assets/favicon.svg', '/assets/app-icon-192.png'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(STATIC)).then(() => self.skipWaiting()));
 });

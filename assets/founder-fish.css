@@ -1,0 +1,25 @@
+/* A colourful fish burst has its own banner above the founder seal. */
+body.electronicama-theme #founders.founders-promo::before,
+body.electronicama-theme #founders.founders-promo::after{
+ content:none!important;display:none!important;
+}
+body.electronicama-theme #founders .founders-seal{
+ position:relative;box-sizing:border-box;min-width:0;padding-top:138px;
+}
+body.electronicama-theme #founders .founders-seal::before{
+ content:"";position:absolute;inset:5px 8px auto;height:120px;
+ background:url('/assets/founder-fish.svg?v=9.29.12') center/contain no-repeat;
+ border:0;border-radius:0;opacity:1;transform:none;animation:none;
+ pointer-events:none;user-select:none;
+}
+@media(max-width:600px){
+ body.electronicama-theme #founders .founders-seal{padding-top:136px}
+ body.electronicama-theme #founders .founders-seal::before{inset:4px 2px auto;height:122px}
+}
+@media(forced-colors:active){
+ body.electronicama-theme #founders .founders-seal{padding-top:24px}
+ body.electronicama-theme #founders .founders-seal::before{display:none}
+}
+@media(forced-colors:active) and (max-width:600px){
+ body.electronicama-theme #founders .founders-seal{padding-top:18px}
+}

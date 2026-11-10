@@ -50,3 +50,15 @@ su posición durante las actualizaciones.
 El panel adopta superficies oscuras, texto claro, acentos de colores y rayas
 finas multicolor. El ramo de la cabecera tiene su propio espacio y las tarjetas
 conmemorativas dejan de repetir el mismo adorno floral.
+
+## Mil flores, Amapolda y peces · 9.29.12
+
+El fondo incorpora exactamente mil margaritas en una sola capa SVG, con diez
+colores y posiciones, tamaños y giros variados. Las instancias reutilizan dos
+dibujos originales; no realizan mil descargas ni se animan continuamente. La
+capa no ocupa espacio del contenido ni captura pulsaciones. Las páginas legales
+la muestran atenuada para mantener legible el texto.
+
+La entrada y la presentación inicial pasan a decir «Flores Amapolda». Se retiran
+los dos pies «Diva Diba». La ilustración del bloque de las insignias de fundador
+cambia a una explosión de peces de colores.

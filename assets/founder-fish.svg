@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 300" fill="none">
+  <defs>
+    <g id="fish" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M-21 0C-29-5-34-13-43-18C-41-7-36-2-36 0C-37 4-41 11-43 18C-32 14-28 5-21 0Z" fill="currentColor" opacity=".85"/>
+      <path d="M-23 0C-12-19 12-18 29 0C13 18-10 19-23 0Z" fill="currentColor"/>
+      <path d="M-10-12C-6-23 2-25 10-13M-9 12C-4 22 6 22 11 12" fill="currentColor" opacity=".65"/>
+      <path d="M-1-7C-9 0-8 4-2 9C4 5 6 1 5-2" fill="#fff" fill-opacity=".3"/>
+      <path d="M-10-10C-6-3-6 4-10 11M2-12C6-5 6 6 2 13" stroke="#fff" stroke-opacity=".35" stroke-width="2.3"/>
+      <path d="M22 7C19 8 17 8 15 7" stroke="#10242c" stroke-opacity=".5" stroke-width="1.1"/>
+      <circle cx="17" cy="-3" r="3.4" fill="#fff"/>
+      <circle cx="18" cy="-3" r="1.7" fill="#10242c"/>
+      <circle cx="18.6" cy="-3.7" r=".5" fill="#fff"/>
+    </g>
+  </defs>
+  <g opacity=".7" stroke-linecap="round">
+    <path d="M356 138C268 104 191 105 112 74" stroke="#86e4f0" stroke-width="1.3" stroke-dasharray="3 12"/>
+    <path d="M432 160C532 193 620 193 704 235" stroke="#c9b0ff" stroke-width="1.2" stroke-dasharray="2 15"/>
+    <path d="M369 179C303 209 259 229 207 272M430 120C491 90 538 69 593 33" stroke="#ffb6d8" stroke-opacity=".5" stroke-width="1"/>
+  </g>
+  <use href="#fish" transform="translate(88 117) rotate(-24) scale(.95)" color="#59d1e7"/>
+  <use href="#fish" transform="translate(161 61) rotate(-31) scale(.78)" color="#f697c6"/>
+  <use href="#fish" transform="translate(251 104) rotate(-16) scale(1.16)" color="#a694f7"/>
+  <use href="#fish" transform="translate(302 42) rotate(26) scale(.68)" color="#ffc86b"/>
+  <use href="#fish" transform="translate(376 97) rotate(-39) scale(.77)" color="#7ce0b8"/>
+  <use href="#fish" transform="translate(460 49) rotate(163) scale(.73)" color="#69bdf6"/>
+  <use href="#fish" transform="translate(539 106) rotate(156) scale(1.02)" color="#ff9a8b"/>
+  <use href="#fish" transform="translate(635 56) rotate(170) scale(.86)" color="#b4e98e"/>
+  <use href="#fish" transform="translate(723 118) rotate(149) scale(.8)" color="#d3acff"/>
+  <use href="#fish" transform="translate(143 205) rotate(21) scale(1.04)" color="#ffbe72"/>
+  <use href="#fish" transform="translate(251 250) rotate(38) scale(.78)" color="#7bdbd1"/>
+  <use href="#fish" transform="translate(300 178) rotate(12) scale(.8)" color="#fd87b7"/>
+  <use href="#fish" transform="translate(393 224) rotate(-14) scale(1.12)" color="#81bcff"/>
+  <use href="#fish" transform="translate(468 164) rotate(171) scale(.86)" color="#efc66b"/>
+  <use href="#fish" transform="translate(549 252) rotate(152) scale(.74)" color="#c3a0ff"/>
+  <use href="#fish" transform="translate(644 202) rotate(166) scale(1.12)" color="#6fdfbc"/>
+  <use href="#fish" transform="translate(730 246) rotate(-156) scale(.62)" color="#f1a0ce"/>
+  <g stroke-width="1.5">
+    <circle cx="54" cy="201" r="5" stroke="#87d6ec" opacity=".65"/>
+    <circle cx="77" cy="46" r="3" stroke="#b9b0f4" opacity=".7"/>
+    <circle cx="203" cy="152" r="5.5" stroke="#e6a6cf" opacity=".55"/>
+    <circle cx="343" cy="260" r="3.4" stroke="#8dddd2" opacity=".6"/>
+    <circle cx="410" cy="146" r="6" stroke="#d9d4f4" opacity=".8"/>
+    <circle cx="424" cy="130" r="2.5" stroke="#9bdbec" opacity=".7"/>
+    <circle cx="589" cy="162" r="4" stroke="#c8b1f4" opacity=".7"/>
+    <circle cx="703" cy="45" r="4.5" stroke="#b8e9bf" opacity=".6"/>
+    <circle cx="759" cy="184" r="3" stroke="#a9d5f8" opacity=".65"/>
+  </g>
+</svg>

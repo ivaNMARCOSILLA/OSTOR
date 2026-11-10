@@ -117,9 +117,9 @@ def run():
         page.goto(BASE_URL+'/');close_preferences(page)
         page.locator('.track-card').first.wait_for()
         expect(page.locator('#hero-title')).to_contain_text('Flores')
-        expect(page.locator('#hero-title')).to_contain_text('no estar mal')
+        expect(page.locator('#hero-title')).to_contain_text('Flores Amapolda')
         expect(page.locator('#ol-intro-title')).to_contain_text('Flores')
-        expect(page.locator('#ol-intro-title')).to_contain_text('no estar mal')
+        expect(page.locator('#ol-intro-title')).to_contain_text('Flores Amapolda')
         assert page.locator('#hero h1').evaluate("e=>getComputedStyle(e,'::after').backgroundImage")=='none'
         for width in WIDTHS:
             check_flowers(page,width)
@@ -133,8 +133,8 @@ def run():
         page.locator('[data-site-language]').select_option('en')
         expect(page.locator('html')).to_have_attribute('lang','en')
         expect(page.locator('#hero-title')).to_contain_text('Flores')
-        expect(page.locator('#hero-title')).to_contain_text('no estar mal')
-        expect(page.locator('#ol-intro-title')).to_contain_text('no estar mal')
+        expect(page.locator('#hero-title')).to_contain_text('Flores Amapolda')
+        expect(page.locator('#ol-intro-title')).to_contain_text('Flores Amapolda')
         page.locator('[data-site-language]').select_option('es')
         expect(page.locator('html')).to_have_attribute('lang','es')
         for view in ['favorites','history','discover']:
