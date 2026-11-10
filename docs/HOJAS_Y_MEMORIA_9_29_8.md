@@ -20,3 +20,10 @@ Las hojas son decorativas y no capturan pulsaciones. El diseño reserva espacio
 para ellas, se adapta al móvil y elimina los adornos en modo de colores forzados.
 Las pruebas de navegador verifican navegación real, controles accesibles,
 borradores conservados y acceso administrativo denegado a visitantes y miembros.
+
+## Preferencia por las hojas · 9.29.9
+
+El fondo lateral compartido de música, cuenta, Ol Live y páginas legales pasa a
+usar ramas de hojas doradas en lugar de las figuras geométricas decorativas.
+El dibujo conserva sus proporciones en móvil y ordenador y deja espacio entre
+ramas. Los controles y las figuras interactivas de Hologramas siguen disponibles.

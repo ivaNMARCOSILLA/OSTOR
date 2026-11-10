@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 1200" fill="none">
+  <defs>
+    <linearGradient id="border-gold" x1="22" y1="204" x2="324" y2="16" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8c7046"/>
+      <stop offset=".48" stop-color="#d7b77d"/>
+      <stop offset="1" stop-color="#a98750"/>
+    </linearGradient>
+    <g id="leaf-branch" stroke="url(#border-gold)" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M15 207C85 180 113 139 176 108S272 57 333 20" stroke-width="1.8"/>
+      <g fill="#b4935e" fill-opacity=".1" stroke-width="1.3">
+        <path d="M64 181C29 165 36 125 20 103C58 117 78 144 64 181Z"/>
+        <path d="M88 160C109 130 141 149 172 136C149 168 118 177 88 160Z"/>
+        <path d="M130 133C95 118 117 78 101 54C142 77 151 105 130 133Z"/>
+        <path d="M175 109C204 91 232 114 263 99C239 130 202 135 175 109Z"/>
+        <path d="M218 86C192 63 219 34 214 13C245 34 244 65 218 86Z"/>
+        <path d="M267 58C290 36 315 55 343 39C326 65 293 79 267 58Z"/>
+        <path d="M301 40C287 24 307 12 311 2C322 18 316 30 301 40Z"/>
+      </g>
+      <g stroke-width=".9" opacity=".85">
+        <path d="M64 181C60 152 41 129 20 103M88 160C117 158 143 146 172 136M130 133C128 104 113 81 101 54M175 109C207 117 235 110 263 99M218 86C225 60 220 36 214 13M267 58C294 60 320 50 343 39M301 40C308 28 311 14 311 2"/>
+        <path d="M57 153L40 145M51 139L40 131M119 157L124 146M139 149L145 143M126 105L115 99M120 91L115 81M205 115L212 105M227 112L234 105M224 61L211 56M222 43L216 35M292 58L298 48M312 53L318 46" opacity=".7"/>
+      </g>
+      <path d="M15 207C43 195 61 183 80 166" stroke="#9db8a6" stroke-opacity=".45" stroke-width="1.2"/>
+    </g>
+  </defs>
+  <use href="#leaf-branch" transform="translate(18 90) scale(.47)"/>
+  <use href="#leaf-branch" transform="translate(182 780) scale(-.44 .44)" opacity=".82"/>
+</svg>
