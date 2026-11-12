@@ -1,0 +1,7 @@
+/* The requested cover sits above the entrance, with its entire artwork visible. */
+body.electronicama-theme .torpes-cover{box-sizing:border-box;width:100%;min-width:0;margin:12px 0 14px;text-align:center;scroll-margin-top:90px}
+body.electronicama-theme .torpes-cover>a{display:block;width:fit-content;max-width:100%;margin:auto;border:1px solid #b59bc5;border-radius:18px;overflow:hidden;background:#080808}
+body.electronicama-theme .torpes-cover img{display:block;width:auto;max-width:100%;height:auto;max-height:240px;aspect-ratio:3/2;object-fit:contain}
+body.electronicama-theme .torpes-cover figcaption{margin-top:7px;color:#d6c1e5;font:500 11px/1.5 system-ui,sans-serif;letter-spacing:.08em}
+body.electronicama-theme .torpes-cover>a:focus-visible{outline:3px solid #a8eaf1;outline-offset:4px}
+@media(max-width:800px){body.electronicama-theme .torpes-cover img{max-height:180px}body.electronicama-theme .torpes-cover{margin-top:10px}}

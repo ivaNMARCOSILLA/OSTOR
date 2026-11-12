@@ -58,7 +58,7 @@ def run():
 
             # The reported script is served as JavaScript and really runs.
             assert script_responses and all(code==200 and 'javascript' in mime for code,mime in script_responses),script_responses
-            expect(page.locator('#mobile-dock a')).to_have_count(5)
+            expect(page.locator('#mobile-dock a')).to_have_count(6)
             assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+2')
             if width==390:
                 expect(page.locator('#mobile-dock')).to_be_visible()

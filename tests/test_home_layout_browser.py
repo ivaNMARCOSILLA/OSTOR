@@ -22,8 +22,9 @@ def run():
    assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+2'),width
    for title in page.locator('.track-title').all():
     assert title.evaluate('(el)=>el.scrollWidth<=el.clientWidth+1 && getComputedStyle(el).whiteSpace!=="nowrap"'),(width,'clipped track title')
-   metrics=page.evaluate("""()=>{const box=id=>document.getElementById(id).getBoundingClientRect();return {search:box('search-form').top,gap:box('track-grid').top-box('search-form').bottom,hero:box('hero').height,music:box('track-grid').top,styles:box('momentos').top,ad:box('ol-live-premiere').top,libraryEnd:box('library').bottom}}""")
-   assert metrics['search']<450,(width,metrics)
+   metrics=page.evaluate("""()=>{const box=id=>document.getElementById(id).getBoundingClientRect();return {search:box('search-form').top,gap:box('track-grid').top-box('search-form').bottom,hero:box('hero').height,cover:box('torpes-image').height,music:box('track-grid').top,styles:box('momentos').top,ad:box('ol-live-premiere').top,libraryEnd:box('library').bottom}}""")
+   assert metrics['search']<450+metrics['cover'],(width,metrics)
+   assert page.locator('#torpes-image').evaluate("el=>el.getBoundingClientRect().bottom<=document.querySelector('#hero').getBoundingClientRect().top"),width
    assert 0<=metrics['gap']<280,(width,metrics)
    assert metrics['hero']<190,(width,metrics)
    assert metrics['styles']>=metrics['libraryEnd'],(width,metrics)
