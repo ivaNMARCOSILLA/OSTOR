@@ -118,6 +118,9 @@ def delete_unpaid_member(conn, member_id, actor_id=None):
     recording_scope = 'owner_id=?' + (' OR channel_id IN ('+channel_marks+')' if channel_ids else '')
     if has('live_recordings', recording_scope, scope_args):
         raise AccountDeletionBlocked('La cuenta tiene grabaciones conservadas para revisión. No se borrará su historial.')
+    for table, column in [('community_videos', 'owner_id'), ('community_video_reviews', 'actor_id'), ('community_video_reports', 'reporter_id')]:
+        if has(table, column+'=?', (member_id,)):
+            raise AccountDeletionBlocked('La cuenta tiene vídeos o un historial de revisión que debe conservarse. Archívala y revisa sus vídeos antes de tramitar su eliminación.')
     if has('community_messages', '('+scope+") AND (kind='report' OR blocked=1)", scope_args):
         raise AccountDeletionBlocked('La cuenta o su canal tienen denuncias o incidencias de moderación que deben conservarse.')
     if 'community_report_details' in tables:

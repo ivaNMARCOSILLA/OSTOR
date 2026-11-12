@@ -20,6 +20,10 @@ def run():
             subprocess.run([sys.executable,str(Path(__file__).resolve()),name],cwd=ROOT,check=True)
         return
     with tempfile.TemporaryDirectory() as directory:
+        # Legacy suites deliberately exercise the compatibility mode; the dedicated
+        # security suite checks the production-default email challenge end to end.
+        os.environ['OL_LOGIN_EMAIL_REQUIRED']='1' if selected==['test_email_login_browser.py'] else '0'
+        os.environ['OL_LOGIN_AUDIT_EMAILS']='1' if selected==['test_email_login_browser.py'] else '0'
         os.environ.setdefault('OL_PAYMENT_PROVIDER','legacy_paypal')
         os.environ.setdefault('OL_LIVE_PREMIERE','0')
         os.environ.pop('DATABASE_URL', None)
@@ -43,6 +47,11 @@ def run():
             with target.open('a') as stream:stream.write(json.dumps({'recipient':recipient,'title':title,'body':body})+'\n')
         delivery_patch=patch.object(email_security,'deliver_to',side_effect=capture_mail);delivery_patch.start()
         mail_ready_patch=patch.object(email_security,'mail_ready',return_value=True);mail_ready_patch.start()
+        login_mail_patches=[]
+        if selected==['test_email_login_browser.py']:
+            import notifications
+            login_mail_patches=[patch.object(notifications,'mail_ready',return_value=True),patch.object(notifications,'deliver_to',side_effect=capture_mail)]
+            for fixture in login_mail_patches:fixture.start()
         stripe_fixture_patches=[]
         if selected==['test_annual_checkout_browser.py']:
             import payments,notifications
@@ -58,6 +67,10 @@ def run():
                 raise AssertionError('Unexpected external Stripe operation: '+path)
             stripe_fixture_patches=[patch.dict(os.environ,{'OL_PAYMENT_PROVIDER':'stripe','OL_LIVE_PREMIERE':'0','STRIPE_WEBHOOK_SECRET':'whsec_browser_local_fixture'}),patch.object(payments,'ready',return_value=True),patch.object(payments,'stripe',side_effect=stripe_fixture),patch.object(notifications,'mail_ready',return_value=True),patch.object(notifications,'deliver_to',side_effect=capture_mail)]
             for fixture in stripe_fixture_patches:fixture.start()
+        video_fixture=None
+        if selected==['test_videos_browser.py']:
+            from video_upload_fixture import install as install_video_fixture
+            video_fixture=install_video_fixture(app)
         from membership import create_admin
         from werkzeug.serving import make_server, WSGIRequestHandler
         password=secrets.token_urlsafe(32)
@@ -73,6 +86,8 @@ def run():
         finally:
             server.shutdown();server.server_close();delivery_patch.stop();mail_ready_patch.stop()
             for fixture in reversed(stripe_fixture_patches):fixture.stop()
+            if video_fixture is not None:video_fixture.close()
+            for fixture in reversed(login_mail_patches):fixture.stop()
 
 
 if __name__=='__main__':run()

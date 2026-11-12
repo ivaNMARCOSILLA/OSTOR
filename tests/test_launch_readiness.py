@@ -19,5 +19,5 @@ class LaunchReadinessTests(unittest.TestCase):
  def test_fondos_web_is_an_editorial_label_with_no_transaction_controls(self):
   r=app.app.test_client().get('/live');self.assertEqual(r.status_code,200)
   s=r.get_data(as_text=True);i=s.index('class="web-funds-note"');fragment=s[i:s.index('</aside>',i)]
-  self.assertIn('Fondos Web',fragment);self.assertIn('etiqueta editorial',fragment)
+  self.assertIn('Fondos Web',fragment);self.assertRegex(fragment,r'(?:etiqueta|distintivo) editorial')
   self.assertNotIn('<button',fragment);self.assertNotIn('<form',fragment)

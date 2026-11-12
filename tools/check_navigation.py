@@ -8,7 +8,7 @@ from urllib.request import Request,build_opener,HTTPSHandler,HTTPRedirectHandler
 from urllib.error import HTTPError,URLError
 
 ROOT=Path(__file__).resolve().parents[1]
-PAGES={'/':'index.html','/account':'assets/account.html','/live':'assets/streamers.html','/streamers':'assets/streamers.html'}
+PAGES={'/videos':'assets/videos.html','/':'index.html','/account':'assets/account.html','/live':'assets/streamers.html','/streamers':'assets/streamers.html'}
 PAGES.update({'/'+p.relative_to(ROOT).as_posix():p.relative_to(ROOT).as_posix() for p in (ROOT/'legal').glob('*.html')})
 class Document(HTMLParser):
  def __init__(self,source):

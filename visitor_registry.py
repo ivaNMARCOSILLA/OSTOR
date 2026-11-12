@@ -19,7 +19,7 @@ PUBLIC_TOTAL_ID='entries'
 PUBLIC_TIME_ZONE='Europe/Madrid'
 PUBLIC_HISTORY_DAYS=14
 PUBLIC_HISTORY_PAGE_SIZE=15
-PAGES={'/','/live','/account','/legal/privacidad.html','/legal/cookies.html','/legal/aviso-legal.html'}
+PAGES={'/','/live','/videos','/account','/legal/privacidad.html','/legal/cookies.html','/legal/aviso-legal.html'}
 
 
 def init_database():
@@ -266,7 +266,7 @@ def public_visits():
         summary=conn.execute('SELECT COUNT(*) AS sessions,COUNT(DISTINCT device_id) AS browsers FROM visitor_sessions WHERE started_at>=?',(cutoff,)).fetchone()
         rows=conn.execute('SELECT started_at,device,last_page FROM visitor_sessions WHERE started_at>=? ORDER BY started_at DESC,id DESC LIMIT 20',(cutoff,)).fetchall()
         history=public_history(conn,instant,history_page)
-    labels={'/':'Música','/live':'Ol Live','/account':'Cuenta','/legal/privacidad.html':'Información legal','/legal/cookies.html':'Información legal','/legal/aviso-legal.html':'Información legal'}
+    labels={'/':'Música','/live':'Ol Live','/videos':'Vídeos','/account':'Cuenta','/legal/privacidad.html':'Información legal','/legal/cookies.html':'Información legal','/legal/aviso-legal.html':'Información legal'}
     return private_response({'visits':[{'at':row['started_at'][:16]+':00+00:00','device':row['device'],'page':labels.get(row['last_page'],'Web')} for row in rows], 'summary':dict(summary),'cumulative':cumulative,'history':history,'window_hours':24,'limit':20,'consented_only':True,'approximate':True})
 
 

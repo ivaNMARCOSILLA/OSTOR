@@ -1,7 +1,7 @@
 """Private profiles, verified email and single-use password recovery; no automatic login."""
 import hashlib,re,secrets
 from datetime import timedelta
-from flask import Blueprint,jsonify,session
+from flask import Blueprint,jsonify,session,g
 from werkzeug.security import check_password_hash,generate_password_hash
 from membership import database,get_user,payload,stamp,now_utc,validate_password,allow_attempt
 from storage import INTEGRITY_ERRORS
@@ -115,6 +115,8 @@ def confirm():
   c.execute('BEGIN IMMEDIATE');row=consume(c,payload().get('token'),'verify')
   if not row:return jsonify(error='El enlace no es válido o ha caducado. Pide otro correo desde tu cuenta.'),400
   c.execute('UPDATE member_profiles SET email_verified=1,updated_at=? WHERE member_id=?',(stamp(now_utc()),row['member_id']))
+  from login_security import subject
+  subject(row['member_id'],row['email'])
  return jsonify(ok=True)
 
 @bp.post('/api/account/password/request')
@@ -127,7 +129,10 @@ def request_reset():
  try:email=clean_email(payload().get('email'))
  except ValueError:email=None
  with database() as c:row=c.execute('SELECT member_id FROM member_profiles WHERE email=? AND email_verified=1',(email,)).fetchone() if email else None
- if row:send_security_mail(row['member_id'],'reset')
+ if row:
+  from login_security import subject
+  subject(row['member_id'],email)
+  g.login_security_result='recovery_mail_sent' if send_security_mail(row['member_id'],'reset') else 'recovery_mail_pending'
  return jsonify(ok=True,message=GENERIC)
 
 @bp.post('/api/account/password/reset')
@@ -142,6 +147,8 @@ def reset():
   if not row or not row['email_verified']:return jsonify(error='El enlace no es válido o ha caducado. Solicita uno nuevo.'),400
   c.execute('UPDATE members SET password_hash=?,session_version=session_version+1 WHERE id=?',(encoded,row['member_id']))
   c.execute('DELETE FROM email_tokens WHERE member_id=?',(row['member_id'],))
+  from login_security import subject
+  subject(row['member_id'],row['email'])
  session.clear()
  return jsonify(ok=True,message='Contraseña cambiada. Las sesiones anteriores se han cerrado. Inicia sesión con tu nueva contraseña; la verificación en dos pasos se mantiene.')
 

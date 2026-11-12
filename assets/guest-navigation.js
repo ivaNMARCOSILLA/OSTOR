@@ -1,7 +1,7 @@
 /* Optional first-party guest journeys. Never collect field values, queries, fragments or user identity. */
 (()=>{
  const key='electronicama_navigation_consent_v1';let csrf='',guest=false,ready=false,allowed=false,busy=false,timer=null,queue=[];
- const pages=new Set(['/','/live','/account','/legal/privacidad.html','/legal/cookies.html','/legal/aviso-legal.html']);
+ const pages=new Set(['/','/live','/videos','/account','/legal/privacidad.html','/legal/cookies.html','/legal/aviso-legal.html']);
  const page=()=>location.pathname==='/streamers'?'/live':location.pathname;
  const preference=()=>{try{return localStorage.getItem(key)==='accepted'&&!navigator.globalPrivacyControl&&navigator.doNotTrack!=='1';}catch{return false;}};
  async function identity(){try{const r=await fetch('/api/account/me',{cache:'no-store'});if(!r.ok)return false;const a=await r.json();csrf=a.csrf;guest=!a.user;ready=true;return guest;}catch{return false;}}

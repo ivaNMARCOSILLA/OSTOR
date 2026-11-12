@@ -67,7 +67,8 @@ class SitemapTests(unittest.TestCase):
   locations=[node.text for node in root.findall('s:url/s:loc',NS)]
   self.assertEqual(len(locations),len(set(locations)))
   self.assertIn(ORIGIN+'/',locations);self.assertIn(ORIGIN+'/live',locations)
-  self.assertEqual(len(locations),5)
+  self.assertEqual(len(locations),6)
+  self.assertIn(ORIGIN+'/videos',locations)
   for location in locations:
    url=urlsplit(location)
    self.assertEqual((url.scheme,url.netloc),('https','electronicama.com'))

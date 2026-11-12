@@ -315,3 +315,8 @@ body.electronicama-theme .live-screen-source select{width:100%;max-width:100%;mi
  body.electronicama-theme #mobile-live-controls{justify-self:start}
  body.electronicama-theme #leave-room{justify-self:end}
 }
+
+/* A direct entrance to community uploads, including the compact home edition. */
+body.electronicama-theme #hero .hero-video-entry{margin:0}
+@media(min-width:801px){body.electronicama-theme .content>#hero .hero-copy{padding-block:12px}}
+body.electronicama-theme .hero-video-entry .button{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:9px 16px;border:1px solid #a99acb;border-radius:12px;background:#17131e;color:#efe6ff;font-size:14px;text-decoration:none}

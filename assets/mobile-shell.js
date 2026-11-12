@@ -2,18 +2,18 @@
 (()=>{
  if(document.getElementById('mobile-dock'))return;
  const dock=document.createElement('nav');dock.id='mobile-dock';dock.setAttribute('aria-label','Navegación principal móvil');
- const destinations=[['/#inicio','Inicio','home'],['/#library','Música','music'],['/live#live-catalogue','Ol Live','live'],['/#hologramas','Hologramas','holograms'],['/account','Mi cuenta','account']];
- const drawings={home:'M3 10 12 3l9 7M5 9v12h5v-7h4v7h5V9',music:'M9 18V5l11-2v13M9 7l11-2M9 18c0 2-6 3-6 0s6-3 6 0M20 16c0 2-6 3-6 0s6-3 6 0',live:'M8 3h8l5 5v8l-5 5H8l-5-5V8Z M10 8l7 4-7 4Z',holograms:'m12 2 10 10-10 10L2 12Z M12 2v20M2 12h20',account:'M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0M4 21v-3c0-6 16-6 16 0v3'};
+ const destinations=[['/#inicio','Inicio','home'],['/#library','Música','music'],['/live#live-catalogue','Ol Live','live'],['/videos','Vídeos','videos'],['/#hologramas','Hologramas','holograms'],['/account','Mi cuenta','account']];
+ const drawings={videos:'M4 4h16v16H4zM9 8l7 4-7 4zM4 8h3M4 16h3M17 8h3M17 16h3',home:'M3 10 12 3l9 7M5 9v12h5v-7h4v7h5V9',music:'M9 18V5l11-2v13M9 7l11-2M9 18c0 2-6 3-6 0s6-3 6 0M20 16c0 2-6 3-6 0s6-3 6 0',live:'M8 3h8l5 5v8l-5 5H8l-5-5V8Z M10 8l7 4-7 4Z',holograms:'m12 2 10 10-10 10L2 12Z M12 2v20M2 12h20',account:'M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0M4 21v-3c0-6 16-6 16 0v3'};
  for(const [href,title,key] of destinations){
-  const link=document.createElement('a');link.href=href;link.dataset.mobileDestination=key;
+  const link=document.createElement('a');link.href=href;link.dataset.mobileDestination=key;link.setAttribute('aria-label',title);
   const icon=document.createElementNS('http://www.w3.org/2000/svg','svg');icon.setAttribute('viewBox','0 0 24 24');icon.setAttribute('aria-hidden','true');icon.setAttribute('focusable','false');
   const path=document.createElementNS(icon.namespaceURI,'path');path.setAttribute('d',drawings[key]);icon.append(path);
-  const label=document.createElement('span');label.textContent=title;link.append(icon,label);dock.append(link);
+  const label=document.createElement('span');label.textContent=key==='holograms'?'Holo':title;link.append(icon,label);dock.append(link);
  }
  document.body.append(dock);
  function current(){
   const path=location.pathname,hash=location.hash;
-  const key=path==='/account'?'account':['/live','/streamers'].includes(path)?'live':path==='/'?(hash==='#library'?'music':hash==='#hologramas'?'holograms':'home'):null;
+  const key=path==='/videos'?'videos':path==='/account'?'account':['/live','/streamers'].includes(path)?'live':path==='/'?(hash==='#library'?'music':hash==='#hologramas'?'holograms':'home'):null;
   for(const link of dock.children){if(link.dataset.mobileDestination===key)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');}
  }
  current();window.addEventListener('hashchange',current);window.addEventListener('popstate',current);

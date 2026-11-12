@@ -2,7 +2,7 @@
 #mobile-dock,.mobile-quick-search{display:none}
 @media(max-width:800px){
  body.electronicama-theme:has(#mobile-dock){--mobile-dock-height:calc(64px + env(safe-area-inset-bottom));padding-bottom:var(--mobile-dock-height)}
- body.electronicama-theme #mobile-dock{position:fixed;inset:auto 0 0;z-index:18;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:2px;height:var(--mobile-dock-height);padding:5px max(6px,env(safe-area-inset-right)) calc(5px + env(safe-area-inset-bottom)) max(6px,env(safe-area-inset-left));background:#080808;border-top:1px solid #66583e;box-shadow:0 -8px 26px #0009}
+ body.electronicama-theme #mobile-dock{position:fixed;inset:auto 0 0;z-index:18;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:2px;height:var(--mobile-dock-height);padding:5px max(6px,env(safe-area-inset-right)) calc(5px + env(safe-area-inset-bottom)) max(6px,env(safe-area-inset-left));background:#080808;border-top:1px solid #66583e;box-shadow:0 -8px 26px #0009}
  body.electronicama-theme #mobile-dock a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:0;min-height:48px;padding:3px 1px;border:1px solid transparent;border-radius:12px;background:transparent;color:#c9c9d3;font:500 10px/1.25 system-ui,sans-serif;letter-spacing:0;text-align:center;text-decoration:none;overflow-wrap:normal}
  body.electronicama-theme #mobile-dock a[aria-current]{color:#f5d397;background:#211c13;border-color:#72603e}
  body.electronicama-theme #mobile-dock a:hover{color:#fff0cf;background:#211c13}
@@ -31,7 +31,7 @@
  /* Vertical music rows leave room for titles and large touch targets. */
  body.electronicama-theme .content{padding-right:max(12px,env(safe-area-inset-right));padding-left:max(12px,env(safe-area-inset-left))}
  body.electronicama-theme .content>#hero{margin-top:14px;border-radius:22px}
- body.electronicama-theme #hero .hero-copy{padding:18px}
+ body.electronicama-theme .content #hero .hero-copy{padding:8px 18px}
  body.electronicama-theme #hero h1{font-size:clamp(23px,6vw,31px);line-height:1.2;letter-spacing:-.7px}
  body.electronicama-theme #hero p{margin-top:8px;font-size:13px}
  body.electronicama-theme .content>#library{padding:16px 12px;border-radius:22px}
@@ -53,6 +53,6 @@
 }
 @media(max-width:360px){
  /* Long translated names get room without shrinking the text or touch areas. */
- body.electronicama-theme #mobile-dock{grid-template-columns:repeat(3,minmax(0,.9fr)) minmax(0,1.3fr) minmax(0,1.1fr)}
+ body.electronicama-theme #mobile-dock{grid-template-columns:repeat(5,minmax(0,1fr)) minmax(0,1.12fr)}
 }
 @media(prefers-reduced-motion:reduce){#mobile-dock *{transition:none;scroll-behavior:auto}}

@@ -31,7 +31,7 @@ app = Flask(__name__, static_folder=os.path.join(ROOT, "assets"), static_url_pat
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 app.logger.setLevel(logging.INFO)
 
-VERSION = "9.29.12"
+VERSION = "9.30.0"
 AUDIUS_APP_NAME = os.getenv("AUDIUS_APP_NAME", "electronicama")
 SEARCH_CACHE_SECONDS = max(15, min(int(os.getenv("SEARCH_CACHE_SECONDS", "300")), 3600))
 ARCHIVE_CACHE_SECONDS = max(60, min(int(os.getenv("ARCHIVE_CACHE_SECONDS", "3600")), 86400))
@@ -470,7 +470,7 @@ def response_headers(response):
     elif request.path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Robots-Tag"] = "noindex"
-    elif request.path == "/":
+    elif request.path in {"/", "/videos"}:
         response.headers["Cache-Control"] = "no-store"
     return response
 
@@ -478,6 +478,11 @@ def response_headers(response):
 @app.get("/")
 def homepage():
     return send_from_directory(ROOT, "index.html")
+
+
+@app.get("/videos")
+def community_videos_page():
+    return app.send_static_file("videos.html")
 
 
 @app.get("/robots.txt")
@@ -786,6 +791,12 @@ from streamers import install as install_streamers
 install_streamers(app,rate_allowed)
 from recordings import install as install_recordings
 install_recordings(app)
+from videos import install as install_community_videos
+install_community_videos(app)
+from participants import install as install_participants
+install_participants(app)
+from login_security import install as install_login_security
+install_login_security(app)
 from age_policy import install as install_age_policy
 install_age_policy(app)
 from two_factor import install as install_two_factor

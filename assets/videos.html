@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="electronicama-version" content="9.30.0">
+  <meta name="description" content="Descubre vídeos de la comunidad electronicama: música, bailes, creaciones con inteligencia artificial y otras historias. Comparte tus vídeos con una cuenta gratuita y revisión antes de publicar.">
+  <meta name="robots" content="index,follow,max-image-preview:large">
+  <link rel="canonical" href="https://electronicama.com/videos">
+  <title>Vídeos · electronicama</title>
+  <link rel="icon" href="/assets/favicon.svg?v=9.30.0">
+  <link rel="stylesheet" href="/assets/account.css?v=9.30.0">
+  <link rel="stylesheet" href="/assets/ol-theme.css?v=9.30.0">
+  <link rel="stylesheet" href="/assets/platform-theme.css?v=9.30.0">
+  <link rel="stylesheet" href="/assets/site-language.css?v=9.30.0">
+  <link rel="stylesheet" href="/assets/mobile-shell.css?v=9.30.0">
+  <link rel="stylesheet" href="/assets/floral-field.css?v=9.30.0">
+  <link rel="stylesheet" href="/assets/videos.css?v=9.30.0">
+  <script defer src="/assets/videos.js?v=9.30.0"></script>
+  <script defer src="/assets/navigation.js?v=9.30.0"></script>
+  <script defer src="/assets/site-language.js?v=9.30.0"></script>
+  <script defer src="/assets/mobile-shell.js?v=9.30.0"></script>
+  <script defer src="/assets/floral-field.js?v=9.30.0"></script>
+</head>
+<body class="electronicama-theme video-zone">
+<a class="video-skip" href="#video-catalogue">Ir a los vídeos</a>
+<main class="account-shell video-shell">
+  <header class="video-header">
+    <a class="logo" href="/"><span class="brand-gold">electronicama</span> <span class="brand-infinity" aria-hidden="true">∞</span></a>
+    <nav aria-label="Secciones de electronicama"><a href="/#library">Música</a><a href="/live">Ol Live</a><a href="/videos" aria-current="page">Vídeos</a><a href="/account">Mi cuenta</a></nav>
+  </header>
+  <section class="intro video-intro" aria-labelledby="video-zone-title">
+    <span class="eyebrow">VÍDEOS DE LA COMUNIDAD</span>
+    <h1 id="video-zone-title">Lo que haces merece pantalla.</h1>
+    <p>Bailes, música, creaciones con inteligencia artificial y tus propias historias. Un espacio para compartir lo que haces.</p>
+    <p>Sin límites de temática dentro de las normas de la comunidad. Cada vídeo pasa por cuarentena y revisión antes de publicarse.</p>
+    <div class="video-intro-actions"><a class="button" href="#video-upload">Compartir un vídeo</a><a class="button secondary" href="#video-catalogue">Descubrir vídeos</a><a id="video-my-link" class="button secondary" href="#my-videos" hidden>Mis vídeos</a></div>
+    <p id="video-session-status" class="video-subtle" role="status">Comprobando tu cuenta…</p>
+  </section>
+
+  <section id="video-catalogue" class="panel video-section" aria-labelledby="video-catalogue-title">
+    <div class="heading"><div><span class="eyebrow">MIRADAS Y MOVIMIENTO</span><h2 id="video-catalogue-title">Descubre lo que comparte la comunidad</h2></div><button id="video-catalogue-refresh" class="secondary" type="button">Actualizar vídeos</button></div>
+    <form id="video-search-form" class="video-search" role="search">
+      <label>Buscar vídeos<input id="video-search" name="q" type="search" maxlength="160" placeholder="Un título, una idea…" autocomplete="off"></label>
+      <label>Temática<select id="video-category" name="category"><option value="all">Todas las temáticas</option><option value="music">Música</option><option value="dance">Bailes</option><option value="ai">Inteligencia artificial</option><option value="other">Otras creaciones</option></select></label>
+      <button type="submit">Buscar</button>
+    </form>
+    <p id="video-catalogue-status" class="video-status" role="status" aria-live="polite">Cargando vídeos…</p>
+    <div id="video-catalogue-list" class="video-grid"></div>
+    <nav id="video-catalogue-pagination" class="video-pagination" aria-label="Páginas de vídeos" hidden><button id="video-catalogue-previous" type="button" class="secondary">Anterior</button><span id="video-catalogue-page"></span><button id="video-catalogue-next" type="button" class="secondary">Siguiente</button></nav>
+  </section>
+
+  <section id="video-upload" class="panel video-section" aria-labelledby="video-upload-title">
+    <span class="eyebrow">TU PRÓXIMA HISTORIA</span><h2 id="video-upload-title">Comparte tu vídeo</h2>
+    <p>Sube material propio o que tengas permiso para compartir. La cuenta es gratuita; no necesitas contratar Ol Live.</p>
+    <div id="video-upload-guest" class="video-callout" hidden><p>Inicia sesión con una cuenta gratuita para subir vídeos.</p><a class="button" href="/account?next=%2Fvideos%23video-upload">Crear cuenta o entrar</a></div>
+    <p id="video-storage-status" class="video-status" role="status">Comprobando la disponibilidad de las subidas…</p>
+    <form id="video-upload-form" hidden>
+      <fieldset id="video-upload-fields"><legend class="sr-only">Datos de tu vídeo</legend>
+        <label>Título<input id="video-upload-title-input" name="title" maxlength="160" required placeholder="Ponle un título a tu creación"></label>
+        <label>Descripción<textarea id="video-upload-description" name="description" maxlength="3000" rows="4" placeholder="Cuenta qué has creado y añade los créditos necesarios"></textarea></label>
+        <label>Temática<select id="video-upload-category" name="category"><option value="other">Otras creaciones</option><option value="music">Música</option><option value="dance">Bailes</option><option value="ai">Inteligencia artificial</option></select></label>
+        <label>Archivo de vídeo<input id="video-upload-file" name="file" type="file" accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov" required></label>
+        <p id="video-file-guidance" class="video-subtle">MP4, WebM o MOV. Mantén esta página abierta durante la subida.</p>
+        <label class="checkbox video-rights"><input id="video-upload-rights" type="checkbox" required><span>Confirmo que el vídeo es mío o que tengo permiso para compartirlo, y que respeta las <a href="/legal/aviso-legal.html" target="_blank" rel="noopener">normas de la comunidad</a>.</span></label>
+        <button id="video-upload-submit" type="submit" disabled>Subir a cuarentena</button>
+      </fieldset>
+    </form>
+    <div id="video-upload-progress-panel" class="video-upload-progress" hidden><label for="video-upload-progress">Progreso de la subida</label><progress id="video-upload-progress" max="100" value="0"></progress><p id="video-upload-progress-label"></p><div class="video-actions"><button id="video-upload-retry" type="button" hidden>Reintentar comprobación</button><button id="video-upload-cancel" type="button" class="secondary">Cancelar subida</button></div></div>
+    <p id="video-upload-status" class="video-status" role="status" aria-live="polite" tabindex="-1"></p>
+    <aside class="video-quarantine-note"><strong>Primero, cuarentena.</strong><p>Al terminar la subida, tu vídeo queda privado mientras administración lo revisa. Solo aparecerá aquí cuando se apruebe. La espera no lo publica automáticamente.</p></aside>
+  </section>
+
+  <section id="my-videos" class="panel video-section" aria-labelledby="my-videos-title" hidden>
+    <div class="heading"><h2 id="my-videos-title">Mis vídeos</h2><button id="video-mine-refresh" type="button" class="secondary">Actualizar mis vídeos</button></div>
+    <p>Consulta el estado de tus subidas y los motivos de revisión.</p><p id="video-mine-status" class="video-status" role="status" aria-live="polite"></p><div id="video-mine-list" class="video-owner-list"></div>
+    <nav id="video-mine-pagination" class="video-pagination" aria-label="Páginas de mis vídeos" hidden><button id="video-mine-previous" type="button" class="secondary">Anterior</button><span id="video-mine-page"></span><button id="video-mine-next" type="button" class="secondary">Siguiente</button></nav>
+  </section>
+
+  <section id="video-admin" class="panel video-section" aria-labelledby="video-admin-title" hidden>
+    <span class="eyebrow">ADMINISTRACIÓN · VÍDEOS</span><div class="heading"><h2 id="video-admin-title">Cuarentena y revisión</h2><button id="video-admin-refresh" type="button" class="secondary">Actualizar revisión</button></div>
+    <p>Comprueba el vídeo y su descripción antes de aprobarlo. La comprobación del formato no sustituye la revisión de su contenido.</p>
+    <label class="video-admin-filter">Estado<select id="video-admin-state"><option value="quarantined">En cuarentena</option><option value="published">Publicados</option><option value="rejected">Rechazados</option><option value="uploading">Subidas en curso</option><option value="failed">Subidas fallidas</option><option value="all">Todos los estados</option></select></label>
+    <p id="video-admin-status" class="video-status" role="status" aria-live="polite"></p><div id="video-admin-list" class="video-owner-list"></div>
+    <nav id="video-admin-pagination" class="video-pagination" aria-label="Páginas de revisión" hidden><button id="video-admin-previous" type="button" class="secondary">Anterior</button><span id="video-admin-page"></span><button id="video-admin-next" type="button" class="secondary">Siguiente</button></nav>
+  </section>
+  <footer><span translate="no">electronicama · Vídeos de la comunidad</span><nav aria-label="Información legal"><a href="/legal/privacidad.html">Privacidad</a><a href="/legal/aviso-legal.html">Aviso legal</a><a href="/legal/cookies.html">Cookies</a></nav></footer>
+</main>
+</body>
+</html>

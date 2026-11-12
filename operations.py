@@ -115,7 +115,7 @@ def maintenance_report():
  except Exception:
   add('Base de datos','error','No se pudo completar la lectura. Revisa la conexión en Vercel.')
  root=Path(__file__).resolve().parent
- required=['index.html','assets/account.html','assets/streamers.html','assets/account.js','assets/navigation.js','assets/operations.js','assets/ol-theme.css','assets/holograms-launcher.js','assets/holograms.js','assets/vendor/three/build/three.module.js','assets/vendor/hands/hands.js','assets/platform-theme.css','assets/interface-sync.js','assets/studio-tools.js','age_policy.py','account_archives.py','visitor_registry.py','locale_preferences.py','assets/visitor-registry.js','assets/site-language.js','manifest.webmanifest','sw.js']
+ required=['videos.py','video_storage.py','assets/videos.html','assets/videos.js','assets/videos.css','index.html','assets/account.html','assets/streamers.html','assets/account.js','assets/navigation.js','assets/operations.js','assets/ol-theme.css','assets/holograms-launcher.js','assets/holograms.js','assets/vendor/three/build/three.module.js','assets/vendor/hands/hands.js','assets/platform-theme.css','assets/interface-sync.js','assets/studio-tools.js','age_policy.py','account_archives.py','visitor_registry.py','locale_preferences.py','assets/visitor-registry.js','assets/site-language.js','manifest.webmanifest','sw.js']
  missing=[name for name in required if not (root/name).is_file()]
  add('Archivos esenciales','error' if missing else 'ok','Faltan: '+', '.join(missing) if missing else 'Páginas, acceso, decoración y recursos de la aplicación presentes.')
  from app import content_security_policy

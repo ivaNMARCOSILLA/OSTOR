@@ -4,6 +4,9 @@ Allow: /api/locale$
 Allow: /api/status$
 Allow: /api/search$
 Allow: /api/search?
+Allow: /api/videos$
+Allow: /api/videos?
+Allow: /api/videos/config$
 Disallow: /api/
 
 Sitemap: https://electronicama.com/sitemap.xml

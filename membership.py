@@ -214,6 +214,10 @@ def init_database():
     init_visitor_registry()
     from founder_slots import init_database as init_founder_ownership
     init_founder_ownership()
+    from videos import init_database as init_community_videos
+    init_community_videos()
+    from login_security import init_database as init_login_security
+    init_login_security()
 
 def create_admin(username, password):
     username = clean_username(username)
@@ -315,6 +319,9 @@ def verify_csrf():
 def restrict_music():
     # Music is free. Account collections require login; Ol Live requires premium.
     path=request.path
+    if path=='/api/videos' or path.startswith('/api/videos/'):
+        # Video handlers apply their own free-account and moderator checks.
+        return None
     if not path.startswith('/api/') or path.startswith(('/api/account/','/api/admin/','/api/streamers/admin/','/api/play/','/api/resolve/','/api/channel-subscriptions/','/api/payments/')) or path in {'/api/visits','/api/visits/public','/api/visits/consent','/api/navigation/events','/api/navigation/consent','/api/status','/api/locale','/api/sync','/api/search','/api/trending','/api/proxy','/api/promotion/event','/api/presence','/api/live/catalogue','/api/live/founders','/api/live/founders/claim'}:
         return None
     if re.fullmatch(r'/api/streamers/[a-f0-9]{32}/thumbnail',path) and request.method=='GET':return None
@@ -401,7 +408,12 @@ def register():
         name = clean_username(data.get('username'))
         validate_password(data.get('password'))
         from email_security import clean_email,clean_nickname,clean_legal_name
-        email=clean_email(data.get('email'));nickname=clean_nickname(data.get('nickname'));legal_name=clean_legal_name(data.get('legal_name'))
+        import login_security
+        email=clean_email(data.get('email') or data.get('verification_email'));nickname=clean_nickname(data.get('nickname'));legal_name=clean_legal_name(data.get('legal_name'))
+        if login_security.required():
+            if not login_security.mail_ready():return login_security.unavailable()
+            try:email=login_security.validate_enrollment(supplied=email)
+            except ValueError as exc:return jsonify(error=str(exc),code='verification_email_required'),400
         with database() as conn:
             conn.execute('BEGIN IMMEDIATE')
             from human_check import verify
@@ -412,10 +424,13 @@ def register():
                          (ident, name, generate_password_hash(data['password']), stamp(now_utc())))
             if legal_name:conn.execute('INSERT INTO member_legal_names VALUES(?,?,?)',(ident,legal_name,stamp(now_utc())))
             if email or nickname:conn.execute('INSERT INTO member_profiles(member_id,email,nickname,updated_at) VALUES(?,?,?,?)',(ident,email,nickname,stamp(now_utc())))
+            user=conn.execute('SELECT * FROM members WHERE id=?',(ident,)).fetchone()
+        login_security.subject(ident,name)
+        notify('registration','Nueva cuenta registrada','Se ha registrado una cuenta de cliente. El registro no activa acceso de pago.',event_key='registration:'+ident,member_ids=[ident])
+        if login_security.required():return login_security.begin(user,email,purpose='register')
         session.clear()
         session.update(member_id=ident, session_version=0,csrf=secrets.token_urlsafe(32))
         session.permanent = True
-        notify('registration','Nueva cuenta registrada','Se ha registrado una cuenta de cliente. El registro no activa acceso de pago.',event_key='registration:'+ident,member_ids=[ident])
         from email_security import send_security_mail
         return jsonify(ok=True,verification_sent=send_security_mail(ident,'verify') if email else False), 201
     except (ValueError,) + INTEGRITY_ERRORS as exc:
@@ -430,22 +445,25 @@ def login():
     with database() as conn:
         identity=str(data.get('username', '')).strip().lower()
         user=conn.execute('SELECT m.* FROM members m LEFT JOIN member_profiles p ON p.member_id=m.id WHERE (m.username=? OR (p.email=? AND p.email_verified=1)) AND NOT EXISTS(SELECT 1 FROM member_archives a WHERE a.member_id=m.id AND a.restored_at IS NULL)',(identity,identity)).fetchone()
+    import login_security
+    login_security.subject(user['id'] if user else None,identity)
     password = data.get('password')
     valid_password = password if isinstance(password, str) and len(password) <= 256 else ''
-    # Verify a dummy hash too, avoiding a fast response for unknown accounts.
     encoded = user['password_hash'] if user and user['password_hash'] else current_app.config['MEMBERSHIP_DUMMY_HASH']
     if not check_password_hash(encoded, valid_password) or not user or not user['password_hash']:
         return jsonify(error='Usuario o contraseña incorrectos.'), 401
     from two_factor import login_factor
     if not login_factor(user,data):return jsonify(error='Introduce un código nuevo de la app autenticadora o un código de recuperación.',code='two_factor_required'),401
-    session.clear()
-    session.update(member_id=user['id'], session_version=user['session_version'],csrf=secrets.token_urlsafe(32))
-    session.permanent = True
-    return jsonify(ok=True)
+    if login_security.required():return login_security.begin(user,data.get('verification_email'))
+    return login_security.establish(user['id'],user['session_version'])
 
 
 @bp.post('/api/account/logout')
 def logout():
+    user=get_user()
+    if user:
+        from login_security import subject
+        subject(user['id'],user['username'])
     session.clear()
     return jsonify(ok=True)
 
@@ -619,18 +637,28 @@ def accept_invite():
         token = str(data.get('token', ''))
         if not 20 <= len(token) <= 100:
             raise ValueError('Invitación no válida o caducada.')
+        import login_security
+        if login_security.required():
+            if not login_security.mail_ready():return login_security.unavailable()
+            with database() as conn:
+                prior=conn.execute('SELECT * FROM invitations WHERE token_hash=?',(hashlib.sha256(token.encode()).hexdigest(),)).fetchone()
+            if not prior or prior['used_at'] or prior['expires_at']<=stamp(now_utc()):raise ValueError('Invitación no válida o caducada.')
+            try:login_security.validate_enrollment(prior['member_id'],data.get('verification_email'))
+            except ValueError as exc:return jsonify(error=str(exc),code='verification_email_required'),400
         with database() as conn:
             conn.execute('BEGIN IMMEDIATE')
             invitation = conn.execute('SELECT * FROM invitations WHERE token_hash=?', (hashlib.sha256(token.encode()).hexdigest(),)).fetchone()
             if not invitation or invitation['used_at'] or invitation['expires_at'] <= stamp(now_utc()):
                 raise ValueError('Invitación no válida o caducada.')
+            from account_archives import is_archived
+            if is_archived(conn,invitation['member_id']):raise ValueError('Invitación no válida o caducada.')
             conn.execute('UPDATE members SET password_hash=? WHERE id=?', (generate_password_hash(data['password']), invitation['member_id']))
             conn.execute('UPDATE invitations SET used_at=? WHERE token_hash=?', (stamp(now_utc()), invitation['token_hash']))
-        session.clear()
-        session.update(member_id=invitation['member_id'], session_version=0,csrf=secrets.token_urlsafe(32))
-        session.permanent = True
+            user=conn.execute('SELECT * FROM members WHERE id=?',(invitation['member_id'],)).fetchone()
+        login_security.subject(user['id'],user['username'])
         notify('invitation','Invitación aceptada','Un invitado ha activado su cuenta. Revisa su acceso gratuito en administración.',event_key='invite:'+invitation['member_id'],member_ids=[invitation['member_id']])
-        return jsonify(ok=True)
+        if login_security.required():return login_security.begin(user,data.get('verification_email'),purpose='invite')
+        return login_security.establish(user['id'],user['session_version'])
     except ValueError as exc:
         return jsonify(error=str(exc)), 400
 
@@ -733,6 +761,6 @@ def install(app):
     app.before_request(restrict_music)
     @app.after_request
     def private_pages(response):
-        if request.path in {'/', '/account'} or request.path.startswith(('/api/account/', '/api/admin/')):
+        if request.path in {'/', '/account', '/videos'} or request.path.startswith(('/api/account/', '/api/admin/')):
             response.headers['Cache-Control'] = 'no-store'
         return response

@@ -3,7 +3,7 @@ from playwright.sync_api import sync_playwright, expect
 from browser_support import BASE_URL
 
 
-DESTINATIONS=['/#inicio','/#library','/live#live-catalogue','/#hologramas','/account']
+DESTINATIONS=['/#inicio','/#library','/live#live-catalogue','/videos','/#hologramas','/account']
 
 
 def assert_dock(page, width, height):

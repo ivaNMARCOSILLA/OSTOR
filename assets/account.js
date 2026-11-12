@@ -1,6 +1,8 @@
 'use strict';
 const $ = id => document.getElementById(id);
 let csrf = '', current = null, members = [], payments = [],memberPage=1,invitationPage=1;
+let loginChallenge=null,loginCodeTimer=null,invitationConsumed=false,loginSecurity={email_code_required:false,email_delivery_configured:false};
+let loginAuditPage=1,loginAuditPages=1,loginAuditRevision=0,loginAuditOwner=null;
 let accountRefreshRevision=0,accountWrites=0;
 const roleDrafts=new Map(),roleBusy=new Set(),renameStates=new Map();
 document.addEventListener('input',rememberDraft);document.addEventListener('change',rememberDraft);
@@ -11,7 +13,8 @@ function formSnapshot(form){return [...form.querySelectorAll('input,select,texta
 function confirmFormSnapshot(snapshot){for(const [field,value] of snapshot)if(field.value===value)delete field.dataset.userDraft;}
 function accountEditing(){const active=document.activeElement;return Boolean(active?.closest('form,[contenteditable="true"]')||active?.closest('#admin-members')&&active.matches('input,select,textarea'))||accountWrites>0||roleBusy.size>0||paymentSyncBusy.size>0||accountArchiveBusy.size>0||[...renameStates.values()].some(item=>item.busy);}
 const requestedReturn=new URLSearchParams(location.search).get('next')?.replace(/^\/live(?=#|$)/,'/streamers');
-const streamReturn=(['/streamers','/streamers#stream-studio','/streamers#creator-panel','/streamers#live-catalogue','/streamers#founders'].includes(requestedReturn)||/^\/streamers#canal-[a-f0-9]{32}$/.test(requestedReturn||''))?requestedReturn.replace(/^\/streamers/,'/live'):null;
+const videoReturn=['/videos','/videos#video-upload'].includes(requestedReturn)?requestedReturn:null;
+const streamReturn=videoReturn||((['/streamers','/streamers#stream-studio','/streamers#creator-panel','/streamers#live-catalogue','/streamers#founders'].includes(requestedReturn)||/^\/streamers#canal-[a-f0-9]{32}$/.test(requestedReturn||''))?requestedReturn.replace(/^\/streamers/,'/live'):null);
 const inviteToken = new URLSearchParams(location.hash.slice(1)).get('invite');
 let verifyEmailToken=null,resetPasswordToken=null;
 function inspectMailLink(){const fragment=new URLSearchParams(location.hash.slice(1)),verify=fragment.get('verify-email'),reset=fragment.get('reset-password');if(!verify&&!reset)return;verifyEmailToken=verify;resetPasswordToken=reset;history.replaceState(null,'','/account');$('email-link-panel').classList.toggle('hidden',!verify);$('password-reset-panel').classList.toggle('hidden',!reset);$('confirm-email-link').disabled=false;$('email-link-status').textContent='';$('password-reset-status').textContent='';if(reset)$('password-reset-form').reset();const panel=$(reset?'password-reset-panel':'email-link-panel');panel.tabIndex=-1;panel.focus({preventScroll:true});panel.scrollIntoView({block:'start'});}
@@ -28,19 +31,173 @@ async function api(path,data,csrfRetry=true){
   const response=await fetch(path,data===undefined?{cache:'no-store',signal:controller.signal}:{method:'POST',signal:controller.signal,headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify(data)});
   let result;try{result=await response.json();}catch{throw new Error('El servidor no ha respondido correctamente. Vuelve a intentarlo en unos instantes.');}
   if(response.status===403&&result.code==='csrf_expired'&&csrfRetry&&data!==undefined){const fresh=await fetch('/api/account/me',{cache:'no-store',signal:controller.signal});if(fresh.ok){csrf=(await fresh.json()).csrf;return api(path,data,false);}}
-  if(!response.ok){const error=new Error(result.error||'No se pudo completar la operación.');error.code=result.code;throw error;}
+  if(!response.ok){const error=new Error(result.error||'No se pudo completar la operación.');error.code=result.code;error.details=result;error.httpStatus=response.status;throw error;}
   return result;
  }catch(error){if(error.name==='AbortError')throw new Error('La conexión tarda demasiado. Si estabas creando tu cuenta, prueba a iniciar sesión antes de repetir el registro.');throw error;}finally{clearTimeout(timer);if(writing){accountWrites--;if(interfaceRefreshPending&&!accountEditing())queueMicrotask(refreshInterfaceAccount);}}
 }
+
+async function inspectLoginSecurity(){
+ try{
+  loginSecurity=await api('/api/account/login-security');
+  const required=loginSecurity.email_code_required===true;
+  $('registration-access-description').textContent=required?'Crea tu cuenta gratis y confirma el código del correo para completar el acceso.':'Abre tu cuenta y accede al instante, sin invitaciones, autorizaciones ni pagos.';
+  const email=$('register-form').elements.email;
+  email.required=required;
+  $('registration-email-label').textContent=required?'Correo para verificar el acceso · privado':'Correo electrónico (opcional, privado)';
+  $('invite-verification-email-label').classList.toggle('hidden',!required);
+  $('invite-form').elements.verification_email.required=required;
+  if(required&&!loginSecurity.email_delivery_configured&&!current)status('El envío de códigos de acceso no está disponible en este momento. Inténtalo más tarde.');
+ }catch{
+  // The authoritative login endpoint still requires its configured checks.
+  // A failed capability read never creates a session or skips verification.
+ }
+ return loginSecurity;
+}
+
+function challengeFeedback(message,error=false){
+ const element=$('login-code-status');element.textContent=message;element.classList.toggle('error',error);
+}
+function updateChallengeCountdown(){
+ const button=$('login-code-resend');
+ if(!loginChallenge){button.disabled=true;return;}
+ const seconds=Math.max(0,Math.ceil((loginChallenge.resendAt-Date.now())/1000));
+ button.disabled=loginChallenge.busy||seconds>0;
+ button.textContent=seconds?'Volver a enviar en '+seconds+' s':'Volver a enviar código';
+}
+function beginEmailChallenge(data,returnPath){
+ if(typeof data.csrf==='string')csrf=data.csrf;
+ clearInterval(loginCodeTimer);
+ loginChallenge={id:data.challenge_id,returnPath,resendAt:Date.now()+Math.max(0,Number(data.resend_after)||0)*1000,busy:false};
+ if(typeof data.login_identifier==='string'){
+  $('login-form').elements.username.value=data.login_identifier;
+  if(inviteToken)invitationConsumed=true;
+ }
+ for(const id of ['login-form','register-form','invite-form']){
+  for(const field of $(id).querySelectorAll('input[type=password],input[name=otp],input[name=recovery_code]')){field.value='';delete field.dataset.userDraft;}
+ }
+ $('credentials').classList.add('hidden');$('invitation').classList.add('hidden');
+ $('login-code-panel').classList.remove('hidden');$('login-email-code').value='';
+ $('login-code-recipient').textContent=data.email_hint?'Hemos enviado el código a '+data.email_hint+'.':'Hemos enviado un código al correo de tu cuenta.';
+ $('login-code-submit').disabled=false;challengeFeedback('Revisa tu bandeja de entrada y la carpeta de correo no deseado.');
+ updateChallengeCountdown();loginCodeTimer=setInterval(updateChallengeCountdown,1000);
+ $('login-code-panel').scrollIntoView({block:'start'});$('login-email-code').focus({preventScroll:true});
+}
+function finishAccountAccess(data,returnPath){
+ if(data&&typeof data.challenge_id==='string'&&(data.code==='email_code_required'||data.challenge_required)){
+  beginEmailChallenge(data,returnPath);return;
+ }
+ location.assign(returnPath);
+}
+function requireVerificationAddress(form){
+ const field=form.elements.verification_email;
+ if(!field)return;
+ const label=field.closest('label');label.classList.remove('hidden');field.required=true;
+ field.focus();label.scrollIntoView({block:'nearest'});
+}
+$('login-code-form').addEventListener('submit',async event=>{
+ event.preventDefault();if(!loginChallenge||loginChallenge.busy)return;
+ const code=$('login-email-code').value.trim();
+ if(!/^\d{6}$/.test(code)){challengeFeedback('Escribe las seis cifras del código del correo.',true);$('login-email-code').focus();return;}
+ const challenge=loginChallenge;challenge.busy=true;$('login-code-submit').disabled=true;updateChallengeCountdown();
+ try{
+  const result=await api('/api/account/login/verify',{challenge_id:challenge.id,code});
+  if(loginChallenge!==challenge)return;
+  if(typeof result.csrf==='string')csrf=result.csrf;
+  clearInterval(loginCodeTimer);$('login-email-code').value='';loginChallenge=null;
+  location.assign(challenge.returnPath);
+ }catch(error){
+  if(loginChallenge===challenge){challengeFeedback(error.message,true);$('login-email-code').value='';$('login-email-code').focus();}
+ }finally{if(loginChallenge===challenge){challenge.busy=false;$('login-code-submit').disabled=false;updateChallengeCountdown();}}
+});
+$('login-code-resend').addEventListener('click',async()=>{
+ if(!loginChallenge||loginChallenge.busy||Date.now()<loginChallenge.resendAt)return;
+ const challenge=loginChallenge;challenge.busy=true;updateChallengeCountdown();
+ try{
+  const data=await api('/api/account/login/resend',{challenge_id:challenge.id});
+  if(loginChallenge===challenge)beginEmailChallenge(data,challenge.returnPath);
+ }catch(error){
+  if(loginChallenge===challenge){
+   if(Number(error.details?.resend_after)>0)challenge.resendAt=Date.now()+Number(error.details.resend_after)*1000;
+   challengeFeedback(error.message,true);
+  }
+ }finally{if(loginChallenge===challenge){challenge.busy=false;updateChallengeCountdown();}}
+});
+$('login-code-back').addEventListener('click',async()=>{
+ if(!loginChallenge||loginChallenge.busy)return;
+ const challenge=loginChallenge;challenge.busy=true;$('login-code-back').disabled=true;updateChallengeCountdown();
+ try{
+  await api('/api/account/login/cancel',{});
+  if(loginChallenge!==challenge)return;
+  loginChallenge=null;clearInterval(loginCodeTimer);$('login-email-code').value='';
+  $('login-code-panel').classList.add('hidden');$('login-code-recipient').textContent='';challengeFeedback('');
+  const pendingInvite=Boolean(inviteToken)&&!invitationConsumed;
+  $('credentials').classList.toggle('hidden',Boolean(current)||pendingInvite);
+  $('invitation').classList.toggle('hidden',!pendingInvite);
+  const form=$(pendingInvite?'invite-form':'login-form');form.querySelector('input:not([type=hidden])')?.focus();
+ }catch(error){if(loginChallenge===challenge)challengeFeedback(error.message,true);}
+ finally{if(loginChallenge===challenge){challenge.busy=false;updateChallengeCountdown();}$('login-code-back').disabled=false;}
+});
+window.addEventListener('pagehide',()=>clearInterval(loginCodeTimer));
+window.addEventListener('pageshow',()=>{if(loginChallenge){clearInterval(loginCodeTimer);updateChallengeCountdown();loginCodeTimer=setInterval(updateChallengeCountdown,1000);}});
+
+function clearLoginAudit(){
+ loginAuditRevision++;loginAuditPage=1;loginAuditPages=1;
+ $('login-audit-list').replaceChildren();$('login-audit-summary').textContent='';$('login-audit-status').textContent='';
+ $('login-audit-page').textContent='';$('login-audit-retry').disabled=true;
+ $('login-audit-previous').disabled=true;$('login-audit-next').disabled=true;
+}
+const loginAuditEvents={email_code_verification:'Verificación del código de correo',email_code_resend:'Reenvío del código',email_code_cancel:'Cancelación del acceso',registration:'Registro de cuenta',invitation_access:'Acceso por invitación',email_confirmation:'Confirmación de correo',email_confirmation_resend:'Reenvío de confirmación de correo',password_recovery_request:'Solicitud de recuperación de contraseña',profile_update:'Cambio de perfil',logout:'Cierre de sesión',login_attempt:'Intento de acceso',login_success:'Acceso completado',login_failed:'Acceso no completado',code_sent:'Código enviado',code_invalid:'Código incorrecto',code_verified:'Código verificado',code_expired:'Código caducado',code_resent:'Código reenviado',email_confirmed:'Correo confirmado',password_reset:'Contraseña restablecida',login_cancelled:'Acceso cancelado'};
+const loginAuditResults={email_code_required:'Pendiente de confirmar el código',verification_email_required:'Falta un correo para verificar',email_delivery_unavailable:'Envío de correo no disponible',email_code_invalid:'Código no válido o caducado',email_code_exhausted:'Límite de intentos del código alcanzado',email_code_rate_limited:'Reenvío limitado temporalmente',login_changed:'La cuenta ha cambiado',two_factor_required:'Falta la verificación del autenticador',csrf_expired:'Sesión del formulario caducada',denied:'Denegado',success:'Correcto',failed:'No completado',blocked:'Bloqueado',pending:'Pendiente',sent:'Enviado',invalid:'No válido',expired:'Caducado',rate_limited:'Demasiados intentos'};
+const loginAuditMail={pending:'Aviso pendiente de envío',sending:'Envío en curso',sent:'Aviso enviado',failed:'Envío fallido · pendiente de reintento'};
+async function loadLoginAudit(){
+ if(current?.role!=='admin'){clearLoginAudit();return;}
+ if(!$('login-security-audit').open)return;
+ const revision=++loginAuditRevision,owner=current.id;
+ $('login-audit-status').textContent='Consultando el registro privado de acceso…';
+ try{
+  const data=await api('/api/admin/login-audit?page='+loginAuditPage);
+  if(revision!==loginAuditRevision||current?.role!=='admin'||current.id!==owner||!$('login-security-audit').open)return;
+  loginAuditPage=Number(data.page)||1;loginAuditPages=Math.max(1,Number(data.pages)||1);
+  const pending=Number(data.pending_email)||0;
+  $('login-audit-summary').textContent=(data.email_code_required?'Código por correo exigido. ':'Verificación por correo pendiente de activar. ')+(data.email_delivery_configured?'Servicio de correo configurado. ':'Envío de correo pendiente de configurar. ')+pending+' avisos pendientes · conservación: '+(Number(data.retention_days)||90)+' días.';
+  const fragment=document.createDocumentFragment();
+  for(const record of data.events||[]){
+   const article=text('article','');article.className='login-audit-event';
+   article.append(text('h4',loginAuditEvents[record.event]||String(record.event||'Intento de acceso').replaceAll('_',' ')));
+   const identity=text('p',record.identifier||'Identificador no disponible');identity.setAttribute('translate','no');article.append(identity);
+   article.append(text('p',loginAuditResults[record.result]||String(record.result||'Resultado no disponible').replaceAll('_',' ')));
+   article.append(text('small',record.created_at?date(record.created_at):'Fecha no disponible'));
+   article.append(text('p',loginAuditMail[record.mail_status]||'Estado del aviso no disponible'));
+   fragment.append(article);
+  }
+  if(!(data.events||[]).length)fragment.append(text('p','Todavía no hay intentos de acceso en este registro.'));
+  $('login-audit-list').replaceChildren(fragment);
+  $('login-audit-page').textContent='Página '+loginAuditPage+' de '+loginAuditPages;
+  $('login-audit-previous').disabled=loginAuditPage<=1;$('login-audit-next').disabled=loginAuditPage>=loginAuditPages;
+  $('login-audit-retry').disabled=!data.email_delivery_configured||pending===0;
+  $('login-audit-status').textContent=Number(data.total||0)+' registros de seguridad.';
+ }catch(error){if(revision===loginAuditRevision&&current?.role==='admin'&&current.id===owner){$('login-audit-status').textContent=error.message;if(error.httpStatus===403)clearLoginAudit();}}
+}
+$('login-security-audit').addEventListener('toggle',()=>{if($('login-security-audit').open)loadLoginAudit();});
+$('login-audit-refresh').addEventListener('click',()=>loadLoginAudit());
+$('login-audit-previous').addEventListener('click',()=>{if(loginAuditPage>1){loginAuditPage--;loadLoginAudit();}});
+$('login-audit-next').addEventListener('click',()=>{if(loginAuditPage<loginAuditPages){loginAuditPage++;loadLoginAudit();}});
+$('login-audit-retry').addEventListener('click',async()=>{
+ if(current?.role!=='admin')return;
+ $('login-audit-retry').disabled=true;
+ try{await api('/api/admin/login-audit/retry-email',{});await loadLoginAudit();}
+ catch(error){$('login-audit-status').textContent=error.message;}
+});
 
 async function refresh({automatic=false}={}) {
   const revision=++accountRefreshRevision,data = await api('/api/account/me');
   if(revision!==accountRefreshRevision)return false;
   if(automatic&&accountEditing()){interfaceRefreshPending=true;return false;}
   csrf = data.csrf; current = data.user;
-  $('credentials').classList.toggle('hidden', Boolean(current) || Boolean(inviteToken));
+  $('credentials').classList.toggle('hidden', Boolean(current) || Boolean(inviteToken&&!invitationConsumed) || Boolean(loginChallenge));
   $('member-panel').classList.toggle('hidden', !current);
   $('admin-panel').classList.toggle('hidden', current?.role !== 'admin');
+  if(current?.role!=='admin'||loginAuditOwner!==current.id){clearLoginAudit();loginAuditOwner=current?.role==='admin'?current.id:null;}
   const adminIdentity=$('admin-session-username');if(adminIdentity)adminIdentity.textContent=current?.role==='admin'?'@'+current.username:'';
   const granel=$('granel-access-link');granel.hidden=Boolean(inviteToken&&!current);granel.href=current?'#member-panel':'#granel-access-title';granel.textContent=current?'Abrir Granel':'Entrar a Granel';
   window.dispatchEvent(new Event('ol:account-refreshed'));
@@ -95,13 +252,14 @@ async function loadAdmin({automatic=false}={}) {
   }
   renderCalendar();
   await loadStatistics();
+  if($('login-security-audit').open)await loadLoginAudit();
   return true;
 }
 let floresAliasRevision=0;
 async function loadFloresStreamAlias(){
  const revision=++floresAliasRevision;
  try{
-  const [data,{streamHonor}]=await Promise.all([api('/api/streamers/admin/flores-alias'),import('/assets/stream-honor.js?v=9.29.12')]);
+  const [data,{streamHonor}]=await Promise.all([api('/api/streamers/admin/flores-alias'),import('/assets/stream-honor.js?v=9.30.0')]);
   if(revision!==floresAliasRevision||current?.role!=='admin')return;
   const container=$('flores-stream-alias-badge'),honor=streamHonor(data.stream_alias);container.replaceChildren();if(honor)container.append(honor);
   if(data.account)$('flores-stream-alias-description').textContent='Distinción de triunfador en el directo de '+data.account.display_name+' (@'+data.account.username+').';
@@ -321,22 +479,38 @@ async function loadRegistrationCheck(){if(registrationLoading)return;registratio
 $('registration-human-refresh').addEventListener('click',loadRegistrationCheck);
 $('register-form').addEventListener('submit',async event=>{
  event.preventDefault();const form=event.target,username=form.elements.username,password=form.elements.password,answer=form.elements.human_answer,button=$('registration-submit');
+ await(window.OlLoginSecurityReady||Promise.resolve());
  const name=username.value.trim();username.value=name;const email=form.elements.email,nickname=form.elements.nickname;
+ if(email.required&&!email.value.trim()){registrationFeedback('Añade tu correo para recibir el código de acceso.',true);email.focus();return;}
  if(email.value&&!email.validity.valid){registrationFeedback('Escribe un correo electrónico válido.',true);email.focus();return;}
  if(nickname.value.trim()&&nickname.value.trim().length<2){registrationFeedback('El apodo debe tener al menos dos caracteres.',true);nickname.focus();return;}
  if(!/^[a-zA-Z0-9_.-]{3,60}$/.test(name)){registrationFeedback('Elige un usuario de 3 a 60 letras, números, puntos o guiones. Sin espacios ni @.',true);username.focus();return;}
  if(password.value.length<12||password.value.length>256){registrationFeedback('La contraseña debe tener entre 12 y 256 caracteres. Puedes usar una frase larga.',true);password.focus();return;}
  if(!form.elements.human_id.value||answer.value.trim().length!==5){registrationFeedback('Escribe las cinco letras y números de la imagen para comprobar que eres una persona.',true);answer.focus();return;}
  button.disabled=true;button.textContent='Creando tu cuenta…';registrationFeedback('Creando tu cuenta. No necesitas autorización ni pagar.');
- try{await(window.OlAccountReady||Promise.resolve());await api('/api/account/register',Object.fromEntries(new FormData(form)));location.assign(streamReturn||'/account?registered=1');}
- catch(error){registrationFeedback(error.message,true);if(error.code==='human_required')await loadRegistrationCheck();}
+ try{await(window.OlAccountReady||Promise.resolve());const result=await api('/api/account/register',Object.fromEntries(new FormData(form)));finishAccountAccess(result,streamReturn||'/account?registered=1');}
+ catch(error){registrationFeedback(error.message,true);if(error.code==='human_required')await loadRegistrationCheck();if(error.code==='verification_email_required'){form.elements.email.required=true;form.elements.email.focus();}if(error.details?.account_created){password.value='';$('login-form').elements.username.value=error.details.login_identifier||name;status(error.message);$('login-form').scrollIntoView({block:'start'});$('login-form').elements.password.focus();}}
  finally{button.disabled=false;button.textContent='Crear mi cuenta gratis';}
 });
 for (const [id,endpoint] of [['login-form','login'],['invite-form','accept-invite']]) {
- $(id).addEventListener('submit',async event=>{event.preventDefault();const button=$(id).querySelector('button');button.disabled=true;try{const data=Object.fromEntries(new FormData($(id)));if(endpoint==='accept-invite')data.token=inviteToken;await api(`/api/account/${endpoint}`,data);location.assign(streamReturn||'/account?manage=1');}catch(error){status(error.message);if(endpoint==='login'&&error.code==='two_factor_required'){$('login-second-factor').classList.remove('hidden');$('login-form').querySelector('[name=otp]').focus();}}finally{button.disabled=false;}});
+ $(id).addEventListener('submit',async event=>{
+  event.preventDefault();const form=$(id),button=form.querySelector('button');if(button.disabled)return;button.disabled=true;
+  try{
+   await Promise.all([window.OlAccountReady||Promise.resolve(),window.OlLoginSecurityReady||Promise.resolve()]);
+   if(!form.reportValidity())return;
+   const data=Object.fromEntries(new FormData(form));if(endpoint==='accept-invite')data.token=inviteToken;
+   const result=await api(`/api/account/${endpoint}`,data);finishAccountAccess(result,streamReturn||'/account?manage=1');
+  }catch(error){
+   status(error.message);
+   if(endpoint==='login'&&error.code==='two_factor_required'){$('login-second-factor').classList.remove('hidden');form.querySelector('[name=otp]').focus();}
+   if(error.code==='verification_email_required')requireVerificationAddress(form);
+   if(endpoint==='accept-invite'&&(error.details?.account_created||error.details?.invite_accepted)){invitationConsumed=true;form.elements.password.value='';if(error.details.login_identifier)$('login-form').elements.username.value=error.details.login_identifier;$('invitation').classList.add('hidden');$('credentials').classList.remove('hidden');$('login-form').scrollIntoView({block:'start'});$('login-form').elements.password.focus();}
+  }finally{button.disabled=false;}
+ });
 }
 $('logout').addEventListener('click',async()=>{try{await api('/api/account/logout',{});location.assign('/account');}catch(error){status(error.message);}});
 $('create-invite').addEventListener('submit',async event=>{event.preventDefault();try{const result=await api('/api/admin/invite',Object.fromEntries(new FormData(event.target)));const link=text('a',`${location.origin}${result.path}`);link.href=result.path;$('invite-result').replaceChildren(text('span','Acceso gratuito incluido. Comparte esta invitación privada con tu amigo (48 horas para aceptarla): '),link);event.target.reset();await loadAdmin();}catch(error){status(error.message);}});
+window.OlLoginSecurityReady=inspectLoginSecurity();
 window.OlAccountReady=refresh().then(()=>{if(!current&&!inviteToken&&!$('registration-panel').hidden)loadRegistrationCheck();if(new URLSearchParams(location.search).get('password_reset')==='1')status('Contraseña cambiada. Inicia sesión con tu contraseña nueva.');if(current&&new URLSearchParams(location.search).get('registered')==='1'){status('Cuenta creada. Ya estás dentro de electronicama. No necesitas autorización.');$('member-title').scrollIntoView({block:'start'});}if(streamReturn&&current)location.assign(streamReturn);}).catch(error=>status(error.message));
 
 if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('/sw.js').catch(()=>{});
@@ -410,7 +584,7 @@ async function refreshAdminImages(force=false){
  emblemRefreshPending=true;emblemRefreshForce=emblemRefreshForce||force;
  if(emblemRefreshBusy)return;
  const requestedForce=emblemRefreshForce;emblemRefreshForce=false;emblemRefreshPending=false;emblemRefreshBusy=true;paintAdminRefresh();
- try{const {refreshAdminEmblems}=await import('/assets/admin-emblems.js?v=9.29.12');const result=await refreshAdminEmblems({force:requestedForce});adminImageFailed=result.failed||0;}
+ try{const {refreshAdminEmblems}=await import('/assets/admin-emblems.js?v=9.30.0');const result=await refreshAdminEmblems({force:requestedForce});adminImageFailed=result.failed||0;}
  catch{adminImageFailed=1;}
  finally{emblemRefreshBusy=false;paintAdminRefresh();if(emblemRefreshPending&&!document.hidden)queueMicrotask(()=>refreshAdminImages(emblemRefreshForce));}
 }

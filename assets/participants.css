@@ -1,0 +1,44 @@
+/* The participant file is private, read-only and independent of account forms. */
+body.electronicama-theme #participant-tracking{min-width:0;margin:24px 0;padding:16px 18px;border:1px solid #807398;border-radius:16px;background:#100f17}
+body.electronicama-theme #participant-tracking[hidden]{display:none!important}
+body.electronicama-theme #participant-tracking>summary{min-height:44px;display:list-item;padding:10px 0;color:#e5ddff;line-height:1.5;overflow-wrap:anywhere}
+body.electronicama-theme #participant-tracking-content{min-width:0;padding-top:8px}
+body.electronicama-theme #participant-tracking .participant-note{margin:8px 0 16px;color:#d7cfdf;font-size:13px;line-height:1.65;overflow-wrap:anywhere}
+body.electronicama-theme #participant-tracking .participant-search{display:grid;grid-template-columns:minmax(180px,1fr) minmax(170px,.8fr) auto auto;gap:12px;align-items:end;max-width:none;margin:18px 0}
+body.electronicama-theme #participant-tracking .participant-search>label{min-width:0;margin:0;color:#e4dced;font-size:13px;line-height:1.5}
+body.electronicama-theme #participant-tracking input[type=search]{box-sizing:border-box;display:block;min-width:0;width:100%;min-height:44px;margin-top:6px;padding:10px 12px;border:1px solid #9285a9;border-radius:10px;background:#17131f;color:#f8f3ff;font-size:16px}
+body.electronicama-theme #participant-tracking .participant-archived{display:flex;align-items:center;gap:9px;min-height:44px}
+body.electronicama-theme #participant-tracking .participant-archived input{width:20px;height:20px;min-height:20px;flex:none;margin:0;padding:0;accent-color:#d9c8ff}
+body.electronicama-theme #participant-tracking button{min-width:0;max-width:100%;min-height:44px;box-sizing:border-box;padding:10px 13px;border-radius:10px;font-size:13px;line-height:1.5;white-space:normal;overflow-wrap:anywhere}
+body.electronicama-theme #participant-tracking .participant-search>button{align-self:end;width:100%}
+body.electronicama-theme #participant-tracking .participant-status{min-height:24px;margin:10px 0;color:#d7cdeb;font-size:13px;line-height:1.6}
+body.electronicama-theme #participant-tracking .participant-error{color:#ffc5db!important;line-height:1.65}
+body.electronicama-theme #participant-tracking .participant-layout{display:grid;grid-template-columns:minmax(210px,.78fr) minmax(0,1.4fr);gap:18px;align-items:start;min-width:0}
+body.electronicama-theme #participant-tracking .participant-list-column,body.electronicama-theme #participant-tracking .participant-detail{min-width:0}
+body.electronicama-theme #participant-tracking ul{list-style:none;margin:0;padding:0}
+body.electronicama-theme #participant-tracking .participant-list{display:grid;gap:9px}
+body.electronicama-theme #participant-tracking .participant-list>li{min-width:0}
+body.electronicama-theme #participant-tracking .participant-choice{display:grid;gap:5px;width:100%;text-align:left;background:#1b1824!important;color:#e9e0f5!important;border:1px solid #786b90!important}
+body.electronicama-theme #participant-tracking .participant-choice[aria-pressed=true]{background:#292037!important;border-color:#ccb3f3!important;box-shadow:inset 3px 0 #c9a0ec}
+body.electronicama-theme #participant-tracking .participant-choice>strong{font-size:15px;color:#f6efff;line-height:1.5;overflow-wrap:anywhere}
+body.electronicama-theme #participant-tracking .participant-username{color:#e8c4df;font-size:12px}
+body.electronicama-theme #participant-tracking .participant-access{color:#c6e5e4;font-size:12px}
+body.electronicama-theme #participant-tracking .participant-meta{display:block;color:#cdc5d9;font-size:12px;line-height:1.6;overflow-wrap:anywhere}
+body.electronicama-theme #participant-tracking .participant-pagination{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;margin:14px 0;min-width:0}
+body.electronicama-theme #participant-tracking .participant-pagination span{text-align:center;color:#e5d9f4;font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+body.electronicama-theme #participant-tracking .participant-detail{padding:20px;border:1px solid #766b88;border-radius:14px;background:#0b0b12;color:#e9e2ef}
+body.electronicama-theme #participant-tracking .participant-detail>h3{margin:0 0 18px;font-size:21px;line-height:1.35;overflow-wrap:anywhere}
+body.electronicama-theme #participant-tracking .participant-facts{display:grid;grid-template-columns:minmax(100px,.9fr) minmax(0,1.2fr);gap:8px 12px;margin:0 0 14px;line-height:1.6;font-size:13px}
+body.electronicama-theme #participant-tracking dt{margin:0;color:#c9bed8;font-weight:500;overflow-wrap:anywhere}
+body.electronicama-theme #participant-tracking dd{min-width:0;margin:0;color:#f2eafa;overflow-wrap:anywhere}
+body.electronicama-theme #participant-tracking .participant-block{margin:16px 0 0;padding-top:15px;border-top:1px solid #665a77;min-width:0}
+body.electronicama-theme #participant-tracking .participant-block h4{margin:0 0 13px;color:#e8dbfa;font-size:15px;line-height:1.5;overflow-wrap:anywhere}
+body.electronicama-theme #participant-tracking .participant-records{display:grid;gap:12px}
+body.electronicama-theme #participant-tracking .participant-records>li{display:grid;gap:4px;min-width:0;color:#e1d8eb;font-size:13px;line-height:1.6;overflow-wrap:anywhere}
+body.electronicama-theme #participant-tracking .participant-records>li>strong{color:#f0e5fb;font-size:13px}
+body.electronicama-theme #participant-tracking .participant-records a{display:inline-flex;align-items:center;min-height:44px;color:#bfdff0;overflow-wrap:anywhere}
+body.electronicama-theme #participant-tracking .participant-empty{padding:10px 0;color:#d7cce5;font-size:13px;line-height:1.6;overflow-wrap:anywhere}
+body.electronicama-theme #participant-tracking :is(a,button,input,summary):focus-visible{outline:3px solid #a4e9f2;outline-offset:4px}
+@media(max-width:1000px){body.electronicama-theme #participant-tracking .participant-search{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}body.electronicama-theme #participant-tracking .participant-layout{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:600px){body.electronicama-theme #participant-tracking{padding:12px;margin:20px 0}body.electronicama-theme #participant-tracking .participant-search{grid-template-columns:minmax(0,1fr)}body.electronicama-theme #participant-tracking .participant-detail{padding:14px}body.electronicama-theme #participant-tracking .participant-facts{grid-template-columns:minmax(0,1fr);gap:3px}body.electronicama-theme #participant-tracking dd{margin-bottom:10px}body.electronicama-theme #participant-tracking .participant-pagination{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}body.electronicama-theme #participant-tracking .participant-pagination span{grid-column:1/-1;grid-row:1}}
+@media(forced-colors:active){body.electronicama-theme #participant-tracking .participant-choice[aria-pressed=true]{border-width:3px!important;box-shadow:none}}

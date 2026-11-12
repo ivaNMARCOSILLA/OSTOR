@@ -46,4 +46,4 @@ body.electronicama-theme .music-search-fallback:focus-visible{outline:2px solid 
 @media(prefers-reduced-motion:reduce){body.electronicama-theme #music-memory button{transition:none}}
 
 body.electronicama-theme #hero .music-memory-jump svg,body.electronicama-theme #music-memory .music-memory-search svg{display:block;flex:none;width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-@media(max-width:360px){body.electronicama-theme .content #hero .hero-copy{padding-top:16px;padding-bottom:16px}}
+@media(max-width:360px){body.electronicama-theme .content #hero .hero-copy{padding-top:8px;padding-bottom:8px}}

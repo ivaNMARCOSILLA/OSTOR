@@ -83,7 +83,7 @@ def statistics():
 
 
 JOURNEY_COOKIE='electronicama_navigation'
-JOURNEY_PAGES={'/','/live','/account','/legal/privacidad.html','/legal/cookies.html','/legal/aviso-legal.html'}
+JOURNEY_PAGES={'/','/live','/videos','/account','/legal/privacidad.html','/legal/cookies.html','/legal/aviso-legal.html'}
 JOURNEY_TARGETS={'explorar','favoritos','historial','buscar-musica','reproducir-musica','guardar-favorito','reproducir-pausar','siguiente-cancion','anterior-cancion','ampliar-reproductor','cerrar-reproductor','crear-cuenta','iniciar-sesion','abrir-musica','abrir-ol-livis','abrir-cuenta','abrir-legal','abrir-fuente','fuente-audius','fuente-archive','fuente-youtube','fuente-mix','fuente-radio','ver-hologramas','abrir-estilos'}
 
 def journey_identity():

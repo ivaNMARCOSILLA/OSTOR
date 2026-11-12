@@ -26,3 +26,26 @@ body.electronicama-theme .admin-refresh-controls button:focus-visible,body.elect
 @media(max-width:600px){body.electronicama-theme .admin-refresh-controls{grid-template-columns:minmax(0,1fr)}body.electronicama-theme .admin-refresh-controls button{width:100%}body.electronicama-theme .member-rename{max-width:100%}}
 
 body.electronicama-theme .client-account-archive-status{background:#222;color:#d0eee5;border-color:#78a79e}
+
+/* Email verification is a separate, focused step; credentials are cleared first. */
+body.electronicama-theme #login-code-panel{background:#100f17;border-color:#9e8cbd;color:#f3edff;scroll-margin-top:100px}
+body.electronicama-theme #login-code-panel h2{color:#efe4ff;text-shadow:none}
+body.electronicama-theme #login-code-panel p{line-height:1.65;color:#ddd6e9;overflow-wrap:anywhere}
+body.electronicama-theme #login-code-form{max-width:40rem;min-width:0;gap:18px}
+body.electronicama-theme #login-email-code{box-sizing:border-box;width:min(100%,18rem);min-height:54px;font-size:24px;letter-spacing:.3em;background:#16131d;border:1px solid #aa9cc4;color:#fbf7ff}
+body.electronicama-theme .login-code-actions,body.electronicama-theme .login-audit-actions{display:flex;flex-wrap:wrap;gap:10px;min-width:0}
+body.electronicama-theme .login-code-actions button,body.electronicama-theme .login-audit-actions button{min-height:44px;max-width:100%;padding:10px 16px;white-space:normal;overflow-wrap:anywhere;font-size:14px}
+body.electronicama-theme #login-code-submit{background:#dbc7ff;color:#1a1426;border-color:#dbc7ff}
+body.electronicama-theme #login-code-panel .secondary{background:#201b29;color:#f0e8fc;border-color:#9486ab}
+body.electronicama-theme #login-code-panel button:disabled{background:#302a3b;color:#c8c0d4;border-color:#766a88}
+body.electronicama-theme :is(#login-verification-email-label,#invite-verification-email-label) small{line-height:1.55;color:#c9bfd8;font-size:12px}
+body.electronicama-theme #login-security-audit{min-width:0;margin:24px 0;padding:0 16px 18px;border:1px solid #8d7da6;border-radius:16px;background:#100f17}
+body.electronicama-theme #login-security-audit>summary{min-height:44px;padding:16px 0;color:#e8dbff;line-height:1.5;overflow-wrap:anywhere}
+body.electronicama-theme #login-security-audit>p{font-size:13px;line-height:1.6;overflow-wrap:anywhere}
+body.electronicama-theme .login-audit-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:12px;margin:16px 0;min-width:0}
+body.electronicama-theme .login-audit-event{min-width:0;padding:14px;border:1px solid #726783;border-radius:12px;background:#17131f;overflow-wrap:anywhere}
+body.electronicama-theme .login-audit-event h4{margin:0 0 10px;font-size:15px;line-height:1.45}
+body.electronicama-theme .login-audit-event p{margin:7px 0;font-size:13px;line-height:1.5}
+body.electronicama-theme .login-audit-event small{color:#cbc1da;font-size:12px;line-height:1.5}
+body.electronicama-theme :is(#login-code-panel,#login-security-audit) :is(input,button,summary):focus-visible{outline:3px solid #b8e7f2;outline-offset:3px}
+@media(max-width:600px){body.electronicama-theme .login-code-actions button,body.electronicama-theme .login-audit-actions button{width:100%}body.electronicama-theme #login-security-audit{padding:0 12px 14px}}

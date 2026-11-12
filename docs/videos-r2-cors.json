@@ -1,0 +1,12 @@
+[
+  {
+    "AllowedOrigins": [
+      "https://electronicama.com",
+      "https://www.electronicama.com"
+    ],
+    "AllowedMethods": ["PUT", "GET", "HEAD"],
+    "AllowedHeaders": ["Content-Type", "Range"],
+    "ExposeHeaders": ["ETag", "Content-Length", "Content-Range", "Accept-Ranges"],
+    "MaxAgeSeconds": 3600
+  }
+]

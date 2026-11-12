@@ -1,7 +1,7 @@
 /* Optional first-party visit records. No fingerprint, field contents or full URLs. */
 (()=>{
  const KEY='electronicama_visit_registry_consent_v1',OLD_KEY='electronicama_navigation_consent_v1';
- const paths=new Set(['/','/live','/account','/legal/cookies.html','/legal/privacidad.html','/legal/aviso-legal.html']);
+ const paths=new Set(['/','/live','/videos','/account','/legal/cookies.html','/legal/privacidad.html','/legal/aviso-legal.html']);
  const page=()=>location.pathname==='/streamers'?'/live':location.pathname;
  const privacySignal=()=>navigator.globalPrivacyControl||navigator.doNotTrack==='1';
  const preference=()=>{try{return localStorage.getItem(KEY);}catch{return null;}};
@@ -89,7 +89,7 @@
   setText(unassigned,history.unassigned?`${number.format(history.unassigned)} · ${t('entradas anteriores sin desglose diario')}`:'');
  }
  function renderRecent(list,visits){
-  const labels={desktop:'Ordenador',mobile:'Móvil',tablet:'Tableta',bot:'Automatizado',unknown:'Sin identificar'},pages={'/':'Música','/live':'Ol Live','/account':'Cuenta','/legal/cookies.html':'Información legal','/legal/privacidad.html':'Información legal','/legal/aviso-legal.html':'Información legal'};
+  const labels={desktop:'Ordenador',mobile:'Móvil',tablet:'Tableta',bot:'Automatizado',unknown:'Sin identificar'},pages={'/':'Música','/live':'Ol Live','/videos':'Vídeos','/account':'Cuenta','/legal/cookies.html':'Información legal','/legal/privacidad.html':'Información legal','/legal/aviso-legal.html':'Información legal'};
   const nextRows=new Map(),rows=[],occurrences=new Map(),date=new Intl.DateTimeFormat(document.documentElement.lang||'es',{timeZone:'Europe/Madrid',hour:'2-digit',minute:'2-digit'});
   for(const visit of visits){const base=JSON.stringify([visit.at,visit.page,visit.device]),number=occurrences.get(base)||0,key=base+':'+number;occurrences.set(base,number+1);let record=recentRows.get(key);if(!record){const row=document.createElement('li'),device=document.createElement('strong'),time=document.createElement('time'),where=document.createElement('span');time.dateTime=visit.at;row.append(device,where,time);record={row,device,time,where};}
    setText(record.device,t(labels[visit.device]||visit.device||'Sin identificar'));setText(record.time,date.format(new Date(visit.at)));setText(record.where,t(pages[visit.page]||visit.page||'Web'));nextRows.set(key,record);rows.push(record.row);
