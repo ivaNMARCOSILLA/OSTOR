@@ -850,6 +850,8 @@ def registration_payment_gate():
     safe_prefixes=('/api/account/','/api/admin/','/api/payments/','/api/streamers/admin/')
     safe_paths={'/api/status','/api/locale','/api/sync','/api/visits','/api/visits/public','/api/visits/consent','/api/navigation/events','/api/navigation/consent','/api/presence','/api/promotion/event','/api/contributions/config'}
     if path.startswith(safe_prefixes) or path in safe_paths:return
+    from flask import session
+    if not session.get('member_id'):return
     from membership import get_user
     from registration_fee import state as fee_state,activate
     user=get_user()
