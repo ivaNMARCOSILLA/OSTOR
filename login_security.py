@@ -138,6 +138,8 @@ def establish(member_id, version):
     session.clear()
     session.update(member_id=member_id, session_version=version, csrf=secrets.token_urlsafe(32))
     session.permanent = True
+    from registration_fee import activate
+    activate(member_id)
     subject(member_id)
     return jsonify(ok=True, csrf=session['csrf'])
 
@@ -242,6 +244,9 @@ def verify():
             conn.execute('INSERT INTO member_profiles(member_id,email,email_verified,updated_at) VALUES(?,?,1,?) ON CONFLICT(member_id) DO UPDATE SET email=excluded.email,email_verified=1,updated_at=excluded.updated_at', (row['member_id'],row['email'],stamp(now_utc())))
         except INTEGRITY_ERRORS:
             return jsonify(error='No se puede confirmar ese correo para esta cuenta.',code='email_code_invalid'),409
+        if not row['profile_email_present']:
+            from account_reports import queue_account
+            queue_account(conn,row['member_id'],event='email_added')
         conn.execute('UPDATE security_login_challenges SET used_at=?,attempts=? WHERE id=?',(stamp(now_utc()),attempts,row['id']))
         member_id,version=row['member_id'],row['current_version']
     return establish(member_id,version)

@@ -220,13 +220,23 @@ def init_database():
     init_login_security()
     from contributions import init_database as init_contributions
     init_contributions()
+    from registration_fee import init_database as init_registration_fee
+    init_registration_fee()
+    from account_reports import init_database as init_account_reports
+    init_account_reports()
+    apply_registration_policy()
 
 def create_admin(username, password):
     username = clean_username(username)
     validate_password(password)
     with database() as conn:
+        ident=secrets.token_hex(16)
         conn.execute('INSERT INTO members(id,username,password_hash,role,created_at) VALUES(?,?,?,?,?)',
-                     (secrets.token_hex(16), username, generate_password_hash(password), 'admin', stamp(now_utc())))
+                     (ident, username, generate_password_hash(password), 'admin', stamp(now_utc())))
+        from registration_fee import enroll
+        enroll(conn,ident,'operator_admin')
+        from account_reports import queue_account
+        queue_account(conn,ident)
 
 
 def prepare_admin_invitation(username='admin'):
@@ -240,6 +250,10 @@ def prepare_admin_invitation(username='admin'):
         ident = user['id'] if user else secrets.token_hex(16)
         if not user:
             conn.execute('INSERT INTO members(id,username,role,created_at) VALUES(?,?,?,?)', (ident, username, 'admin', stamp(now_utc())))
+        from registration_fee import enroll
+        enroll(conn,ident,'operator_admin')
+        from account_reports import queue_account
+        queue_account(conn,ident)
         conn.execute('DELETE FROM invitations WHERE member_id=?', (ident,))
         token = secrets.token_urlsafe(32)
         conn.execute('INSERT INTO invitations(token_hash,member_id,expires_at) VALUES(?,?,?)',
@@ -398,7 +412,11 @@ def account_me():
         legal=conn.execute('SELECT legal_name FROM member_legal_names WHERE member_id=?',(user['id'],)).fetchone() if user else None
         slot=reservation(conn,user['id']) if user else None
         last_release=conn.execute('SELECT number,trial_until,released_at FROM founder_slot_history WHERE member_id=? ORDER BY released_at DESC,id DESC LIMIT 1',(user['id'],)).fetchone() if user else None
-    return jsonify(user=user_public(user) if user else None, csrf=csrf_token(), payments=payments, payment_mode='manual_verified', streamer_available=streamer_sales_ready(),premium_available=streamer_sales_ready(),founder_reservation=slot,founder_last_release=dict(last_release) if last_release else None,live_video_ready=live_ready(),music_free=True,live_price_cents=2500,live_trial_months=0,live_trial_days=0,live_billing_period='year',live_premiere=premiere(),profile={'legal_name':legal['legal_name'] if legal else '', 'email':user['profile_email'],'nickname':user['nickname'] or '', 'email_verified':bool(user['profile_email_verified'])} if user else None)
+    from registration_fee import state as registration_state,activate as activate_registration
+    fee=registration_state(user)
+    if user and fee['enabled'] and fee['required'] and not fee['deadline']:
+        activate_registration(user['id']);fee=registration_state(user)
+    return jsonify(user=user_public(user) if user else None, registration_fee=fee, csrf=csrf_token(), payments=payments, payment_mode='manual_verified', streamer_available=streamer_sales_ready(),premium_available=streamer_sales_ready(),founder_reservation=slot,founder_last_release=dict(last_release) if last_release else None,live_video_ready=live_ready(),music_free=True,live_price_cents=2500,live_trial_months=0,live_trial_days=0,live_billing_period='year',live_premiere=premiere(),profile={'legal_name':legal['legal_name'] if legal else '', 'email':user['profile_email'],'nickname':user['nickname'] or '', 'email_verified':bool(user['profile_email_verified'])} if user else None)
 
 
 @bp.post('/api/account/register')
@@ -424,15 +442,21 @@ def register():
             ident = secrets.token_hex(16)
             conn.execute('INSERT INTO members(id,username,password_hash,created_at) VALUES(?,?,?,?)',
                          (ident, name, generate_password_hash(data['password']), stamp(now_utc())))
+            from registration_fee import enroll
+            enroll(conn,ident,'self_service')
             if legal_name:conn.execute('INSERT INTO member_legal_names VALUES(?,?,?)',(ident,legal_name,stamp(now_utc())))
             if email or nickname:conn.execute('INSERT INTO member_profiles(member_id,email,nickname,updated_at) VALUES(?,?,?,?)',(ident,email,nickname,stamp(now_utc())))
             user=conn.execute('SELECT * FROM members WHERE id=?',(ident,)).fetchone()
+            from account_reports import queue_account
+            queue_account(conn,ident)
         login_security.subject(ident,name)
         notify('registration','Nueva cuenta registrada','Se ha registrado una cuenta de cliente. El registro no activa acceso de pago.',event_key='registration:'+ident,member_ids=[ident])
         if login_security.required():return login_security.begin(user,email,purpose='register')
         session.clear()
         session.update(member_id=ident, session_version=0,csrf=secrets.token_urlsafe(32))
         session.permanent = True
+        from registration_fee import activate
+        activate(ident)
         from email_security import send_security_mail
         return jsonify(ok=True,verification_sent=send_security_mail(ident,'verify') if email else False), 201
     except (ValueError,) + INTEGRITY_ERRORS as exc:
@@ -562,6 +586,10 @@ def invite():
                 return jsonify(error='Esta cuenta ya está activada. Usa «Dar acceso gratuito» en el listado de clientes.'),409
             ident=existing['id'] if existing else secrets.token_hex(16)
             if not existing:conn.execute('INSERT INTO members(id,username,created_at) VALUES(?,?,?)',(ident,name,stamp(now_utc())))
+            from registration_fee import enroll
+            enroll(conn,ident,'owner_invitation')
+            from account_reports import queue_account
+            queue_account(conn,ident)
             conn.execute('DELETE FROM invitations WHERE member_id=?',(ident,))
             token = secrets.token_urlsafe(32)
             conn.execute('INSERT INTO invitations(token_hash,member_id,expires_at) VALUES(?,?,?)',
@@ -627,6 +655,23 @@ def apply_owner_access_migration():
             if target and owner:
                 conn.execute('INSERT INTO service_grants VALUES(?,?,?,NULL) ON CONFLICT(member_id) DO UPDATE SET granted_at=excluded.granted_at,granted_by=excluded.granted_by,revoked_at=NULL',(target['id'],stamp(now_utc()),owner['id']))
             conn.execute('INSERT INTO owner_access_migrations VALUES(?,?,?)',(ident,stamp(now_utc()),'granted' if target and owner else 'skipped_missing_existing_account'))
+
+
+def apply_registration_policy():
+    """Enroll existing accounts once; retain the owner's rosas identity by ID."""
+    import json
+    from registration_fee import enroll,mark_owner
+    migration='owner-account-registration-fee-2026-11-12-v1'
+    with database() as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        if conn.execute('SELECT id FROM owner_access_migrations WHERE id=?',(migration,)).fetchone():return
+        for member in conn.execute('SELECT id,role FROM members').fetchall():
+            enroll(conn,member['id'],'legacy_unknown')
+        linked=conn.execute("SELECT member_id FROM member_identity_links WHERE identity='rosas'").fetchone()
+        rosas=conn.execute('SELECT id FROM members WHERE id=?',(linked['member_id'],)).fetchone() if linked else conn.execute("SELECT id FROM members WHERE username='rosas'").fetchone()
+        if rosas:mark_owner(conn,rosas['id'],'owner_rosas')
+        outcome={'policy':'one_time_100_cents_after_300_seconds','rosas_member_id':rosas['id'] if rosas else None}
+        conn.execute('INSERT INTO owner_access_migrations(id,applied_at,result) VALUES(?,?,?)',(migration,stamp(now_utc()),json.dumps(outcome)))
 
 
 OWNER_ADMIN_MIGRATION_ID = 'owner-admin-adminsiempre-2026-11-12'

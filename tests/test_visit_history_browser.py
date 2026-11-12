@@ -54,7 +54,7 @@ def run():
         with page.expect_response(lambda response:response.request.method=='POST' and response.url.endswith('/api/visits')):
             page.locator('#consent-accept').click()
         expect(page.locator(TOTAL)).to_have_text('1')
-        expect(page.locator('#public-visit-days tr').last.locator('td>span').first).to_have_text('Al menos 1')
+        expect(page.locator('#public-visit-days tr').last.locator('td>span').first).to_have_text('1')
         page.locator('#privacy-button').click()
         with page.expect_response(lambda response:response.request.method=='POST' and response.url.endswith('/api/visits/consent')):
             page.locator('#consent-decline').click()
@@ -64,7 +64,7 @@ def run():
         assert after['history']['days'][-1]=={'day':today,'sessions':1,'complete':False}
         assert after['history']['since']==history['since']
         expect(page.locator(TOTAL)).to_have_text('1')
-        expect(page.locator('#public-visit-days tr').last.locator('td>span').first).to_have_text('Al menos 1')
+        expect(page.locator('#public-visit-days tr').last.locator('td>span').first).to_have_text('1')
 
         for width in [320,390,1440]:
             page.set_viewport_size({'width':width,'height':1000})
@@ -105,7 +105,7 @@ def run():
         expect(page.locator('#public-visit-range')).to_have_text('1 / 2')
         assert requested[-1]==1
         assert dates(page)==[day['day'] for day in after['history']['days']]
-        expect(page.locator('#public-visit-days tr').last.locator('td>span').first).to_have_text('Al menos 1')
+        expect(page.locator('#public-visit-days tr').last.locator('td>span').first).to_have_text('1')
         expect(page.locator(TOTAL)).to_have_text('1')
         expect(page.locator('#public-visit-unassigned')).to_be_hidden()
         assert not errors,errors

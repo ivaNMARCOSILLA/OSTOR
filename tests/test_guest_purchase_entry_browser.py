@@ -11,7 +11,7 @@ def run():
   button=page.locator('#trial-start');assert button.is_enabled()
   button.click()
   page.wait_for_function("document.activeElement===document.querySelector('#register-form [name=username]')")
-  assert 'Crea tu cuenta gratis' in page.locator('#login-feedback').inner_text()
+  assert 'Crea tu cuenta' in page.locator('#login-feedback').inner_text()
   assert not errors,errors
   browser.close()
  print('OK: annual purchase guest button opens registration and focuses username')

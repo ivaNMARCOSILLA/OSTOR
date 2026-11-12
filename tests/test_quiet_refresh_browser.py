@@ -114,7 +114,7 @@ def run():
         state['rewards']['owned_preview'].append(deepcopy(unlocked))
         page.clock.fast_forward(31100)
         expect(page.locator('#public-visit-count .public-visit-total')).to_have_text('6')
-        expect(page.locator('#public-visit-days tr').last.locator('td>span').first).to_have_text('Al menos 6')
+        expect(page.locator('#public-visit-days tr').last.locator('td>span').first).to_have_text('6')
         expect(page.locator('#public-visit-list li')).to_have_count(2)
         expect(page.locator('#reward-points')).to_have_text('10')
         changed=page.evaluate('''()=>{const r=window.quietRefs;return {total:r.total===document.querySelector('.public-visit-total'),day:r.day===document.querySelector('#public-visit-days tr:last-child'),recent:r.recent===document.querySelector('#public-visit-list li:nth-child(2)'),card:r.card===document.querySelector('#reward-album article'),art:r.art===document.querySelector('#reward-album img'),focus:r.sound===document.activeElement};}''')

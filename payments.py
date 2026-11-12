@@ -366,6 +366,9 @@ def webhook(scope):
    if scope=='platform':
     from contributions import handle_event
     handled_contribution=handle_event(c,event)
+    if not handled_contribution:
+     from registration_fee import handle_event as handle_registration_fee
+     handled_contribution=handle_registration_fee(c,event)
    if handled_contribution:pass
    elif kind in {'checkout.session.completed','checkout.session.async_payment_succeeded','checkout.session.expired'}:
     order=c.execute('SELECT * FROM stripe_orders WHERE checkout_id=? AND account_id=?',(obj.get('id',''),account)).fetchone()

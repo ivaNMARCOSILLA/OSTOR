@@ -75,7 +75,7 @@
    const {row,time,value,label,bar,fill}=record,partial=day.complete?'':'public-visit-partial';
    if(row.className!==partial)row.className=partial;
    setText(time,date.format(new Date(day.day+'T12:00:00+00:00')));
-   setText(label,day.sessions===null?t('Sin datos disponibles'):day.complete?number.format(day.sessions):`${t('Al menos')} ${number.format(day.sessions)}`);
+   setText(label,day.sessions===null?t('Sin datos disponibles'):number.format(day.sessions));
    const title=day.complete?'':t('Desglose anterior incompleto');if(label.title!==title)label.title=title;
    if(day.sessions!==null){const width=(100*day.sessions/maximum)+'%';if(fill.style.width!==width)fill.style.width=width;if(bar.parentNode!==value)value.append(bar);}else if(bar.parentNode)bar.remove();
    nextRows.set(day.day,record);rows.push(row);

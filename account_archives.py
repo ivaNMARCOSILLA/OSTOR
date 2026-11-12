@@ -109,6 +109,7 @@ def delete_unpaid_member(conn, member_id, actor_id=None):
     financial = has('payments', 'member_id=? OR verified_by=?', (member_id, member_id))
     financial = financial or has('stripe_orders', '('+scope+") AND (paid_at IS NOT NULL OR reversed_at IS NOT NULL OR state IN ('paid','test_paid','reversed'))", scope_args)
     financial = financial or has('contribution_payments', "member_id=? AND (paid_at IS NOT NULL OR state IN ('paid','refunded','disputed'))", (member_id,))
+    financial = financial or has('registration_fee_orders', "member_id=? AND (paid_at IS NOT NULL OR state IN ('paid','refunded','disputed') OR (checkout_id IS NOT NULL AND state IN ('created','pending')))", (member_id,))
     financial = financial or has('creator_subscriptions', '('+scope+') OR verified_by=?', (*scope_args, member_id))
     financial = financial or has('live_entitlements', 'member_id=? AND paid_at IS NOT NULL', (member_id,))
     financial = financial or has('annual_access_emails', 'member_id=?', (member_id,))
@@ -205,6 +206,7 @@ def delete_unpaid_member(conn, member_id, actor_id=None):
             cumulative_visits(conn)
         for table in ('live_guest_invites', 'live_channel_views', 'adult_age_declarations',
                       'stripe_connect_states', 'stripe_accounts', 'email_tokens', 'invitations',
+                      'registration_fee_orders', 'registration_access',
                       'member_two_factor', 'two_factor_recovery', 'member_legal_names',
                       'member_profiles', 'member_rewards', 'fan_aliases', 'annual_preferences',
                       'service_grants', 'community_roles', 'moderator_permissions',

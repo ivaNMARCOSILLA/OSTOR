@@ -38,7 +38,7 @@
    tones.forEach((tone,number)=>{
     const flower=document.createElement('img');flower.className='botanical-flower';
     flower.dataset.flowerTone=tone;flower.dataset.flowerGesture=number?'lift':'lean';
-    flower.src='/assets/botanical-flower.svg?v=9.30.1';flower.alt='';flower.width=32;flower.height=44;
+    flower.src='/assets/botanical-flower.svg?v=9.31.0';flower.alt='';flower.width=32;flower.height=44;
     flower.draggable=false;flower.setAttribute('aria-hidden','true');flower.setAttribute('role','presentation');
     group.append(flower);
    });

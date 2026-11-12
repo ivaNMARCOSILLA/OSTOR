@@ -24,6 +24,8 @@ def run():
         # security suite checks the production-default email challenge end to end.
         os.environ['OL_LOGIN_EMAIL_REQUIRED']='1' if selected==['test_email_login_browser.py'] else '0'
         os.environ['OL_LOGIN_AUDIT_EMAILS']='1' if selected==['test_email_login_browser.py'] else '0'
+        os.environ['OL_REGISTRATION_FEE_ENABLED']='1' if selected==['test_registration_fee_browser.py'] else '0'
+        os.environ['OL_ACCOUNT_REPORT_EMAILS']='0'
         os.environ.setdefault('OL_PAYMENT_PROVIDER','legacy_paypal')
         os.environ.setdefault('OL_LIVE_PREMIERE','0')
         os.environ.pop('DATABASE_URL', None)

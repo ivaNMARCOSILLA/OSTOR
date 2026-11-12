@@ -1,0 +1,28 @@
+/* Registration notices stay in document flow; account and legal controls remain usable. */
+body.electronicama-theme #registration-payment.registration-payment{box-sizing:border-box;position:relative;min-width:0;max-width:100%;margin:18px 0;padding:18px 20px;border:1px solid #8c7ca8;border-radius:15px;background:#15101e;color:#f2eafa;scroll-margin-top:100px}
+body.electronicama-theme #registration-payment[hidden]{display:none!important}
+body.electronicama-theme #registration-payment h2{margin:0 0 9px;color:#f2e8fc;font-size:22px;line-height:1.35;overflow-wrap:anywhere}
+body.electronicama-theme #registration-payment p{margin:8px 0;color:#ded3ea;font-size:13px;line-height:1.65;overflow-wrap:anywhere}
+body.electronicama-theme #registration-payment.registration-payment--grace{padding:12px 16px;background:#15111c;border-color:#77698b}
+body.electronicama-theme #registration-payment.registration-payment--grace h2{font-size:16px;margin-bottom:4px}
+body.electronicama-theme #registration-payment.registration-payment--grace #registration-fee-copy{margin:4px 0}
+body.electronicama-theme #registration-payment.registration-payment--grace .registration-fee-actions{display:none}
+body.electronicama-theme #registration-payment .registration-fee-status:empty{display:none}
+body.electronicama-theme #registration-fee-countdown{font:600 16px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;color:#d4c0f5!important;font-variant-numeric:tabular-nums}
+body.electronicama-theme #registration-payment.registration-payment--due{border-color:#d6a0cc;background:#19101d}
+body.electronicama-theme #registration-payment .registration-fee-form{display:grid;grid-template-columns:minmax(0,1fr);max-width:620px;min-width:0;gap:13px;margin:18px 0 12px}
+body.electronicama-theme #registration-payment .registration-fee-consent{display:flex;align-items:flex-start;gap:10px;min-width:0;color:#f0e4f7;font-size:14px;line-height:1.6}
+body.electronicama-theme #registration-fee-terms{box-sizing:border-box;width:20px;height:20px;min-height:20px;flex:0 0 20px;margin:2px 0 0;padding:0;accent-color:#d8b3f3}
+body.electronicama-theme #registration-payment button{box-sizing:border-box;min-width:0;max-width:100%;min-height:44px;padding:10px 15px;border-radius:10px;font-family:inherit;font-weight:600;font-size:13px;line-height:1.5;white-space:normal;overflow-wrap:anywhere}
+body.electronicama-theme #registration-fee-submit{justify-self:start;background:#dfc5f7;border:1px solid #e8d5fb;color:#23162d}
+body.electronicama-theme #registration-payment button:disabled{background:#2b2233;border-color:#79678c;color:#d4c4e1;cursor:not-allowed;opacity:1}
+body.electronicama-theme #registration-payment .registration-fee-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px;margin-top:13px;min-width:0}
+body.electronicama-theme #registration-payment .registration-fee-actions a{display:inline-flex;align-items:center;min-height:44px;max-width:100%;color:#d7d7ff;font-size:13px;line-height:1.5;overflow-wrap:anywhere}
+body.electronicama-theme #registration-payment .registration-fee-actions .secondary{background:#21192b;border:1px solid #9380a8;color:#f0e2fb}
+body.electronicama-theme #registration-payment .registration-fee-note{font-size:12px;color:#cfc0dd}
+body.electronicama-theme #registration-payment .registration-fee-error{color:#ffc8df!important}
+body.electronicama-theme #registration-payment .registration-fee-return{border-left:3px solid #b79ada;padding-left:12px;color:#eadcf5}
+body.electronicama-theme #registration-payment [hidden]{display:none!important}
+body.electronicama-theme #registration-payment :is(button,a,input):focus-visible{outline:3px solid #aae8ee;outline-offset:4px}
+html.registration-fee-due iframe[src^="https://www.youtube.com/"],html.registration-fee-due iframe[src^="https://www.youtube-nocookie.com/"],html.registration-fee-due iframe[src^="https://youtube.com/"],html.registration-fee-due iframe[src^="https://youtube-nocookie.com/"]{pointer-events:none}
+@media(max-width:600px){body.electronicama-theme #registration-payment.registration-payment{padding:16px 14px;margin:14px 0}body.electronicama-theme #registration-payment h2{font-size:20px}body.electronicama-theme #registration-payment.registration-payment--grace{padding:11px 13px}body.electronicama-theme #registration-fee-submit{width:100%;justify-self:stretch}body.electronicama-theme #registration-payment .registration-fee-actions{gap:6px 12px}}

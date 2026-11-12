@@ -31,7 +31,7 @@ app = Flask(__name__, static_folder=os.path.join(ROOT, "assets"), static_url_pat
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 app.logger.setLevel(logging.INFO)
 
-VERSION = "9.30.1"
+VERSION = "9.31.0"
 AUDIUS_APP_NAME = os.getenv("AUDIUS_APP_NAME", "electronicama")
 SEARCH_CACHE_SECONDS = max(15, min(int(os.getenv("SEARCH_CACHE_SECONDS", "300")), 3600))
 ARCHIVE_CACHE_SECONDS = max(60, min(int(os.getenv("ARCHIVE_CACHE_SECONDS", "3600")), 86400))
@@ -835,6 +835,31 @@ from payments import install as install_payments
 install_payments(app)
 from contributions import install as install_contributions
 install_contributions(app)
+from registration_fee import install as install_registration_fee
+install_registration_fee(app)
+from account_reports import install as install_account_reports
+install_account_reports(app)
+from access_help import install as install_access_help
+install_access_help(app)
+
+
+@app.before_request
+def registration_payment_gate():
+    path=request.path
+    if not path.startswith('/api/') or request.method=='OPTIONS':return
+    safe_prefixes=('/api/account/','/api/admin/','/api/payments/','/api/streamers/admin/')
+    safe_paths={'/api/status','/api/locale','/api/sync','/api/visits','/api/visits/public','/api/visits/consent','/api/navigation/events','/api/navigation/consent','/api/presence','/api/promotion/event','/api/contributions/config'}
+    if path.startswith(safe_prefixes) or path in safe_paths:return
+    from membership import get_user
+    from registration_fee import state as fee_state,activate
+    user=get_user()
+    if not user:return
+    fee=fee_state(user)
+    if fee['required'] and not fee['deadline']:
+        activate(user['id']);fee=fee_state(user)
+    if fee['required'] and fee['deadline'] and not fee['in_grace']:
+        return jsonify(error='El alta de tu cuenta requiere un pago único de 1 €. Puedes completar el pago o solicitar ayuda desde Mi cuenta.',code='registration_fee_required',registration_fee=fee),402
+
 from account_archives import install as install_account_archives
 install_account_archives(app)
 from notifications import apply_owner_history_cleanup

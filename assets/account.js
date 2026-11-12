@@ -40,7 +40,7 @@ async function inspectLoginSecurity(){
  try{
   loginSecurity=await api('/api/account/login-security');
   const required=loginSecurity.email_code_required===true;
-  $('registration-access-description').textContent=required?'Crea tu cuenta gratis y confirma el código del correo para completar el acceso.':'Abre tu cuenta y accede al instante, sin invitaciones, autorizaciones ni pagos.';
+  $('registration-access-description').textContent=required?'Crea tu cuenta y confirma el código del correo para completar el acceso.':'Abre tu cuenta y accede al instante, sin invitaciones, autorizaciones ni pagos.';
   const email=$('register-form').elements.email;
   email.required=required;
   $('registration-email-label').textContent=required?'Correo para verificar el acceso · privado':'Correo electrónico (opcional, privado)';
@@ -259,7 +259,7 @@ let floresAliasRevision=0;
 async function loadFloresStreamAlias(){
  const revision=++floresAliasRevision;
  try{
-  const [data,{streamHonor}]=await Promise.all([api('/api/streamers/admin/flores-alias'),import('/assets/stream-honor.js?v=9.30.1')]);
+  const [data,{streamHonor}]=await Promise.all([api('/api/streamers/admin/flores-alias'),import('/assets/stream-honor.js?v=9.31.0')]);
   if(revision!==floresAliasRevision||current?.role!=='admin')return;
   const container=$('flores-stream-alias-badge'),honor=streamHonor(data.stream_alias);container.replaceChildren();if(honor)container.append(honor);
   if(data.account)$('flores-stream-alias-description').textContent='Distinción de triunfador en el directo de '+data.account.display_name+' (@'+data.account.username+').';
@@ -353,7 +353,7 @@ function renderMembers(){
   for (const member of matches.slice((memberPage-1)*25,memberPage*25)) {
     const row = document.createElement('tr');
     row.dataset.memberId=member.id;
-    for (const value of [member.username+(member.nickname&&member.nickname!==member.username?' · '+member.nickname:''), member.legal_name||'Pendiente de indicar', member.account_activated===false?'Sin activar':member.role === 'admin' ? 'Administrador' : member.founder_number ? 'Fundador n.º '+member.founder_number : member.complimentary ? 'Amigo · gratuito' : member.live_annual ? 'Participante Ol Live' : member.streamer_active ? 'Ol Live Creador' : 'Cliente', member.archived?'Cuenta dada de baja':member.account_activated===false?'Cuenta sin activar':member.active ? 'Ol Live activo' : 'Cuenta gratuita', member.archived?'Baja: '+date(member.archived_at):member.account_activated===false?'Pendiente de activar':member.full_service?'Acceso completo gratuito · sin vencimiento':member.live_annual?date(member.access_until):member.founder_active ? 'Fundador · actividad requerida' : member.live_lifetime ? 'Sin vencimiento · pago único' : member.trial_active ? 'Prueba hasta '+date(member.live_trial_until) : member.complimentary ? 'Sin vencimiento · invitación gratuita' : member.streamer_until ? `electronicama: ${date(member.access_until)} · Ol Live Creador: ${date(member.streamer_until)}` : date(member.access_until), member.last_payment?`${(member.last_payment.amount_cents/100).toFixed(2)} € · ${date(member.last_payment.verified_at)}`:'Sin pago registrado']) row.append(text('td', value));
+    for (const value of [member.username+(member.nickname&&member.nickname!==member.username?' · '+member.nickname:''), member.legal_name||'Pendiente de indicar', member.account_activated===false?'Sin activar':member.role === 'admin' ? 'Administrador' : member.founder_number ? 'Fundador n.º '+member.founder_number : member.complimentary ? 'Amigo · gratuito' : member.live_annual ? 'Participante Ol Live' : member.streamer_active ? 'Ol Live Creador' : 'Cliente', member.archived?'Cuenta dada de baja':member.account_activated===false?'Cuenta sin activar':member.active ? 'Ol Live activo' : 'Cuenta registrada', member.archived?'Baja: '+date(member.archived_at):member.account_activated===false?'Pendiente de activar':member.full_service?'Acceso completo gratuito · sin vencimiento':member.live_annual?date(member.access_until):member.founder_active ? 'Fundador · actividad requerida' : member.live_lifetime ? 'Sin vencimiento · pago único' : member.trial_active ? 'Prueba hasta '+date(member.live_trial_until) : member.complimentary ? 'Sin vencimiento · invitación gratuita' : member.streamer_until ? `electronicama: ${date(member.access_until)} · Ol Live Creador: ${date(member.streamer_until)}` : date(member.access_until), member.last_payment?`${(member.last_payment.amount_cents/100).toFixed(2)} € · ${date(member.last_payment.verified_at)}`:'Sin pago registrado']) row.append(text('td', value));
     const actions = document.createElement('td');
     const archiveFeedback=text('p',accountArchiveResults.get(member.id)||'');archiveFeedback.className='client-account-archive-status';archiveFeedback.setAttribute('role','status');archiveFeedback.setAttribute('aria-live','polite');
     if(member.archived){
@@ -490,7 +490,7 @@ $('register-form').addEventListener('submit',async event=>{
  button.disabled=true;button.textContent='Creando tu cuenta…';registrationFeedback('Creando tu cuenta. No necesitas autorización ni pagar.');
  try{await(window.OlAccountReady||Promise.resolve());const result=await api('/api/account/register',Object.fromEntries(new FormData(form)));finishAccountAccess(result,streamReturn||'/account?registered=1');}
  catch(error){registrationFeedback(error.message,true);if(error.code==='human_required')await loadRegistrationCheck();if(error.code==='verification_email_required'){form.elements.email.required=true;form.elements.email.focus();}if(error.details?.account_created){password.value='';$('login-form').elements.username.value=error.details.login_identifier||name;status(error.message);$('login-form').scrollIntoView({block:'start'});$('login-form').elements.password.focus();}}
- finally{button.disabled=false;button.textContent='Crear mi cuenta gratis';}
+ finally{button.disabled=false;button.textContent='Crear mi cuenta';}
 });
 for (const [id,endpoint] of [['login-form','login'],['invite-form','accept-invite']]) {
  $(id).addEventListener('submit',async event=>{
@@ -529,7 +529,7 @@ async function loadStatistics(){
 $('refresh-statistics').addEventListener('click',loadStatistics);
 setInterval(()=>{if(!document.hidden&&current?.role==='admin')loadStatistics();},60000);
 
-$('trial-start').addEventListener('click',async()=>{if(current?.live_annual&&new Date(current.access_until).getTime()-Date.now()>30*86400000)return;if(!current){$('credentials').classList.remove('hidden');$('registration-panel').scrollIntoView({block:'start',behavior:'smooth'});$('register-form').elements.username.focus({preventScroll:true});status('Crea tu cuenta gratis o inicia sesión. Después podrás contratar Ol Live por 25 € al año.');return;}if(!$('annual-legal-name').reportValidity()||!$('annual-terms').reportValidity())return;const button=$('trial-start');button.disabled=true;try{const result=await api('/api/payments/checkout',{annual_terms:true,legal_name:$('annual-legal-name').value});location.assign(result.url);}catch(error){status(error.message);$('premium-availability').textContent=error.message;button.disabled=false;}});
+$('trial-start').addEventListener('click',async()=>{if(current?.live_annual&&new Date(current.access_until).getTime()-Date.now()>30*86400000)return;if(!current){$('credentials').classList.remove('hidden');$('registration-panel').scrollIntoView({block:'start',behavior:'smooth'});$('register-form').elements.username.focus({preventScroll:true});status('Crea tu cuenta o inicia sesión. Después podrás contratar Ol Live por 25 € al año.');return;}if(!$('annual-legal-name').reportValidity()||!$('annual-terms').reportValidity())return;const button=$('trial-start');button.disabled=true;try{const result=await api('/api/payments/checkout',{annual_terms:true,legal_name:$('annual-legal-name').value});location.assign(result.url);}catch(error){status(error.message);$('premium-availability').textContent=error.message;button.disabled=false;}});
 
 let founderActivityPage=1;
 async function loadFounderActivity(){try{const d=await api('/api/admin/founders/activity?page='+founderActivityPage);$('founder-activity-page').textContent=`Página ${d.page} de ${d.pages} · ${d.total} insignias`;$('founder-activity-prev').disabled=d.page<=1;$('founder-activity-next').disabled=d.page>=d.pages;const list=$('admin-founder-activity');list.replaceChildren();if(!d.founders.length)list.append(text('p','Todavía no hay insignias asignadas.'));for(const f of d.founders){const a=f.activity,card=text('article','');card.className='founder-activity-card';card.append(text('strong',`N.º ${f.number} · ${f.username}`),text('p',`${f.revoked_at?'Desactivada':a.eligible?'En periodo inicial o con actividad suficiente':'Actividad pendiente de revisión'} · ${a.activity_exempt?'Exento de emitir (fundador n.º 1)':Math.floor(a.recent_seconds/60)+'/120 min en los últimos 30 días · primer directo: '+(a.qualified?'completado':'pendiente')}`),text('p','Plazo inicial o ampliado: '+(a.qualification_until?date(a.qualification_until):'empieza al activarse realmente el vídeo de Ol Live')));if(!f.revoked_at){const b=text('button','Ampliar plazo por incidencia');b.type='button';b.addEventListener('click',async()=>{b.disabled=true;try{await api('/api/admin/founders/grace',{member_id:f.member_id,days:Number($('founder-grace-days').value)});await loadFounderActivity();$('founder-activity-status').textContent='Plazo de actividad ampliado. El vencimiento de pago de la plaza no cambia.';}catch(e){$('founder-activity-status').textContent=e.message;}finally{b.disabled=false;}});card.append(b);}list.append(card);}}catch(e){$('founder-activity-status').textContent=e.message;}}
@@ -584,7 +584,7 @@ async function refreshAdminImages(force=false){
  emblemRefreshPending=true;emblemRefreshForce=emblemRefreshForce||force;
  if(emblemRefreshBusy)return;
  const requestedForce=emblemRefreshForce;emblemRefreshForce=false;emblemRefreshPending=false;emblemRefreshBusy=true;paintAdminRefresh();
- try{const {refreshAdminEmblems}=await import('/assets/admin-emblems.js?v=9.30.1');const result=await refreshAdminEmblems({force:requestedForce});adminImageFailed=result.failed||0;}
+ try{const {refreshAdminEmblems}=await import('/assets/admin-emblems.js?v=9.31.0');const result=await refreshAdminEmblems({force:requestedForce});adminImageFailed=result.failed||0;}
  catch{adminImageFailed=1;}
  finally{emblemRefreshBusy=false;paintAdminRefresh();if(emblemRefreshPending&&!document.hidden)queueMicrotask(()=>refreshAdminImages(emblemRefreshForce));}
 }
@@ -702,3 +702,19 @@ async function loadContributions(){
 $('admin-contributions').addEventListener('toggle',loadContributions);
 $('admin-contributions-refresh').addEventListener('click',loadContributions);
 window.addEventListener('ol:account-refreshed',()=>{if(current?.role!=='admin')clearContributions();else loadContributions();});
+
+let accountReportsBusy=false;
+async function loadAccountReports(send=false){
+ if(current?.role!=='admin'||accountReportsBusy)return;
+ const owner=current.id;accountReportsBusy=true;$('account-reports-send').disabled=true;
+ try{
+  const result=await api('/api/admin/account-reports'+(send?'/send':''),send?{}:undefined);
+  if(current?.role!=='admin'||current.id!==owner)return;
+  const report=send?await api('/api/admin/account-reports'):result;
+  $('account-reports-status').textContent=`${report.sent||0} envíos confirmados · ${report.pending||0} pendientes · ${report.failed||0} fallidos`;
+ }catch(error){if(current?.role==='admin')$('account-reports-status').textContent=error.message;}
+ finally{accountReportsBusy=false;$('account-reports-send').disabled=false;}
+}
+$('account-reports-panel').addEventListener('toggle',()=>{if($('account-reports-panel').open)loadAccountReports();});
+$('account-reports-send').addEventListener('click',()=>loadAccountReports(true));
+window.addEventListener('ol:account-refreshed',()=>{if(current?.role!=='admin')$('account-reports-status').textContent='';else if($('account-reports-panel').open)loadAccountReports();});
