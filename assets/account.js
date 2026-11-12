@@ -259,7 +259,7 @@ let floresAliasRevision=0;
 async function loadFloresStreamAlias(){
  const revision=++floresAliasRevision;
  try{
-  const [data,{streamHonor}]=await Promise.all([api('/api/streamers/admin/flores-alias'),import('/assets/stream-honor.js?v=9.30.0')]);
+  const [data,{streamHonor}]=await Promise.all([api('/api/streamers/admin/flores-alias'),import('/assets/stream-honor.js?v=9.30.1')]);
   if(revision!==floresAliasRevision||current?.role!=='admin')return;
   const container=$('flores-stream-alias-badge'),honor=streamHonor(data.stream_alias);container.replaceChildren();if(honor)container.append(honor);
   if(data.account)$('flores-stream-alias-description').textContent='Distinción de triunfador en el directo de '+data.account.display_name+' (@'+data.account.username+').';
@@ -584,7 +584,7 @@ async function refreshAdminImages(force=false){
  emblemRefreshPending=true;emblemRefreshForce=emblemRefreshForce||force;
  if(emblemRefreshBusy)return;
  const requestedForce=emblemRefreshForce;emblemRefreshForce=false;emblemRefreshPending=false;emblemRefreshBusy=true;paintAdminRefresh();
- try{const {refreshAdminEmblems}=await import('/assets/admin-emblems.js?v=9.30.0');const result=await refreshAdminEmblems({force:requestedForce});adminImageFailed=result.failed||0;}
+ try{const {refreshAdminEmblems}=await import('/assets/admin-emblems.js?v=9.30.1');const result=await refreshAdminEmblems({force:requestedForce});adminImageFailed=result.failed||0;}
  catch{adminImageFailed=1;}
  finally{emblemRefreshBusy=false;paintAdminRefresh();if(emblemRefreshPending&&!document.hidden)queueMicrotask(()=>refreshAdminImages(emblemRefreshForce));}
 }
@@ -673,3 +673,32 @@ window.addEventListener('ol:account-refreshed',()=>{
 });
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&$('visitor-registry').open)loadVisitorRegistry();});
 setInterval(loadVisitorRegistry,30000);
+
+// Contributions are private payment records, separate from annual access.
+let contributionsBusy=false,contributionsRevision=0;
+function clearContributions(){
+ contributionsRevision++;$('admin-contributions-list').replaceChildren();$('admin-contributions-summary').replaceChildren();$('admin-contributions-status').textContent='';
+}
+async function loadContributions(){
+ if(current?.role!=='admin'||!$('admin-contributions').open||document.hidden||contributionsBusy)return;
+ const revision=contributionsRevision,owner=current.id;contributionsBusy=true;$('admin-contributions-refresh').disabled=true;
+ try{
+  const data=await api('/api/admin/contributions');
+  if(revision!==contributionsRevision||current?.role!=='admin'||current.id!==owner)return;
+  const money=value=>new Intl.NumberFormat(document.documentElement.lang||'es',{style:'currency',currency:'EUR'}).format(Number(value||0)/100);
+  const summary=$('admin-contributions-summary');summary.replaceChildren();
+  for(const [key,label] of [['gross_cents','Aportaciones confirmadas'],['refunded_cents','Importe devuelto'],['disputed_cents','Importe en disputa'],['net_cents','Confirmado tras devoluciones y disputas']]){
+   const card=document.createElement('article');card.append(text('strong',money(data.summary?.[key])),text('span',label));summary.append(card);
+  }
+  const labels={created:'Creada',pending:'Pendiente',paid:'Confirmada',refunded:'Devuelta',disputed:'En disputa',failed:'No completada',expired:'Caducada'};
+  const body=$('admin-contributions-list');body.replaceChildren();
+  for(const item of Array.isArray(data.contributions)?data.contributions:[]){
+   const row=document.createElement('tr');for(const value of [date(item.paid_at||item.created_at),money(item.amount_cents),money(item.refunded_cents),labels[item.state]||'Pendiente'])row.append(text('td',value));body.append(row);
+  }
+  $('admin-contributions-status').textContent=data.contributions?.length?'Últimas aportaciones registradas.':'Todavía no hay aportaciones registradas.';
+ }catch(error){if(revision===contributionsRevision&&current?.role==='admin')$('admin-contributions-status').textContent=error.message;}
+ finally{contributionsBusy=false;$('admin-contributions-refresh').disabled=false;}
+}
+$('admin-contributions').addEventListener('toggle',loadContributions);
+$('admin-contributions-refresh').addEventListener('click',loadContributions);
+window.addEventListener('ol:account-refreshed',()=>{if(current?.role!=='admin')clearContributions();else loadContributions();});

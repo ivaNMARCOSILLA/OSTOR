@@ -135,7 +135,12 @@
  window.addEventListener('focus',resume);window.addEventListener('online',resume);window.addEventListener('pageshow',resume);
  document.getElementById('public-visit-older')?.addEventListener('click',()=>{historyPage++;refreshPublic(true);});
  document.getElementById('public-visit-newer')?.addEventListener('click',()=>{historyPage=Math.max(1,historyPage-1);refreshPublic(true);});
- for(const id of ['public-visit-history','public-visit-recent'])document.getElementById(id)?.addEventListener('toggle',()=>{if(!recentOpen())document.getElementById('public-visit-list').replaceChildren();refreshPublic(true);});
+ for(const id of ['public-visit-history','public-visit-recent'])document.getElementById(id)?.addEventListener('toggle',()=>{
+  if(id==='public-visit-history'&&document.getElementById(id).open)requestAnimationFrame(()=>{
+   const scroll=document.querySelector('.public-visit-day-scroll');if(scroll)scroll.scrollTop=scroll.scrollHeight;
+  });
+  if(!recentOpen())document.getElementById('public-visit-list').replaceChildren();refreshPublic(true);
+ });
  const settings=document.createElement('button');settings.type='button';settings.className='secondary';settings.textContent='Preferencias de visitas';settings.dataset.visitsPreferences='';settings.addEventListener('click',showPreferences);if(!document.getElementById('privacy-button'))(document.querySelector('footer')||document.body).append(settings);
  if(allowed)token().then(account=>{lastAccount=account.user?.id||null;identityReady=true;record('page');}).catch(()=>{});
  else if(!preference()&&!privacySignal()&&!document.getElementById('consent-dialog'))showPreferences();

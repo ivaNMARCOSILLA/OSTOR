@@ -362,7 +362,12 @@ def webhook(scope):
    c.execute('BEGIN IMMEDIATE')
    if c.execute('SELECT id FROM stripe_events WHERE id=?',(event_id,)).fetchone():return jsonify(ok=True,duplicate=True)
    kind=event.get('type')
-   if kind in {'checkout.session.completed','checkout.session.async_payment_succeeded','checkout.session.expired'}:
+   handled_contribution=False
+   if scope=='platform':
+    from contributions import handle_event
+    handled_contribution=handle_event(c,event)
+   if handled_contribution:pass
+   elif kind in {'checkout.session.completed','checkout.session.async_payment_succeeded','checkout.session.expired'}:
     order=c.execute('SELECT * FROM stripe_orders WHERE checkout_id=? AND account_id=?',(obj.get('id',''),account)).fetchone()
     if order:
      if (order['kind']=='test')!=(scope=='test'):raise ValueError('order mode mismatch')

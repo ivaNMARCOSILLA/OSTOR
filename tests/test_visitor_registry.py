@@ -85,11 +85,11 @@ class VisitorRegistryTests(unittest.TestCase):
     conn.set_trace_callback(statements.append)
     yield conn
   with patch('visitor_registry.now_utc',return_value=instant+timedelta(days=20)),patch('visitor_registry.database',traced_database),patch('visitor_registry.cleanup',side_effect=AssertionError('compact refresh must not clean personal detail')):
-   response=self.guest.get('/api/visits/public?compact=1&history_page=2')
+   response=self.guest.get('/api/visits/public?compact=1&history_page=1')
   self.assertEqual(response.status_code,200);data=response.json
   self.assertEqual(set(data),{'cumulative','history','consented_only','approximate'})
   self.assertEqual(data['cumulative'],initial['cumulative']);self.assertEqual(data['cumulative']['sessions'],3)
-  self.assertEqual(data['history']['page'],2);self.assertEqual(data['history']['pages'],3)
+  self.assertEqual(data['history']['page'],1);self.assertEqual(data['history']['pages'],2)
   self.assertEqual(next(day['sessions'] for day in data['history']['days'] if day['day']=='2026-11-04'),3)
   self.assertIn('no-store',response.headers['Cache-Control']);self.assertNotIn('Set-Cookie',response.headers)
   for statement in statements:
@@ -134,9 +134,9 @@ class VisitorRegistryTests(unittest.TestCase):
    ident=conn.execute('SELECT id FROM visitor_devices').fetchone()['id'];bucket=vr.protected(ident,'visit-rate')
    for _ in range(120):conn.execute('INSERT INTO login_attempts(bucket,attempted_at) VALUES(?,?)',(bucket,m.stamp(m.now_utc())))
   self.assertEqual(self.post(self.guest,data={'consent':True,'page':'/','username':'bypass'}).status_code,429)
- def test_cumulative_seeds_fourteen_madrid_days_once_before_first_new_visit(self):
+ def test_cumulative_seeds_120_madrid_dates_once_before_first_new_visit(self):
   instant=datetime(2026,11,4,12,tzinfo=timezone.utc)
-  origin=datetime(2026,10,20,22,tzinfo=timezone.utc)  # 21 October midnight in Madrid.
+  origin=datetime(2026,7,7,22,tzinfo=timezone.utc)  # 8 July midnight in Madrid, 120 dates including today.
   self.seed_session('before-history',origin-timedelta(seconds=1))
   self.seed_session('history-start',origin)
   self.seed_session('this-week',instant-timedelta(hours=1))
@@ -155,7 +155,7 @@ class VisitorRegistryTests(unittest.TestCase):
   with patch('visitor_registry.now_utc',return_value=instant):
    empty=self.cumulative()
    self.assertEqual(empty['sessions'],0)
-   self.assertEqual(empty['since'],'2026-06-16T22:00:00+00:00')  # 17 June midnight CEST.
+   self.assertEqual(empty['since'],'2026-03-03T23:00:00+00:00')  # 4 March midnight CET, before the DST change.
    self.post(self.guest)
    self.post(self.guest,data={'consent':True,'page':'/live','event':'heartbeat'})
    self.post(self.guest,data={'consent':True,'page':'/account','event':'page'})
@@ -167,7 +167,7 @@ class VisitorRegistryTests(unittest.TestCase):
   instant=datetime(2026,3,27,12,tzinfo=timezone.utc)
   with patch('visitor_registry.now_utc',return_value=instant):
    self.post(self.guest);initial=self.cumulative()
-   self.assertEqual(initial['since'],'2026-03-12T23:00:00+00:00')
+   self.assertEqual(initial['since'],'2025-11-27T23:00:00+00:00')
   with patch('visitor_registry.now_utc',return_value=instant+timedelta(days=8)):
    self.assertEqual(self.visits()['total'],0)
    data=self.guest.get('/api/visits/public').json
@@ -197,7 +197,7 @@ class VisitorRegistryTests(unittest.TestCase):
   # Old observations that still exist seed the anonymous history before the
   # seven-day personal-detail cleanup, including an interval crossing DST.
   instant=datetime(2026,10,25,22,30,tzinfo=timezone.utc)
-  origin=datetime(2026,10,10,22,tzinfo=timezone.utc)
+  origin=datetime(2026,6,27,22,tzinfo=timezone.utc)
   self.seed_session('early-in-long-week',origin)
   self.seed_session('recent-in-long-week',instant-timedelta(hours=1))
   with patch('visitor_registry.now_utc',return_value=instant):
@@ -229,10 +229,10 @@ class VisitorRegistryTests(unittest.TestCase):
    conn.execute('INSERT INTO visitor_public_totals(id,since,sessions) VALUES(?,?,?)',(vr.PUBLIC_TOTAL_ID,m.stamp(old_origin),12))
   with patch('visitor_registry.now_utc',return_value=instant):
    data=self.guest.get('/api/visits/public').json
-   self.assertEqual(data['cumulative'],{'sessions':14,'since':'2026-10-20T22:00:00+00:00','time_zone':'Europe/Madrid'})
+   self.assertEqual(data['cumulative'],{'sessions':14,'since':'2026-07-07T22:00:00+00:00','time_zone':'Europe/Madrid'})
    history=data['history'];self.assertEqual(history['unassigned'],10)
    self.assertEqual(history['tracking_since'],'2026-11-05')
-   self.assertEqual(history['total_days'],15);self.assertEqual(history['pages'],1)
+   self.assertEqual(history['total_days'],120);self.assertEqual(history['pages'],1)
    days={day['day']:day for day in history['days']}
    self.assertEqual(days['2026-10-21'],{'day':'2026-10-21','sessions':None,'complete':False})
    self.assertEqual(days['2026-10-25'],{'day':'2026-10-25','sessions':1,'complete':False})
@@ -241,26 +241,87 @@ class VisitorRegistryTests(unittest.TestCase):
   with patch('visitor_registry.now_utc',return_value=instant+timedelta(days=30)):
    later=self.guest.get('/api/visits/public').json
    self.assertEqual(later['cumulative'],data['cumulative'])
-   self.assertEqual(later['history']['total_days'],45);self.assertEqual(later['history']['pages'],3)
-   self.assertTrue(all(day['complete'] and day['sessions']==0 for day in later['history']['days']))
-   first=self.guest.get('/api/visits/public?history_page=3').json['history']
-   self.assertEqual(first['days'],history['days'])
-   self.assertEqual(first['unassigned'],10)
+   self.assertEqual(later['history']['total_days'],150);self.assertEqual(later['history']['pages'],2)
+   future=[day for day in later['history']['days'] if day['day']>'2026-11-04']
+   self.assertTrue(all(day['complete'] and day['sessions']==0 for day in future))
+   oldest=self.guest.get('/api/visits/public?history_page=2').json['history']
+   combined={day['day']:day for day in oldest['days']+later['history']['days']}
+   self.assertEqual([combined[day['day']] for day in history['days']],history['days'])
+   self.assertEqual(oldest['unassigned'],10)
 
  def test_older_existing_origin_is_preserved_and_undated_total_is_not_reallocated(self):
   instant=datetime(2026,11,4,12,tzinfo=timezone.utc)
-  origin='2026-09-30T22:00:00+00:00'
+  origin='2026-04-30T22:00:00+00:00'
   self.seed_session('known-day',instant-timedelta(days=1))
   with app.app.app_context(),m.database() as conn:
    conn.execute('INSERT INTO visitor_public_totals VALUES(?,?,?)',(vr.PUBLIC_TOTAL_ID,origin,25))
   with patch('visitor_registry.now_utc',return_value=instant):
    data=self.guest.get('/api/visits/public').json
    self.assertEqual(data['cumulative']['since'],origin);self.assertEqual(data['cumulative']['sessions'],25)
-   self.assertEqual(data['history']['unassigned'],24);self.assertEqual(data['history']['total_days'],35)
-   self.assertEqual(data['history']['days'][0]['day'],'2026-10-21')
-   oldest=self.guest.get('/api/visits/public?history_page=3').json['history']
-   self.assertEqual(oldest['days'][0]['day'],'2026-10-01')
+   self.assertEqual(data['history']['unassigned'],24);self.assertEqual(data['history']['total_days'],188)
+   self.assertEqual(data['history']['days'][0]['day'],'2026-07-08')
+   oldest=self.guest.get('/api/visits/public?history_page=2').json['history']
+   self.assertEqual(oldest['days'][0]['day'],'2026-05-01')
    self.assertTrue(all(day['sessions'] is None and not day['complete'] for day in oldest['days']))
+
+ def test_initialized_short_calendar_expands_without_recounting_private_visits(self):
+  initialized=datetime(2026,11,4,12,tzinfo=timezone.utc)
+  transition=initialized+timedelta(days=10)
+  old_origin='2026-10-20T22:00:00+00:00'
+  self.seed_session('older-private-detail',datetime(2026,9,1,12,tzinfo=timezone.utc))
+  with app.app.app_context(),m.database() as conn:
+   conn.execute('INSERT INTO visitor_public_totals VALUES(?,?,?)',(vr.PUBLIC_TOTAL_ID,old_origin,321))
+   conn.execute('INSERT INTO visitor_public_history VALUES(?,?,?,?)',(vr.PUBLIC_TOTAL_ID,old_origin,m.stamp(initialized),312))
+   for day,count in [('2026-11-03',7),('2026-11-04',2)]:
+    conn.execute('INSERT INTO visitor_public_days VALUES(?,?)',(day,count))
+   # A read-only poll asks its caller to lock instead of changing the calendar.
+   self.assertIsNone(vr.cumulative_visits(conn,transition,initialize=False))
+   self.assertEqual(conn.execute('SELECT since FROM visitor_public_totals').fetchone()['since'],old_origin)
+  statements=[]
+  @contextmanager
+  def traced_database():
+   with m.database() as conn:
+    conn.set_trace_callback(statements.append)
+    yield conn
+  with patch('visitor_registry.now_utc',return_value=transition),patch('visitor_registry.database',traced_database),patch('visitor_registry.cleanup',side_effect=AssertionError('calendar expansion must not erase detail')):
+   response=self.guest.get('/api/visits/public?compact=1')
+  self.assertEqual(response.status_code,200);data=response.json
+  self.assertEqual(data['cumulative'],{'sessions':321,'since':'2026-07-07T22:00:00+00:00','time_zone':'Europe/Madrid'})
+  self.assertEqual(data['history']['unassigned'],312)
+  self.assertEqual(data['history']['tracking_since'],'2026-11-05')
+  known={day['day']:day for day in data['history']['days']}
+  self.assertEqual(known['2026-09-01'],{'day':'2026-09-01','sessions':None,'complete':False})
+  self.assertEqual(known['2026-11-03'],{'day':'2026-11-03','sessions':7,'complete':False})
+  self.assertEqual(known['2026-11-05'],{'day':'2026-11-05','sessions':0,'complete':True})
+  self.assertTrue(any(statement=='BEGIN IMMEDIATE' for statement in statements))
+  for statement in statements:
+   self.assertNotIn('visitor_sessions',statement.lower())
+   self.assertNotIn('visitor_devices',statement.lower())
+   self.assertNotIn('delete ',statement.lower())
+  with app.app.app_context(),m.database() as conn:
+   history=dict(conn.execute('SELECT * FROM visitor_public_history').fetchone())
+   self.assertEqual(history,{'id':vr.PUBLIC_TOTAL_ID,'since':'2026-07-07T22:00:00+00:00','initialized_at':m.stamp(initialized),'unassigned':312})
+   self.assertEqual([(row['day'],row['sessions']) for row in conn.execute('SELECT * FROM visitor_public_days ORDER BY day').fetchall()],[('2026-11-03',7),('2026-11-04',2)])
+   self.assertEqual(conn.execute('SELECT COUNT(*) AS n FROM visitor_sessions').fetchone()['n'],1)
+  statements.clear()
+  with patch('visitor_registry.now_utc',return_value=transition+timedelta(days=200)),patch('visitor_registry.database',traced_database):
+   later=self.guest.get('/api/visits/public?compact=1').json
+  self.assertEqual(later['cumulative'],data['cumulative'])
+  self.assertEqual(later['history']['unassigned'],312)
+  self.assertEqual(later['history']['tracking_since'],'2026-11-05')
+  self.assertEqual(len(statements),4)
+  self.assertFalse(any('update ' in statement.lower() or 'begin ' in statement.lower() for statement in statements))
+
+ def test_initialized_origin_older_than_120_dates_remains_unchanged(self):
+  initialized=datetime(2026,11,4,12,tzinfo=timezone.utc)
+  origin='2025-01-01T23:00:00+00:00'
+  with app.app.app_context(),m.database() as conn:
+   conn.execute('INSERT INTO visitor_public_totals VALUES(?,?,?)',(vr.PUBLIC_TOTAL_ID,origin,17))
+   conn.execute('INSERT INTO visitor_public_history VALUES(?,?,?,?)',(vr.PUBLIC_TOTAL_ID,origin,m.stamp(initialized),17))
+   total=vr.cumulative_visits(conn,initialized+timedelta(days=80),initialize=False)
+   self.assertEqual(total,{'sessions':17,'since':origin,'time_zone':'Europe/Madrid'})
+   self.assertEqual(dict(conn.execute('SELECT * FROM visitor_public_history').fetchone()),
+                    {'id':vr.PUBLIC_TOTAL_ID,'since':origin,'initialized_at':m.stamp(initialized),'unassigned':17})
 
  def test_history_pagination_keeps_all_dates_and_future_days_known(self):
   instant=datetime(2026,11,4,12,tzinfo=timezone.utc)
@@ -268,16 +329,16 @@ class VisitorRegistryTests(unittest.TestCase):
    self.post(self.guest)
    first=self.guest.get('/api/visits/public').json['history']
    self.assertEqual(first['days'][-1],{'day':'2026-11-04','sessions':1,'complete':False})
-  with patch('visitor_registry.now_utc',return_value=instant+timedelta(days=20)):
+  with patch('visitor_registry.now_utc',return_value=instant+timedelta(days=125)):
    self.assertEqual(self.visits()['total'],0)
    response=self.post(self.guest);self.assertEqual(response.json['cumulative']['sessions'],2)
    pages=[self.guest.get('/api/visits/public?history_page='+str(page)).json['history'] for page in [1,2,3]]
    days=[day for page in reversed(pages) for day in page['days']]
-   self.assertEqual(len(days),35);self.assertEqual(len({day['day'] for day in days}),35)
-   self.assertEqual(days[0]['day'],'2026-10-21');self.assertEqual(days[-1]['day'],'2026-11-24')
+   self.assertEqual(len(days),245);self.assertEqual(len({day['day'] for day in days}),245)
+   self.assertEqual(days[0]['day'],'2026-07-08');self.assertEqual(days[-1]['day'],'2027-03-09')
    known={day['day']:day for day in days}
    self.assertEqual(known['2026-11-05'],{'day':'2026-11-05','sessions':0,'complete':True})
-   self.assertEqual(known['2026-11-24'],{'day':'2026-11-24','sessions':1,'complete':True})
+   self.assertEqual(known['2027-03-09'],{'day':'2027-03-09','sessions':1,'complete':True})
    self.assertEqual(known['2026-11-04'],{'day':'2026-11-04','sessions':1,'complete':False})
    self.assertEqual(self.guest.get('/api/visits/public?history_page=999').json['history']['page'],3)
    for value in ['invalid','0','-1']:

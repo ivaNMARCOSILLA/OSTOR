@@ -17,8 +17,8 @@ COOKIE='electronicama_visits'
 RETENTION_DAYS=7
 PUBLIC_TOTAL_ID='entries'
 PUBLIC_TIME_ZONE='Europe/Madrid'
-PUBLIC_HISTORY_DAYS=14
-PUBLIC_HISTORY_PAGE_SIZE=15
+PUBLIC_HISTORY_DAYS=120
+PUBLIC_HISTORY_PAGE_SIZE=120
 PAGES={'/','/live','/videos','/account','/legal/privacidad.html','/legal/cookies.html','/legal/aviso-legal.html'}
 
 
@@ -54,10 +54,10 @@ def init_database():
 def cumulative_visits(conn,instant=None,*,initialize=True):
     """Initialize once under the caller's serialized transaction, before erasure.
 
-    The origin starts fourteen Madrid calendar days before first activation and
-    stays fixed. An older aggregate is preserved; only retained observations from
-    before its old origin are added. Anonymous daily rows preserve known history,
-    while the part of an old aggregate with no surviving dates stays unassigned.
+    The initial calendar contains 120 Madrid dates including activation day.
+    Existing shorter calendars extend from their original activation timestamp,
+    without recounting visits or changing the anonymous dated/undated totals.
+    An older origin is preserved and never advances with the current date.
     """
     row=conn.execute('SELECT since,sessions FROM visitor_public_totals WHERE id=?',(PUBLIC_TOTAL_ID,)).fetchone()
     history=conn.execute('SELECT since,initialized_at,unassigned FROM visitor_public_history WHERE id=?',(PUBLIC_TOTAL_ID,)).fetchone()
@@ -72,7 +72,7 @@ def cumulative_visits(conn,instant=None,*,initialize=True):
             conn.execute('INSERT INTO visitor_public_totals(id,since,sessions) VALUES(?,?,?)',(PUBLIC_TOTAL_ID,row['since'],row['sessions']))
         else:
             local=instant.astimezone(ZoneInfo(PUBLIC_TIME_ZONE))
-            anchor=stamp((local-timedelta(days=PUBLIC_HISTORY_DAYS)).replace(hour=0,minute=0,second=0,microsecond=0))
+            anchor=stamp((local-timedelta(days=PUBLIC_HISTORY_DAYS-1)).replace(hour=0,minute=0,second=0,microsecond=0))
             since=min(anchor,row['since']) if row is not None else anchor
             retained=conn.execute('SELECT started_at FROM visitor_sessions WHERE started_at>=? AND started_at<=?',(since,stamp(instant))).fetchall()
             daily=Counter(datetime.fromisoformat(item['started_at']).astimezone(ZoneInfo(PUBLIC_TIME_ZONE)).date().isoformat() for item in retained)
@@ -85,6 +85,18 @@ def cumulative_visits(conn,instant=None,*,initialize=True):
             conn.execute('INSERT INTO visitor_public_totals(id,since,sessions) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET since=excluded.since,sessions=excluded.sessions',(PUBLIC_TOTAL_ID,since,total))
             conn.execute('INSERT INTO visitor_public_history(id,since,initialized_at,unassigned) VALUES(?,?,?,?)',(PUBLIC_TOTAL_ID,since,stamp(instant),total-known))
             row={'since':since,'sessions':total}
+            history={'since':since,'initialized_at':stamp(instant),'unassigned':total-known}
+    # A calendar expansion is not a reconstruction of erased personal detail.
+    # Its immutable anchor is the original history initialization, not this poll.
+    local_initialized=datetime.fromisoformat(history['initialized_at']).astimezone(ZoneInfo(PUBLIC_TIME_ZONE))
+    expanded_anchor=stamp((local_initialized-timedelta(days=PUBLIC_HISTORY_DAYS-1)).replace(hour=0,minute=0,second=0,microsecond=0))
+    since=min(row['since'],history['since'],expanded_anchor)
+    if since!=row['since'] or since!=history['since']:
+        # Public readers must lock and recheck before either metadata update.
+        if not initialize:return None
+        conn.execute('UPDATE visitor_public_totals SET since=? WHERE id=?',(since,PUBLIC_TOTAL_ID))
+        conn.execute('UPDATE visitor_public_history SET since=? WHERE id=?',(since,PUBLIC_TOTAL_ID))
+        row={'since':since,'sessions':row['sessions']}
     return {'sessions':row['sessions'],'since':row['since'],'time_zone':PUBLIC_TIME_ZONE}
 
 

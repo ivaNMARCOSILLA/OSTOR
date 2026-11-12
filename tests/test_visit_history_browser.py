@@ -34,14 +34,15 @@ def run():
         assert not record_requests,'opening or inspecting public history must not record a declined visitor'
         assert initial['cumulative']['sessions']==0
         history=initial['history'];first=history['days'][0]['day'];today=history['days'][-1]['day']
-        assert len(history['days'])==15
-        assert datetime.fromisoformat(today)-datetime.fromisoformat(first)==timedelta(days=14)
+        assert len(history['days'])==120
+        assert datetime.fromisoformat(today)-datetime.fromisoformat(first)==timedelta(days=119)
         assert all(day['sessions'] is None and not day['complete'] for day in history['days'])
         assert history['since']==initial['cumulative']['since']
         page.locator('#public-visit-history>summary').click()
-        expect(page.locator('#public-visit-days tr')).to_have_count(15)
+        expect(page.locator('#public-visit-days tr')).to_have_count(120)
+        page.wait_for_function("(()=>{const el=document.querySelector('.public-visit-day-scroll');return el.scrollHeight>el.clientHeight&&el.scrollTop>=el.scrollHeight-el.clientHeight-2})()")
         assert dates(page)==[day['day'] for day in history['days']]
-        assert labels(page)==['Sin datos disponibles']*15,'unrecoverable historical visits must not be presented as measured zeroes'
+        assert labels(page)==['Sin datos disponibles']*120,'unrecoverable historical visits must not be presented as measured zeroes'
         expect(page.locator('#public-visit-range')).to_have_text('1 / 1')
         expect(page.locator('#public-visit-older')).to_be_disabled()
         expect(page.locator('#public-visit-newer')).to_be_disabled()
@@ -76,17 +77,17 @@ def run():
 
         # Isolated pagination fixture: retain the actual total of one visit,
         # extend only the date range, and mark unknown older dates honestly.
-        # The real API and its fourteen-day origin were checked above.
-        start=datetime.fromisoformat(today).date()-timedelta(days=29)
+        # The real API and its 120-date origin were checked above.
+        start=datetime.fromisoformat(today).date()-timedelta(days=239)
         origin=datetime.combine(start,datetime.min.time(),tzinfo=ZoneInfo('Europe/Madrid')).astimezone(timezone.utc).isoformat()
         requested=[]
         def paginated(route):
             selected=int(parse_qs(urlsplit(route.request.url).query).get('history_page',['1'])[0])
             requested.append(selected);payload=deepcopy(after)
             payload['cumulative']['since']=origin
-            payload['history'].update(since=origin,page=selected,pages=2,page_size=15,total_days=30,unassigned=0)
+            payload['history'].update(since=origin,page=selected,pages=2,page_size=120,total_days=240,unassigned=0)
             if selected==2:
-                payload['history']['days']=[{'day':(start+timedelta(days=i)).isoformat(),'sessions':None,'complete':False} for i in range(15)]
+                payload['history']['days']=[{'day':(start+timedelta(days=i)).isoformat(),'sessions':None,'complete':False} for i in range(120)]
             route.fulfill(json=payload,headers={'Cache-Control':'no-store'})
         page.route('**/api/visits/public*',paginated)
         page.evaluate("window.dispatchEvent(new Event('focus'))")
@@ -95,8 +96,8 @@ def run():
         page.locator('#public-visit-older').click()
         expect(page.locator('#public-visit-range')).to_have_text('2 / 2')
         assert 2 in requested
-        assert dates(page)==[(start+timedelta(days=i)).isoformat() for i in range(15)]
-        assert labels(page)==['Sin datos disponibles']*15
+        assert dates(page)==[(start+timedelta(days=i)).isoformat() for i in range(120)]
+        assert labels(page)==['Sin datos disponibles']*120
         expect(page.locator(TOTAL)).to_have_text('1')
         expect(page.locator('#public-visit-older')).to_be_disabled()
         expect(page.locator('#public-visit-newer')).to_be_enabled()
@@ -109,7 +110,7 @@ def run():
         expect(page.locator('#public-visit-unassigned')).to_be_hidden()
         assert not errors,errors
         browser.close()
-    print('OK: real fourteen-day origin, honest unknown and partial dates, retained daily totals after withdrawal, historical pagination and three widths')
+    print('OK: real 120-date origin, honest unknown and partial dates, retained daily totals after withdrawal, historical pagination and three widths')
 
 
 if __name__=='__main__':run()

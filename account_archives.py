@@ -108,6 +108,7 @@ def delete_unpaid_member(conn, member_id, actor_id=None):
     scope_args = (member_id, *channel_ids)
     financial = has('payments', 'member_id=? OR verified_by=?', (member_id, member_id))
     financial = financial or has('stripe_orders', '('+scope+") AND (paid_at IS NOT NULL OR reversed_at IS NOT NULL OR state IN ('paid','test_paid','reversed'))", scope_args)
+    financial = financial or has('contribution_payments', "member_id=? AND (paid_at IS NOT NULL OR state IN ('paid','refunded','disputed'))", (member_id,))
     financial = financial or has('creator_subscriptions', '('+scope+') OR verified_by=?', (*scope_args, member_id))
     financial = financial or has('live_entitlements', 'member_id=? AND paid_at IS NOT NULL', (member_id,))
     financial = financial or has('annual_access_emails', 'member_id=?', (member_id,))

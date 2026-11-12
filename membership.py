@@ -218,6 +218,8 @@ def init_database():
     init_community_videos()
     from login_security import init_database as init_login_security
     init_login_security()
+    from contributions import init_database as init_contributions
+    init_contributions()
 
 def create_admin(username, password):
     username = clean_username(username)
@@ -319,8 +321,8 @@ def verify_csrf():
 def restrict_music():
     # Music is free. Account collections require login; Ol Live requires premium.
     path=request.path
-    if path=='/api/videos' or path.startswith('/api/videos/'):
-        # Video handlers apply their own free-account and moderator checks.
+    if path=='/api/videos' or path.startswith('/api/videos/') or path in {'/api/contributions/config','/api/contributions/checkout'}:
+        # These public handlers enforce their own permissions and explicit payment consent.
         return None
     if not path.startswith('/api/') or path.startswith(('/api/account/','/api/admin/','/api/streamers/admin/','/api/play/','/api/resolve/','/api/channel-subscriptions/','/api/payments/')) or path in {'/api/visits','/api/visits/public','/api/visits/consent','/api/navigation/events','/api/navigation/consent','/api/status','/api/locale','/api/sync','/api/search','/api/trending','/api/proxy','/api/promotion/event','/api/presence','/api/live/catalogue','/api/live/founders','/api/live/founders/claim'}:
         return None
