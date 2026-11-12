@@ -171,7 +171,7 @@ def run():
         owner.locator('#video-upload-rights').check()
         expect(submit).to_be_enabled()
         submit.click()
-        expect(owner.locator('#video-upload-status')).to_contain_text('Vídeo en cuarentena.', timeout=20000)
+        expect(owner.locator('#video-upload-status')).to_contain_text('Vídeo subido.', timeout=20000)
         uploaded = my_videos(owner_context)
         assert len(uploaded) == 1
         entry = uploaded[0];ident = entry['id']

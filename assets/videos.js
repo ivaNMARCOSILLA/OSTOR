@@ -156,7 +156,7 @@
   const form=node('form'),label=node('label','Motivo o indicación de revisión'),reason=node('textarea');reason.name='reason';reason.rows=3;reason.maxLength=1000;reason.placeholder='Obligatorio para rechazar o devolver a cuarentena';label.append(reason);
   const confirmLabel=node('label',undefined,'video-review-confirm'),checked=node('input');checked.type='checkbox';checked.name='review_confirmed';confirmLabel.append(checked,node('span','He revisado el vídeo y su descripción, y confirmo que puede publicarse.'));
   const actions=node('div',undefined,'video-review-buttons'),feedback=node('p',undefined,'video-status');feedback.setAttribute('role','status');
-  const decisions=item.state==='quarantined'?[['approve','Aprobar y publicar'],['reject','Rechazar vídeo']]:[['quarantine','Volver a cuarentena']];
+  const decisions=item.state==='quarantined'?[['approve','Sacar de cuarentena y publicar'],['reject','Rechazar vídeo']]:[['quarantine','Volver a cuarentena']];
   for(const [decision,title] of decisions){
    const button=node('button',title,decision==='approve'?'':'secondary');button.type='button';button.dataset.videoDecision=decision;
    if(decision==='approve'){button.disabled=true;checked.addEventListener('change',()=>{button.disabled=!checked.checked;});}
@@ -276,7 +276,7 @@
   const state=completed.video?.state;
   if(!['quarantined','published'].includes(state))throw new Error('El servidor no ha confirmado el estado final. Comprueba Mis vídeos.');
   context.finished=true;context.finalizationPending=false;$('video-upload-form').reset();$('video-upload-retry').hidden=true;
-  status('video-upload-status',state==='published'?'El servidor confirma que tu vídeo ya está aprobado y publicado.':'Vídeo en cuarentena. Seguirá privado hasta que administración lo revise y lo apruebe.','success');
+  status('video-upload-status',state==='published'?'El servidor confirma que tu vídeo ya está aprobado y publicado.':'Vídeo subido. Seguirá privado hasta que administración lo revise y lo apruebe.','success');
   await Promise.all([loadMine(1),current?.role==='admin'?loadAdmin(1):Promise.resolve(),state==='published'?loadCatalogue(lists.catalogue.page):Promise.resolve()]);
   $('video-upload-status').focus({preventScroll:true});
  }
@@ -311,7 +311,7 @@
    async function worker(){while(next<=context.partCount&&!context.cancelled){const part=next++;await sendPart(context,part);}}
    await Promise.all(Array.from({length:Math.min(2,context.partCount)},()=>worker()));
    if(context.cancelled)throw new UploadCancelled();
-   status('video-upload-status','Transferencia terminada. Comprobando el archivo antes de ponerlo en cuarentena…');
+   status('video-upload-status','Transferencia terminada. Comprobando el archivo…');
    context.finalizing=true;await confirmCompletion(context);
   }catch(error){
    const userCancelled=context.cancelled;context.cancelled=true;
