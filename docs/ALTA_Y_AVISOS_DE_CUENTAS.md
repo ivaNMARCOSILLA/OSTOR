@@ -53,8 +53,9 @@ rol, estado del alta y último pago anual cuando exista. Se seleccionan los
 campos necesarios; no se cargan contraseñas, hashes, códigos ni tokens para
 construir el informe.
 
-El primer acceso del administrador prepara el resumen inicial de las cuentas
-anteriores, en lotes de hasta 100 cuentas. Las nuevas altas generan su propio
+La primera visita a la portada o a una ruta pública de estado prepara y envía
+el resumen inicial solicitado por el propietario, en lotes de hasta 100 cuentas.
+La respuesta pública nunca incluye los datos del informe ni su estado privado. Las nuevas altas generan su propio
 aviso. Una cuenta nueva ya encolada no se repite en el resumen inicial. Los
 marcadores de envío no dependen del historial de notificaciones del panel y se
 conservan aunque ese historial se limpie.

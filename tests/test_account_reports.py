@@ -228,6 +228,27 @@ class AccountReportTests(unittest.TestCase):
         admin.get('/api/admin/report-test')
         self.assertEqual(self.delivery.call_count, 1)
 
+    def test_first_homepage_visit_runs_the_owner_requested_initial_job_without_exposing_data(self):
+        ident = self.member('existing-account-for-owner', private_profile=True)
+        self.ready.return_value = True
+        @self.app.get('/')
+        def home():
+            return jsonify(ok=True)
+        client = self.app.test_client()
+        response = client.get('/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json, {'ok': True})
+        self.assertNotIn(ident, response.get_data(as_text=True))
+        self.assertNotIn('example.test', response.get_data(as_text=True))
+        self.delivery.assert_called_once()
+        with self.app.app_context():
+            status = reports.status()
+        self.assertTrue(status['initial_queued'])
+        self.assertEqual(status['sent'], 1)
+        self.assertEqual(status['pending'], 0)
+        client.get('/')
+        self.delivery.assert_called_once()
+
     def test_new_account_report_is_sent_after_committed_request_without_admin_session(self):
         self.ready.return_value = True
         client = self.app.test_client()

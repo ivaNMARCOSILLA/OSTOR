@@ -182,16 +182,17 @@ def after_request(response):
     if request.path.startswith('/api/admin/account-reports') or response.status_code >= 400:
         return response
     queued_here=getattr(g,'account_reports_queued',False)
+    initial_trigger=request.method=='GET' and request.path in {'/','/health','/api/status'}
     admin_path=request.path.startswith('/api/admin/') or request.path in {'/','/account','/api/account/me'}
-    if not queued_here and (not admin_path or not session.get('member_id')):return response
+    if not initial_trigger and not queued_here and (not admin_path or not session.get('member_id')):return response
     try:
         user = get_user() if admin_path and session.get('member_id') else None
         admin_request = bool(user and user['role']=='admin' and admin_path)
-        if admin_request:
+        if admin_request or initial_trigger:
             with database() as conn:
                 conn.execute('BEGIN IMMEDIATE')
                 queue_initial(conn)
-        if admin_request or queued_here:
+        if admin_request or queued_here or initial_trigger:
             flush_pending()
     except Exception:
         current_app.logger.warning('Account reports remain queued; processing could not complete')
