@@ -11,7 +11,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--output', type=Path, default=ROOT.parent/'artifacts'/('OL_'+version.replace('.','_')+'.zip'))
 args = parser.parse_args()
 root_files = ['.dockerignore','.env.example','.gitignore','.vercelignore','README.md','AUTORIA_MAGGY.md','Dockerfile','compose.yaml','app.py','age_policy.py','recordings.py','videos.py','video_storage.py','participants.py','login_security.py','contributions.py','registration_fee.py','account_reports.py','access_help.py','membership.py','email_security.py','streamers.py','subscriptions.py','two_factor.py','operations.py','payments.py', 'moderation.py','community.py','notifications.py','rewards.py','founders.py','founder_slots.py','sounds.py','live_access.py','human_check.py','sticker_phrases.py','analytics.py','account_archives.py','visitor_registry.py','locale_preferences.py','storage.py','manage.py','vercel.json','.python-version','index.html','robots.txt','sitemap.xml','manifest.webmanifest','sw.js','requirements.txt','requirements-dev.txt']
-root_files += ['account_blocks.py', 'account_block_guard.py', 'account_block_livekit.py', 'video_upload_access.py']
+root_files += ['account_blocks.py', 'account_block_guard.py', 'account_block_livekit.py', 'video_upload_access.py', 'owner_invitation_cleanup.py']
 files = [ROOT/name for name in root_files]
 for directory in ['api','assets','legal','tests','docs','tools','android','.github']:
     for path in (ROOT/directory).rglob('*'):

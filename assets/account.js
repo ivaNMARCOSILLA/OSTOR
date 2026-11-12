@@ -4,6 +4,11 @@ let csrf = '', current = null, members = [], payments = [],memberPage=1,invitati
 let loginChallenge=null,loginCodeTimer=null,invitationConsumed=false,loginSecurity={email_code_required:false,email_delivery_configured:false};
 let loginAuditPage=1,loginAuditPages=1,loginAuditRevision=0,loginAuditOwner=null;
 let accountRefreshRevision=0,accountWrites=0;
+$('account-profile-link').addEventListener('click',()=>{
+ if(!current)return;
+ const profile=$('profile-settings');profile.open=true;
+ requestAnimationFrame(()=>profile.querySelector('summary')?.focus({preventScroll:true}));
+});
 const roleDrafts=new Map(),roleBusy=new Set(),renameStates=new Map();
 document.addEventListener('input',rememberDraft);document.addEventListener('change',rememberDraft);
 document.addEventListener('reset',event=>{for(const field of event.target.querySelectorAll('input,select,textarea'))delete field.dataset.userDraft;});
@@ -194,6 +199,7 @@ async function refresh({automatic=false}={}) {
   if(revision!==accountRefreshRevision)return false;
   if(automatic&&accountEditing()){interfaceRefreshPending=true;return false;}
   csrf = data.csrf; current = data.user;
+  $('account-profile-link').href=current?'#profile-settings':'#granel-access-title';
   $('credentials').classList.toggle('hidden', Boolean(current) || Boolean(inviteToken&&!invitationConsumed) || Boolean(loginChallenge));
   $('member-panel').classList.toggle('hidden', !current);
   $('admin-panel').classList.toggle('hidden', current?.role !== 'admin');
@@ -520,8 +526,27 @@ async function loadStatistics(){
  const button=$('refresh-statistics');button.disabled=true;
  try{
   const d=await api('/api/admin/statistics'),money=n=>new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR'}).format(n/100);
-  const cards=[['En línea ahora',d.online.total],['Con cuenta en línea',d.online.members],['Visitantes en línea',d.online.guests],['Clientes registrados',d.accounts.registered],['Registros · últimos 7 días',d.accounts.new_week],['Periodos pagados vigentes',d.accounts.paid_active],['Amigos con acceso gratuito',d.friends],['Fundadores activos',d.founders],['Canales creados',d.channels],['Emisiones activas',d.live],['Pagos confirmados',d.payments.count],['Importe confirmado · total',money(d.payments.total_cents)],['Importe confirmado · mes UTC',money(d.payments.month_cents)],['Correos pendientes o fallidos',d.pending_notifications],['Presentación · mostrada',d.promotion?.shown||0],['Presentación · siguiente',d.promotion?.next||0],['Presentación · omitida',d.promotion?.skip||0],['Presentación · completada',d.promotion?.complete||0]];
-  $('statistics-cards').replaceChildren(...cards.map(([label,value])=>{const card=text('article','');card.append(text('strong',String(value)),text('span',label));return card;}));
+  const cards=[
+   ['En línea ahora',d.online.total,'Actividad detectada en los últimos 90 segundos, solo con métricas aceptadas.'],
+   ['Con cuenta en línea',d.online.members,'Cuentas distintas con una sesión activa en los últimos 90 segundos.'],
+   ['Visitantes en línea',d.online.guests,'Navegadores sin cuenta con actividad reciente; no equivalen a personas distintas.'],
+   ['Clientes registrados',d.accounts.registered,'Cuentas activadas que siguen de alta, sin incluir administradores ni invitaciones pendientes.'],
+   ['Registros · últimos 7 días',d.accounts.new_week,'Cuentas activadas creadas durante los últimos siete días y que siguen de alta.'],
+   ['Periodos pagados vigentes',d.accounts.paid_active,'Cuentas activadas con una fecha de acceso que todavía no ha vencido.'],
+   ['Amigos con acceso gratuito',d.friends,'Cuentas activadas con acceso gratuito concedido y todavía no retirado.'],
+   ['Fundadores activos',d.founders,'Insignias de fundador asignadas y sin revocar; no confirma la vigencia del acceso anual.'],
+   ['Canales creados',d.channels,'Canales de cuentas que siguen de alta, estén o no emitiendo ahora.'],
+   ['Emisiones activas',d.live,'Canales que mantienen una emisión activa en este momento.'],
+   ['Pagos confirmados',d.payments.count,'Número de cobros confirmados que constan en el historial de pagos.'],
+   ['Importe confirmado · total',money(d.payments.total_cents),'Suma bruta de los cobros confirmados del historial; no es el beneficio.'],
+   ['Importe confirmado · mes UTC',money(d.payments.month_cents),'Cobros confirmados desde el primer día del mes actual, según UTC.'],
+   ['Correos pendientes o fallidos',d.pending_notifications,'Avisos de administración que aún no se han enviado correctamente.'],
+   ['Presentación · mostrada',d.promotion?.shown||0,'Veces que se ha mostrado la presentación de electronicama.'],
+   ['Presentación · siguiente',d.promotion?.next||0,'Veces que se ha pulsado Siguiente en la presentación; no cuenta personas.'],
+   ['Presentación · omitida',d.promotion?.skip||0,'Veces que se ha cerrado la presentación sin terminarla.'],
+   ['Presentación · completada',d.promotion?.complete||0,'Veces que se ha llegado al final de la presentación.']
+  ];
+  $('statistics-cards').replaceChildren(...cards.map(([label,value,description])=>{const card=text('article',''),summary=text('p',description);summary.className='statistics-explanation';card.append(text('strong',String(value)),text('span',label),summary);return card;}));
   $('statistics-days').replaceChildren(...d.days.map(day=>{const row=text('tr','');for(const value of [day.day,day.registrations,day.payments,money(day.cents)])row.append(text('td',String(value)));return row;}));
   $('statistics-status').textContent='Actualizado: '+date(d.updated_at)+'. En línea: actividad reciente de 90 segundos; cuentas y navegadores que permiten las métricas opcionales. Las categorías de acceso pueden coincidir.';
  }catch(error){$('statistics-status').textContent='No se pudieron actualizar las estadísticas. '+error.message;}finally{button.disabled=false;}

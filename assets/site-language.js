@@ -277,6 +277,169 @@
  Object.assign(rows,registrationAccessTranslations);
  const finalPricingTranslations={"Disfruta de las fuentes gratuitas. El alta de la cuenta cuesta 1 € tras 5 minutos de prueba.":["Gaudeix de les fonts gratuïtes. L’alta del compte costa 1 € després de 5 minuts de prova.","Enjoy the free sources. Account registration costs €1 after a 5-minute trial.","Profite des sources gratuites. L’inscription du compte coûte 1 € après 5 minutes d’essai.","Aproveite as fontes gratuitas. O cadastro da conta custa 1 € após 5 minutos de teste.","Nutze die kostenlosen Quellen. Die Kontoregistrierung kostet nach 5 Minuten Testzeit 1 €.","Approfitta delle fonti gratuite. La registrazione dell’account costa 1 € dopo 5 minuti di prova."],"Ol Live tiene su acceso anual independiente de 25 €.":["Ol Live té el seu accés anual independent de 25 €.","Annual access to Ol Live is separate and costs €25.","L’accès annuel à Ol Live est distinct et coûte 25 €.","O acesso anual ao Ol Live é independente e custa 25 €.","Der separate Jahreszugang zu Ol Live kostet 25 €.","L’accesso annuale a Ol Live è separato e costa 25 €."],"Tu aportación voluntaria ayuda a mantener electronicama. Es un pago único, independiente del alta de 1 € y del acceso anual a Ol Live.":["La teva aportació voluntària ajuda a mantenir electronicama. És un pagament únic, independent de l’alta d’1 € i de l’accés anual a Ol Live.","Your voluntary contribution helps maintain electronicama. It is a one-time payment, separate from the €1 registration fee and annual Ol Live access.","Ta contribution volontaire aide à faire vivre electronicama. Il s’agit d’un paiement unique, distinct des frais d’inscription de 1 € et de l’accès annuel à Ol Live.","Sua contribuição voluntária ajuda a manter electronicama. É um pagamento único, independente do cadastro de 1 € e do acesso anual ao Ol Live.","Dein freiwilliger Beitrag unterstützt den Betrieb von electronicama. Er ist eine einmalige Zahlung, unabhängig von der Registrierungsgebühr von 1 € und dem Ol Live-Jahreszugang.","Il tuo contributo volontario aiuta a mantenere electronicama. È un pagamento unico, separato dalla registrazione da 1 € e dall’accesso annuale a Ol Live."]};
  Object.assign(rows,finalPricingTranslations);
+ const statisticsSummaryTranslations={
+  "Actividad detectada en los últimos 90 segundos, solo con métricas aceptadas.": [
+    "Activitat detectada durant els últims 90 segons, només amb mètriques acceptades.",
+    "Activity detected in the last 90 seconds, only where metrics were accepted.",
+    "Activité détectée au cours des 90 dernières secondes, uniquement avec les métriques acceptées.",
+    "Atividade detectada nos últimos 90 segundos, apenas com métricas aceitas.",
+    "Aktivität der letzten 90 Sekunden, nur bei akzeptierter Statistikmessung.",
+    "Attività rilevata negli ultimi 90 secondi, solo con metriche accettate."
+  ],
+  "Cuentas distintas con una sesión activa en los últimos 90 segundos.": [
+    "Comptes diferents amb una sessió activa durant els últims 90 segons.",
+    "Distinct accounts with an active session in the last 90 seconds.",
+    "Comptes distincts ayant une session active au cours des 90 dernières secondes.",
+    "Contas distintas com uma sessão ativa nos últimos 90 segundos.",
+    "Unterschiedliche Konten mit einer aktiven Sitzung in den letzten 90 Sekunden.",
+    "Account distinti con una sessione attiva negli ultimi 90 secondi."
+  ],
+  "Navegadores sin cuenta con actividad reciente; no equivalen a personas distintas.": [
+    "Navegadors sense compte amb activitat recent; no equivalen a persones diferents.",
+    "Browsers without an account showing recent activity; these are not distinct people.",
+    "Navigateurs sans compte ayant une activité récente ; ils ne correspondent pas à des personnes distinctes.",
+    "Navegadores sem conta com atividade recente; não equivalem a pessoas distintas.",
+    "Browser ohne Konto mit kürzlicher Aktivität; sie stehen nicht für unterschiedliche Personen.",
+    "Browser senza account con attività recente; non equivalgono a persone distinte."
+  ],
+  "Cuentas activadas que siguen de alta, sin incluir administradores ni invitaciones pendientes.": [
+    "Comptes activats que continuen d’alta, sense incloure administradors ni invitacions pendents.",
+    "Activated accounts that remain open, excluding administrators and pending invitations.",
+    "Comptes activés toujours ouverts, hors administrateurs et invitations en attente.",
+    "Contas ativadas que continuam abertas, sem administradores nem convites pendentes.",
+    "Aktivierte, weiterhin bestehende Konten, ohne Administratoren und ausstehende Einladungen.",
+    "Account attivati ancora aperti, esclusi amministratori e inviti in sospeso."
+  ],
+  "Cuentas activadas creadas durante los últimos siete días y que siguen de alta.": [
+    "Comptes activats creats durant els últims set dies que continuen d’alta.",
+    "Activated accounts created in the last seven days that remain open.",
+    "Comptes activés créés au cours des sept derniers jours et toujours ouverts.",
+    "Contas ativadas criadas nos últimos sete dias que continuam abertas.",
+    "Aktivierte Konten, die in den letzten sieben Tagen erstellt wurden und weiterhin bestehen.",
+    "Account attivati creati negli ultimi sette giorni e ancora aperti."
+  ],
+  "Cuentas activadas con una fecha de acceso que todavía no ha vencido.": [
+    "Comptes activats amb una data d’accés que encara no ha vençut.",
+    "Activated accounts whose access expiry date has not yet passed.",
+    "Comptes activés dont la date d’expiration de l’accès n’est pas encore passée.",
+    "Contas ativadas cuja data de acesso ainda não venceu.",
+    "Aktivierte Konten, deren Zugangsfrist noch nicht abgelaufen ist.",
+    "Account attivati la cui data di scadenza dell’accesso non è ancora trascorsa."
+  ],
+  "Cuentas activadas con acceso gratuito concedido y todavía no retirado.": [
+    "Comptes activats amb accés gratuït concedit i encara no retirat.",
+    "Activated accounts with granted free access that has not been withdrawn.",
+    "Comptes activés bénéficiant d’un accès gratuit accordé et non retiré.",
+    "Contas ativadas com acesso gratuito concedido e ainda não retirado.",
+    "Aktivierte Konten mit gewährtem, noch nicht entzogenem kostenlosem Zugang.",
+    "Account attivati con accesso gratuito concesso e non ancora revocato."
+  ],
+  "Insignias de fundador asignadas y sin revocar; no confirma la vigencia del acceso anual.": [
+    "Insígnies de fundador assignades i sense revocar; no confirma la vigència de l’accés anual.",
+    "Assigned founder badges that have not been revoked; this does not confirm current annual access.",
+    "Insignes de fondateur attribués et non révoqués ; cela ne confirme pas la validité de l’accès annuel.",
+    "Insígnias de fundador atribuídas e não revogadas; isso não confirma a validade do acesso anual.",
+    "Vergebene, nicht widerrufene Gründerabzeichen; dies bestätigt keinen gültigen Jahreszugang.",
+    "Distintivi di fondatore assegnati e non revocati; non conferma la validità dell’accesso annuale."
+  ],
+  "Canales de cuentas que siguen de alta, estén o no emitiendo ahora.": [
+    "Canals de comptes que continuen d’alta, estiguin o no emetent ara.",
+    "Channels belonging to open accounts, whether or not they are live now.",
+    "Chaînes de comptes toujours ouverts, qu’elles diffusent ou non en ce moment.",
+    "Canais de contas que continuam abertas, estejam ou não transmitindo agora.",
+    "Kanäle weiterhin bestehender Konten, unabhängig davon, ob sie gerade live sind.",
+    "Canali di account ancora aperti, che siano o meno in diretta ora."
+  ],
+  "Canales que mantienen una emisión activa en este momento.": [
+    "Canals que mantenen una emissió activa en aquest moment.",
+    "Channels with an active live broadcast at this moment.",
+    "Chaînes ayant une diffusion en direct active en ce moment.",
+    "Canais com uma transmissão ao vivo ativa neste momento.",
+    "Kanäle mit einer aktuell aktiven Liveübertragung.",
+    "Canali con una trasmissione in diretta attiva in questo momento."
+  ],
+  "Número de cobros confirmados que constan en el historial de pagos.": [
+    "Nombre de cobraments confirmats que consten a l’historial de pagaments.",
+    "Number of confirmed charges recorded in the payment history.",
+    "Nombre de paiements confirmés figurant dans l’historique des paiements.",
+    "Número de cobranças confirmadas registradas no histórico de pagamentos.",
+    "Anzahl der bestätigten Zahlungen im Zahlungsverlauf.",
+    "Numero di addebiti confermati presenti nella cronologia dei pagamenti."
+  ],
+  "Suma bruta de los cobros confirmados del historial; no es el beneficio.": [
+    "Suma bruta dels cobraments confirmats de l’historial; no és el benefici.",
+    "Gross total of confirmed charges in the history; this is not profit.",
+    "Total brut des paiements confirmés de l’historique ; il ne s’agit pas du bénéfice.",
+    "Soma bruta das cobranças confirmadas no histórico; não é o lucro.",
+    "Bruttosumme der bestätigten Zahlungen im Verlauf; dies ist nicht der Gewinn.",
+    "Totale lordo degli addebiti confermati nella cronologia; non è il profitto."
+  ],
+  "Cobros confirmados desde el primer día del mes actual, según UTC.": [
+    "Cobraments confirmats des del primer dia del mes actual, segons UTC.",
+    "Confirmed charges since the first day of the current month, using UTC.",
+    "Paiements confirmés depuis le premier jour du mois en cours, selon UTC.",
+    "Cobranças confirmadas desde o primeiro dia do mês atual, em UTC.",
+    "Bestätigte Zahlungen seit dem ersten Tag des aktuellen Monats nach UTC.",
+    "Addebiti confermati dal primo giorno del mese corrente, secondo UTC."
+  ],
+  "Avisos de administración que aún no se han enviado correctamente.": [
+    "Avisos d’administració que encara no s’han enviat correctament.",
+    "Administration notices that have not yet been sent successfully.",
+    "Notifications d’administration qui n’ont pas encore été envoyées correctement.",
+    "Avisos de administração que ainda não foram enviados corretamente.",
+    "Verwaltungsmitteilungen, die noch nicht erfolgreich versendet wurden.",
+    "Avvisi di amministrazione non ancora inviati correttamente."
+  ],
+  "Veces que se ha mostrado la presentación de electronicama.": [
+    "Vegades que s’ha mostrat la presentació d’electronicama.",
+    "Times the electronicama introduction has been shown.",
+    "Nombre d’affichages de la présentation d’electronicama.",
+    "Vezes em que a apresentação da electronicama foi exibida.",
+    "Wie oft die Einführung von electronicama angezeigt wurde.",
+    "Numero di volte in cui è stata mostrata la presentazione di electronicama."
+  ],
+  "Veces que se ha pulsado Siguiente en la presentación; no cuenta personas.": [
+    "Vegades que s’ha premut Següent a la presentació; no compta persones.",
+    "Times Next was selected in the introduction; this does not count people.",
+    "Nombre de clics sur Suivant dans la présentation ; cela ne compte pas des personnes.",
+    "Vezes em que Próximo foi selecionado na apresentação; não conta pessoas.",
+    "Wie oft in der Einführung auf Weiter geklickt wurde; dies zählt keine Personen.",
+    "Numero di clic su Avanti nella presentazione; non conta le persone."
+  ],
+  "Veces que se ha cerrado la presentación sin terminarla.": [
+    "Vegades que s’ha tancat la presentació sense acabar-la.",
+    "Times the introduction was closed before it was finished.",
+    "Nombre de fermetures de la présentation avant sa fin.",
+    "Vezes em que a apresentação foi fechada antes de terminar.",
+    "Wie oft die Einführung vor ihrem Ende geschlossen wurde.",
+    "Numero di volte in cui la presentazione è stata chiusa prima della fine."
+  ],
+  "Veces que se ha llegado al final de la presentación.": [
+    "Vegades que s’ha arribat al final de la presentació.",
+    "Times the end of the introduction was reached.",
+    "Nombre de fois où la présentation a été suivie jusqu’à la fin.",
+    "Vezes em que se chegou ao final da apresentação.",
+    "Wie oft das Ende der Einführung erreicht wurde.",
+    "Numero di volte in cui è stata raggiunta la fine della presentazione."
+  ],
+  "Cada tarjeta explica qué cuenta. Las categorías pueden coincidir y no deben sumarse como personas distintas.": [
+    "Cada targeta explica què compta. Les categories poden coincidir i no s’han de sumar com a persones diferents.",
+    "Each card explains what it counts. Categories may overlap and must not be added as distinct people.",
+    "Chaque carte explique ce qu’elle compte. Les catégories peuvent se recouper et ne doivent pas être additionnées comme des personnes distinctes.",
+    "Cada cartão explica o que conta. As categorias podem se sobrepor e não devem ser somadas como pessoas distintas.",
+    "Jede Karte erklärt, was sie zählt. Kategorien können sich überschneiden und dürfen nicht als unterschiedliche Personen addiert werden.",
+    "Ogni scheda spiega cosa conta. Le categorie possono sovrapporsi e non vanno sommate come persone distinte."
+  ],
+  "Reparto diario de cuentas activadas, cobros confirmados y su importe bruto durante los últimos siete días.": [
+    "Repartiment diari de comptes activats, cobraments confirmats i el seu import brut durant els últims set dies.",
+    "Daily breakdown of activated accounts, confirmed charges and their gross amount over the last seven days.",
+    "Répartition quotidienne des comptes activés, des paiements confirmés et de leur montant brut sur les sept derniers jours.",
+    "Distribuição diária de contas ativadas, cobranças confirmadas e seu valor bruto nos últimos sete dias.",
+    "Tägliche Aufschlüsselung aktivierter Konten, bestätigter Zahlungen und ihrer Bruttosumme der letzten sieben Tage.",
+    "Riepilogo giornaliero di account attivati, addebiti confermati e relativo importo lordo degli ultimi sette giorni."
+  ]
+};
+ Object.assign(rows,statisticsSummaryTranslations);
  const reverse=new Map();for(const [es,values] of Object.entries(rows)){reverse.set(es,es);for(const value of values)if(!reverse.has(value))reverse.set(value,es);}
  let language='es',source='default';
  const textOriginal=new WeakMap(),attributeOriginal=new WeakMap();

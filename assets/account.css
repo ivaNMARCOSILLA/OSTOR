@@ -49,3 +49,4 @@ body.electronicama-theme .login-audit-event p{margin:7px 0;font-size:13px;line-h
 body.electronicama-theme .login-audit-event small{color:#cbc1da;font-size:12px;line-height:1.5}
 body.electronicama-theme :is(#login-code-panel,#login-security-audit) :is(input,button,summary):focus-visible{outline:3px solid #b8e7f2;outline-offset:3px}
 @media(max-width:600px){body.electronicama-theme .login-code-actions button,body.electronicama-theme .login-audit-actions button{width:100%}body.electronicama-theme #login-security-audit{padding:0 12px 14px}}
+body.electronicama-theme .admin-statistics .statistics-explanation{margin:3px 0 0;font-size:13px;line-height:1.55;color:#d0d8e3;overflow-wrap:anywhere}
