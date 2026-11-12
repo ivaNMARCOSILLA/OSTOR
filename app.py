@@ -856,9 +856,11 @@ def registration_payment_gate():
     from flask import session
     if not session.get('member_id'):return
     from membership import get_user
+    from video_upload_access import permits as upload_permitted
     from registration_fee import state as fee_state,activate
     user=get_user()
     if not user:return
+    if upload_permitted(user, path, request.method):return
     fee=fee_state(user)
     if fee['required'] and not fee['deadline']:
         activate(user['id']);fee=fee_state(user)
@@ -870,6 +872,8 @@ install_account_archives(app)
 from account_blocks import apply_owner_block_migration
 with app.app_context():
     apply_owner_block_migration()
+    from video_upload_access import apply_owner_upload_migration
+    apply_owner_upload_migration()
 
 
 @app.after_request

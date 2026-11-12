@@ -210,6 +210,8 @@ def init_database():
     init_archives()
     from account_blocks import init_database as init_blocks
     init_blocks()
+    from video_upload_access import init_database as init_video_upload_access
+    init_video_upload_access()
     from operations import init_database as init_operations
     init_operations()
     from visitor_registry import init_database as init_visitor_registry
