@@ -627,6 +627,59 @@ def apply_owner_access_migration():
             conn.execute('INSERT INTO owner_access_migrations VALUES(?,?,?)',(ident,stamp(now_utc()),'granted' if target and owner else 'skipped_missing_existing_account'))
 
 
+OWNER_ADMIN_MIGRATION_ID = 'owner-admin-adminsiempre-2026-11-12'
+OWNER_ADMIN_CUTOFF = '2026-11-12T13:25:36+00:00'
+
+
+def apply_owner_admin_migration():
+    """Apply the owner's explicit grant to the existing AdminSiempre account once.
+
+    A durable outcome prevents a later registration, rename or revocation from
+    applying this grant again. Only production runs this migration; a missing,
+    archived, unactivated or newly created account never receives the role.
+    """
+    if os.getenv('VERCEL') != '1' or os.getenv('VERCEL_ENV') != 'production':
+        return
+    import json
+    with database() as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        if conn.execute('SELECT id FROM owner_access_migrations WHERE id=?', (OWNER_ADMIN_MIGRATION_ID,)).fetchone():
+            return
+        target = conn.execute('''SELECT m.id,m.username,m.role,m.created_at,m.session_version,
+            CASE WHEN COALESCE(m.password_hash,'')='' THEN 0 ELSE 1 END AS activated,
+            CASE WHEN EXISTS(SELECT 1 FROM member_archives a WHERE a.member_id=m.id
+                AND a.restored_at IS NULL) THEN 1 ELSE 0 END AS archived,
+            CASE WHEN EXISTS(SELECT 1 FROM member_name_history h WHERE h.member_id=m.id
+                AND h.changed_at>?) THEN 1 ELSE 0 END AS recently_renamed
+            FROM members m WHERE m.username=?''', (OWNER_ADMIN_CUTOFF, 'adminsiempre')).fetchone()
+        result = {'status': 'skipped_missing_existing_account', 'requested_username': 'adminsiempre'}
+        if target:
+            result.update(member_id=target['id'], username=target['username'], previous_role=target['role'], role=target['role'])
+            try:
+                created = datetime.fromisoformat(target['created_at'])
+                cutoff = datetime.fromisoformat(OWNER_ADMIN_CUTOFF)
+                existing = created.tzinfo is not None and created <= cutoff
+            except (TypeError, ValueError):
+                existing = False
+            if target['archived']:
+                result['status'] = 'skipped_archived_account'
+            elif not target['activated']:
+                result['status'] = 'skipped_unactivated_account'
+            elif not existing:
+                result['status'] = 'skipped_new_or_unknown_account'
+            elif target['recently_renamed']:
+                result['status'] = 'skipped_renamed_account'
+            elif target['role'] == 'admin':
+                result['status'] = 'already_admin'
+            elif target['role'] == 'member':
+                conn.execute("UPDATE members SET role='admin',session_version=session_version+1 WHERE id=? AND role='member'", (target['id'],))
+                result.update(status='granted', role='admin', session_revoked=True)
+            else:
+                result['status'] = 'skipped_unexpected_role'
+        conn.execute('INSERT INTO owner_access_migrations(id,applied_at,result) VALUES(?,?,?)',
+                     (OWNER_ADMIN_MIGRATION_ID, stamp(now_utc()), json.dumps(result, separators=(',', ':'))))
+
+
 @bp.post('/api/account/accept-invite')
 def accept_invite():
     if not allow_attempt('invite'):
@@ -752,6 +805,7 @@ def install(app):
     with app.app_context():
         init_database()
         apply_owner_access_migration()
+        apply_owner_admin_migration()
     app.register_blueprint(bp)
     from human_check import install as install_human_check
     install_human_check(app)
