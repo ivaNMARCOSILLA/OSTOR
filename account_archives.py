@@ -100,6 +100,10 @@ def delete_unpaid_member(conn, member_id, actor_id=None):
             'SELECT 1 FROM '+table+' WHERE '+condition+' LIMIT 1', parameters,
         ).fetchone() is not None
 
+    from account_blocks import is_blocked
+    if is_blocked(conn, member_id):
+        raise AccountDeletionBlocked('La cuenta tiene un bloqueo de acceso vigente. Se conserva su identidad para mantener el bloqueo.')
+
     channels = conn.execute('SELECT id,room_name,live_until FROM streamer_channels WHERE member_id=?',
                             (member_id,)).fetchall() if 'streamer_channels' in tables else []
     channel_ids = [row['id'] for row in channels]
@@ -272,6 +276,10 @@ def archive_account():
             return jsonify(error='La cuenta no existe.'), 404
         if target['role'] == 'admin' or target['id'] == actor['id']:
             return jsonify(error='Las cuentas administradoras se conservan para mantener el acceso al panel.'), 403
+        from account_blocks import is_blocked
+        if not data['archived'] and is_blocked(conn, target['id']):
+            return jsonify(error='Esta cuenta tiene un bloqueo de acceso vigente. No se puede restaurar desde las bajas.',
+                           code='account_blocked'), 409
         if data['archived']:
             rooms = close_member(conn, target['id'], actor['id'])
         elif is_archived(conn, target['id']):

@@ -164,7 +164,7 @@ def begin(user, supplied_email=None, purpose='login'):
     binding = _binding()
     with database() as conn:
         conn.execute('BEGIN IMMEDIATE')
-        fresh = conn.execute('SELECT session_version FROM members WHERE id=? AND NOT EXISTS(SELECT 1 FROM member_archives a WHERE a.member_id=members.id AND a.restored_at IS NULL)', (user['id'],)).fetchone()
+        fresh = conn.execute('SELECT session_version FROM members WHERE id=? AND NOT EXISTS(SELECT 1 FROM member_archives a WHERE a.member_id=members.id AND a.restored_at IS NULL) AND NOT EXISTS(SELECT 1 FROM account_blocks b WHERE b.member_id=members.id)', (user['id'],)).fetchone()
         if not fresh or fresh['session_version'] != user['session_version']:
             return jsonify(error='La cuenta ha cambiado. Inicia sesión de nuevo.', code='login_changed'), 401
         profile=conn.execute('SELECT email FROM member_profiles WHERE member_id=?',(user['id'],)).fetchone()
@@ -208,7 +208,7 @@ def _bound(conn, data):
     row = conn.execute('''SELECT c.*,m.session_version AS current_version,m.username,
         p.email AS current_email FROM security_login_challenges c JOIN members m ON m.id=c.member_id
         LEFT JOIN member_profiles p ON p.member_id=m.id WHERE c.id=? AND NOT EXISTS(
-          SELECT 1 FROM member_archives a WHERE a.member_id=m.id AND a.restored_at IS NULL)''', (ident,)).fetchone()
+          SELECT 1 FROM member_archives a WHERE a.member_id=m.id AND a.restored_at IS NULL) AND NOT EXISTS(SELECT 1 FROM account_blocks b WHERE b.member_id=m.id)''', (ident,)).fetchone()
     if not row:
         return None
     subject(row['member_id'], row['username'])

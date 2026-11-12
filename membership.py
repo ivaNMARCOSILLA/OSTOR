@@ -208,6 +208,8 @@ def init_database():
     init_notifications()
     from account_archives import init_database as init_archives
     init_archives()
+    from account_blocks import init_database as init_blocks
+    init_blocks()
     from operations import init_database as init_operations
     init_operations()
     from visitor_registry import init_database as init_visitor_registry
@@ -302,7 +304,7 @@ def get_user():
     if hasattr(g, 'member'):
         return g.member
     with database() as conn:
-        row = conn.execute('SELECT m.*,p.nickname AS nickname,p.email AS profile_email,p.email_verified AS profile_email_verified,s.until_at AS streamer_until,f.granted_at AS friend_granted_at,f.revoked_at AS friend_revoked_at,l.number AS founder_number,l.revoked_at AS founder_revoked_at,e.trial_until AS live_trial_until,e.paid_at AS live_paid_at,e.revoked_at AS live_revoked_at,cr.community_role AS community_role,ap.cancelled_at AS annual_cancelled_at,sg.granted_at AS service_granted_at,sg.revoked_at AS service_revoked_at FROM members m LEFT JOIN member_profiles p ON p.member_id=m.id LEFT JOIN streamer_access s ON s.member_id=m.id LEFT JOIN friend_access f ON f.member_id=m.id LEFT JOIN live_founders l ON l.member_id=m.id LEFT JOIN live_entitlements e ON e.member_id=m.id LEFT JOIN community_roles cr ON cr.member_id=m.id LEFT JOIN annual_preferences ap ON ap.member_id=m.id LEFT JOIN service_grants sg ON sg.member_id=m.id WHERE m.id=? AND NOT EXISTS(SELECT 1 FROM member_archives a WHERE a.member_id=m.id AND a.restored_at IS NULL)', (session.get('member_id', ''),)).fetchone()
+        row = conn.execute('SELECT m.*,p.nickname AS nickname,p.email AS profile_email,p.email_verified AS profile_email_verified,s.until_at AS streamer_until,f.granted_at AS friend_granted_at,f.revoked_at AS friend_revoked_at,l.number AS founder_number,l.revoked_at AS founder_revoked_at,e.trial_until AS live_trial_until,e.paid_at AS live_paid_at,e.revoked_at AS live_revoked_at,cr.community_role AS community_role,ap.cancelled_at AS annual_cancelled_at,sg.granted_at AS service_granted_at,sg.revoked_at AS service_revoked_at FROM members m LEFT JOIN member_profiles p ON p.member_id=m.id LEFT JOIN streamer_access s ON s.member_id=m.id LEFT JOIN friend_access f ON f.member_id=m.id LEFT JOIN live_founders l ON l.member_id=m.id LEFT JOIN live_entitlements e ON e.member_id=m.id LEFT JOIN community_roles cr ON cr.member_id=m.id LEFT JOIN annual_preferences ap ON ap.member_id=m.id LEFT JOIN service_grants sg ON sg.member_id=m.id WHERE m.id=? AND NOT EXISTS(SELECT 1 FROM member_archives a WHERE a.member_id=m.id AND a.restored_at IS NULL) AND NOT EXISTS(SELECT 1 FROM account_blocks b WHERE b.member_id=m.id)', (session.get('member_id', ''),)).fetchone()
     g.member = row if row and row['session_version'] == session.get('session_version') else None
     return g.member
 
@@ -470,7 +472,7 @@ def login():
     data = payload()
     with database() as conn:
         identity=str(data.get('username', '')).strip().lower()
-        user=conn.execute('SELECT m.* FROM members m LEFT JOIN member_profiles p ON p.member_id=m.id WHERE (m.username=? OR (p.email=? AND p.email_verified=1)) AND NOT EXISTS(SELECT 1 FROM member_archives a WHERE a.member_id=m.id AND a.restored_at IS NULL)',(identity,identity)).fetchone()
+        user=conn.execute('SELECT m.* FROM members m LEFT JOIN member_profiles p ON p.member_id=m.id WHERE (m.username=? OR (p.email=? AND p.email_verified=1)) AND NOT EXISTS(SELECT 1 FROM member_archives a WHERE a.member_id=m.id AND a.restored_at IS NULL) AND NOT EXISTS(SELECT 1 FROM account_blocks b WHERE b.member_id=m.id)',(identity,identity)).fetchone()
     import login_security
     login_security.subject(user['id'] if user else None,identity)
     password = data.get('password')
@@ -751,7 +753,8 @@ def accept_invite():
             if not invitation or invitation['used_at'] or invitation['expires_at'] <= stamp(now_utc()):
                 raise ValueError('Invitación no válida o caducada.')
             from account_archives import is_archived
-            if is_archived(conn,invitation['member_id']):raise ValueError('Invitación no válida o caducada.')
+            from account_blocks import is_blocked
+            if is_archived(conn,invitation['member_id']) or is_blocked(conn,invitation['member_id']):raise ValueError('Invitación no válida o caducada.')
             conn.execute('UPDATE members SET password_hash=? WHERE id=?', (generate_password_hash(data['password']), invitation['member_id']))
             conn.execute('UPDATE invitations SET used_at=? WHERE token_hash=?', (stamp(now_utc()), invitation['token_hash']))
             user=conn.execute('SELECT * FROM members WHERE id=?',(invitation['member_id'],)).fetchone()
@@ -854,6 +857,8 @@ def install(app):
         apply_owner_access_migration()
         apply_owner_admin_migration()
     app.register_blueprint(bp)
+    from account_block_guard import guard as account_block_guard
+    app.before_request(account_block_guard)
     from human_check import install as install_human_check
     install_human_check(app)
     from email_security import install as install_email_security
