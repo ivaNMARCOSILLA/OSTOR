@@ -10,7 +10,7 @@ La calidad automática consulta las capacidades y muestra la resolución real de
 
 ## Precios y meses
 
-Los nuevos precios de canal están limitados a 300–400 céntimos por mes natural. El creador puede cambiar el precio de forma automática cuando conserva los beneficios ya aprobados. Cambiar los beneficios o el destinatario conserva las revisiones de creador, administración y Gref; no se inventan aprobaciones. Sin destinatario o moderador se guarda un borrador, no se publica una tarifa cobrable.
+Los nuevos precios de canal están limitados a 300–400 céntimos por mes natural. El creador puede cambiar el precio de forma automática cuando conserva los beneficios ya aprobados. Cambiar los beneficios o el destinatario conserva las revisiones de creador, administración y moderación de acuerdos; no se inventan aprobaciones. Sin destinatario o moderador se guarda un borrador, no se publica una tarifa cobrable.
 
 La oferta y Checkout calculan el menor precio entre la tarifa vigente y los importes previamente confirmados del mismo suscriptor no revocados. Un cambio no modifica ningún registro ni vencimiento ya adquirido. Un pedido abierto conserva el importe almacenado. El mes se calcula en la zona IANA que envía el navegador al abrir el pago, se guarda con el pedido y se transforma a UTC para persistirlo. El mes corto se ajusta al último día; los cambios estacionales conservan la hora local cuando es posible. La interfaz muestra el vencimiento en la zona local. Las renovaciones siguen siendo manuales, sin cargos adicionales automáticos.
 

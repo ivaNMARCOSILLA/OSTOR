@@ -53,7 +53,7 @@ def run():
   moderator.locator('#subscription-review-list button').first.wait_for()
   assert moderator.locator('#admin-panel').is_hidden();assert mod.request.get(BASE_URL+'/api/admin/members').status==403
   moderator.locator('#subscription-review-list button').first.click()
-  moderator.wait_for_function("document.querySelector('#subscription-review-list').textContent.includes('Gref: aprobado')")
+  moderator.wait_for_function("document.querySelector('#subscription-review-list').textContent.includes('Moderación de acuerdos (@gref): aprobado')")
   offer=owner.request.get(BASE_URL+'/api/channel-subscriptions/'+channel).json()
   assert offer['agreement']['price_cents']==350 and not offer['payments_enabled'] and offer['subscriber_count']==0
   creator.locator('#creator-subscriptions > details').first.locator('summary').click()
@@ -70,6 +70,6 @@ def run():
    assert creator.evaluate('document.documentElement.scrollWidth<=innerWidth+2'),width
    assert moderator.evaluate('document.documentElement.scrollWidth<=innerWidth+2'),width
   assert not errors,errors;browser.close()
- print('OK: real creator/admin/Gref agreement, explicit three-party approvals, restricted moderator, exclusive mode, honest zero subscribers, no early payment, four widths')
+ print('OK: real creator/admin/moderator agreement, explicit three-party approvals, restricted moderator, exclusive mode, honest zero subscribers, no early payment, four widths')
 
 if __name__=='__main__':run()

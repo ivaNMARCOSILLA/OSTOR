@@ -1,6 +1,6 @@
 """Creator subscriptions: versioned terms, three independent approvals, verified receipts."""
-import json,secrets
-from datetime import datetime
+import json,secrets,os,re
+from datetime import datetime,timedelta
 from flask import Blueprint,jsonify,request
 from membership import database,get_user,user_public,now_utc,stamp,payload,require_admin,end_of_plan,allow_attempt
 from storage import INTEGRITY_ERRORS
@@ -39,8 +39,154 @@ def init_database():
 # Payment orders reference the agreement tables initialized above.
 MODERATOR_PERMISSIONS={'review_agreements':'Ver propuestas y sus condiciones','approve_agreements':'Aprobar precios y beneficios'}
 
+OWNER_MODERATOR_MIGRATION_ID='owner-adminsiempre-agreement-moderator-2026-11-13'
+OWNER_MODERATOR_CUTOFF='2026-11-13T12:15:58+00:00'
+
+
+def _next_moderator_assignment(conn):
+ """Keep explicit reassignment ordered even within the same clock second."""
+ instant=now_utc()
+ previous=conn.execute('SELECT assigned_at FROM pricing_moderators ORDER BY assigned_at DESC,member_id DESC LIMIT 1').fetchone()
+ if previous:
+  try:
+   latest=datetime.fromisoformat(previous['assigned_at'])
+   if latest.tzinfo is not None and latest>=instant:instant=latest+timedelta(microseconds=1)
+  except (TypeError,ValueError,OverflowError):pass
+ return stamp(instant)
+
+
+def primary_moderator(conn,exclude_member_id=None):
+ exclusion=' AND m.id<>?' if exclude_member_id is not None else ''
+ parameters=(exclude_member_id,) if exclude_member_id is not None else ()
+ return conn.execute('''SELECT p.member_id,m.username,
+  CASE WHEN COALESCE(m.password_hash,'')<>'' THEN 1 ELSE 0 END AS activated
+  FROM pricing_moderators p JOIN members m ON m.id=p.member_id
+  WHERE p.revoked_at IS NULL
+  AND NOT EXISTS(SELECT 1 FROM member_archives a WHERE a.member_id=m.id AND a.restored_at IS NULL)
+  AND NOT EXISTS(SELECT 1 FROM account_blocks b WHERE b.member_id=m.id)'''+exclusion+
+  ' ORDER BY p.assigned_at DESC,p.member_id DESC LIMIT 1',parameters).fetchone()
+
 def moderator(conn,user,permission='review_agreements'):
- return bool(user and conn.execute('SELECT p.member_id FROM pricing_moderators p JOIN members m ON m.id=p.member_id WHERE p.member_id=? AND p.revoked_at IS NULL AND m.password_hash IS NOT NULL AND EXISTS (SELECT 1 FROM moderator_permissions x WHERE x.member_id=p.member_id AND x.permission=?)',(user['id'],permission)).fetchone())
+ return bool(user and conn.execute('''SELECT p.member_id FROM pricing_moderators p JOIN members m ON m.id=p.member_id
+  WHERE p.member_id=? AND p.revoked_at IS NULL AND COALESCE(m.password_hash,'')<>''
+  AND NOT EXISTS(SELECT 1 FROM member_archives a WHERE a.member_id=m.id AND a.restored_at IS NULL)
+  AND NOT EXISTS(SELECT 1 FROM account_blocks b WHERE b.member_id=m.id)
+  AND EXISTS(SELECT 1 FROM moderator_permissions x WHERE x.member_id=p.member_id AND x.permission=?)''',
+  (user['id'],permission)).fetchone())
+
+def _current_actor(conn,user):
+ if not user:return None
+ from account_archives import is_archived
+ from account_blocks import is_blocked
+ row=conn.execute('SELECT id,role,session_version FROM members WHERE id=?',(user['id'],)).fetchone()
+ return row if row and row['session_version']==user['session_version'] and not is_archived(conn,user['id']) and not is_blocked(conn,user['id']) else None
+
+def _owner_moderator_identity(conn):
+ """Resolve trusted owner instructions, never a later reuse of the display name."""
+ from account_archives import is_archived
+ from account_blocks import is_blocked
+ def available(ident):
+  return ident if isinstance(ident,str) and re.fullmatch(r'[a-f0-9]{32}',ident) and conn.execute('SELECT 1 FROM members WHERE id=?',(ident,)).fetchone() and not is_archived(conn,ident) and not is_blocked(conn,ident) else None
+ for migration,statuses in [(OWNER_MODERATOR_MIGRATION_ID,{'granted'}),
+                            ('owner-admin-adminsiempre-2026-11-12',{'granted','already_admin'})]:
+  record=conn.execute('SELECT result FROM owner_access_migrations WHERE id=?',(migration,)).fetchone()
+  if not record:continue
+  try:outcome=json.loads(record['result'])
+  except (TypeError,ValueError):return None
+  if not isinstance(outcome,dict):return None
+  if outcome.get('status') in statuses:return available(outcome.get('member_id'))
+  # This instruction already made a durable decision, including a missing ID.
+  if migration==OWNER_MODERATOR_MIGRATION_ID:return None
+ references=conn.execute('SELECT member_id FROM video_upload_grants WHERE source=?',
+                         ('owner-adminsiempre-video-upload-2026-11-12',)).fetchall()
+ return available(references[0]['member_id']) if len(references)==1 else None
+
+
+def apply_owner_moderator_migration():
+    """Give the existing AdminSiempre account agreement scope once, by stable ID.
+
+    Other moderators, agreed terms and approvals are left intact. This explicit
+    owner instruction grants only the two granular agreement permissions and
+    never gives a member a general administrator role.
+    """
+    if os.getenv('VERCEL')!='1' or os.getenv('VERCEL_ENV')!='production':
+        return None
+    from account_archives import is_archived
+    from account_blocks import is_blocked
+    with database() as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        previous=conn.execute('SELECT result FROM owner_access_migrations WHERE id=?',
+                              (OWNER_MODERATOR_MIGRATION_ID,)).fetchone()
+        if previous:
+            return json.loads(previous['result'])
+        stable_id=None
+        invalid_identity=False
+        prior=conn.execute('SELECT result FROM owner_access_migrations WHERE id=?',
+                           ('owner-admin-adminsiempre-2026-11-12',)).fetchone()
+        if prior:
+            try:
+                outcome=json.loads(prior['result'])
+                if not isinstance(outcome,dict) or not isinstance(outcome.get('status'),str):
+                    invalid_identity=True
+                elif outcome['status'] in {'granted','already_admin'}:
+                    candidate=outcome.get('member_id')
+                    if isinstance(candidate,str) and re.fullmatch(r'[a-f0-9]{32}',candidate):
+                        stable_id=candidate
+                    else:
+                        invalid_identity=True
+            except (TypeError,ValueError):
+                invalid_identity=True
+        if not stable_id and not invalid_identity:
+            references=conn.execute('SELECT member_id FROM video_upload_grants WHERE source=?',
+                                    ('owner-adminsiempre-video-upload-2026-11-12',)).fetchall()
+            if len(references)>1:
+                invalid_identity=True
+            elif references:
+                stable_id=references[0]['member_id']
+        target=(conn.execute('SELECT * FROM members WHERE id=?',(stable_id,)).fetchone() if stable_id
+                else conn.execute('SELECT * FROM members WHERE username=?',('adminsiempre',)).fetchone())
+        result={'status':'skipped_missing_existing_account','requested_username':'adminsiempre'}
+        if invalid_identity:
+            result['status']='skipped_invalid_prior_identity'
+        elif target:
+            ident=target['id']
+            result.update(member_id=ident,username=target['username'])
+            try:
+                created=datetime.fromisoformat(target['created_at'])
+                existing=created.tzinfo is not None and created<=datetime.fromisoformat(OWNER_MODERATOR_CUTOFF)
+            except (TypeError,ValueError):
+                existing=False
+            renamed=(not stable_id and conn.execute('''SELECT 1 FROM member_name_history
+                WHERE member_id=? AND changed_at>? LIMIT 1''',(ident,OWNER_MODERATOR_CUTOFF)).fetchone())
+            actor=conn.execute('''SELECT m.id FROM members m WHERE m.role='admin'
+                AND COALESCE(m.password_hash,'')<>''
+                AND NOT EXISTS(SELECT 1 FROM member_archives a WHERE a.member_id=m.id AND a.restored_at IS NULL)
+                AND NOT EXISTS(SELECT 1 FROM account_blocks b WHERE b.member_id=m.id)
+                ORDER BY m.created_at,m.id LIMIT 1''').fetchone()
+            if not existing:
+                result['status']='skipped_new_or_unknown_account'
+            elif renamed:
+                result['status']='skipped_renamed_account'
+            elif not target['password_hash']:
+                result['status']='skipped_unactivated_account'
+            elif is_archived(conn,ident) or is_blocked(conn,ident):
+                result['status']='skipped_inactive_account'
+            elif not actor:
+                result['status']='skipped_missing_administrator'
+            else:
+                instant=_next_moderator_assignment(conn)
+                conn.execute('''INSERT INTO pricing_moderators(member_id,assigned_by,assigned_at,revoked_at)
+                    VALUES(?,?,?,NULL) ON CONFLICT(member_id) DO UPDATE SET
+                    assigned_by=excluded.assigned_by,assigned_at=excluded.assigned_at,revoked_at=NULL''',
+                             (ident,actor['id'],instant))
+                for permission in sorted(MODERATOR_PERMISSIONS):
+                    conn.execute('''INSERT INTO moderator_permissions(member_id,permission,granted_by,granted_at)
+                        VALUES(?,?,?,?) ON CONFLICT(member_id,permission) DO NOTHING''',
+                                 (ident,permission,actor['id'],instant))
+                result.update(status='granted',permissions=sorted(MODERATOR_PERMISSIONS),role=target['role'])
+        conn.execute('INSERT INTO owner_access_migrations(id,applied_at,result) VALUES(?,?,?)',
+                     (OWNER_MODERATOR_MIGRATION_ID,stamp(now_utc()),json.dumps(result,separators=(',',':'))))
+    return result
 
 def channel_price(conn,channel_id,fallback=350,member_id=None):
  row=conn.execute('SELECT price_cents FROM channel_subscription_prices WHERE channel_id=?',(channel_id,)).fetchone()
@@ -101,6 +247,8 @@ def public_agreement(conn,row,private=False):
  result.update(benefits=json.loads(row['benefits_json']),approvals={party:any(a['party']==party for a in approvals) for party in ['creator','admin','moderator']})
  if private:
   result.update(creator_id=row['creator_id'],moderator_id=row['moderator_id'])
+  designated=conn.execute('SELECT username FROM members WHERE id=?',(row['moderator_id'],)).fetchone()
+  result['moderator_username']=designated['username'] if designated else None
   if row['paypal_url'].startswith('stripe:'):result.update(payment_provider='stripe',payout_account=row['paypal_url'][7:])
   else:
    from payments import provider
@@ -124,28 +272,40 @@ def reviewer_status():
   from operations import supervisor_review
   is_supervisor=supervisor_review(conn,user)
   is_mod=moderator(conn,user)
-  assigned=conn.execute('SELECT m.id,m.username,(m.password_hash IS NOT NULL) AS activated FROM pricing_moderators p JOIN members m ON m.id=p.member_id WHERE p.revoked_at IS NULL ORDER BY p.assigned_at DESC LIMIT 1').fetchone() if user and user['role']=='admin' else None
+  assigned=primary_moderator(conn) if user and user['role']=='admin' else None
   assigned=dict(assigned) if assigned else None
-  target=assigned['id'] if assigned else user['id'] if user else None
+  target=assigned['member_id'] if assigned else user['id'] if user else None
   permissions=[r['permission'] for r in conn.execute('SELECT permission FROM moderator_permissions WHERE member_id=?',(target,)).fetchall()] if target else []
-  if assigned:assigned.pop('id')
- return jsonify(member_id=user['id'] if user else None,supervisor=is_supervisor,moderator=is_mod,admin=bool(user and user['role']=='admin'),assigned=assigned,permissions=permissions,available_permissions=MODERATOR_PERMISSIONS)
+  actor_permissions=[r['permission'] for r in conn.execute('SELECT permission FROM moderator_permissions WHERE member_id=?',(user['id'],)).fetchall()] if user else []
+  owner_id=_owner_moderator_identity(conn) if user and user['role']=='admin' else None
+  if assigned:assigned.pop('member_id')
+ return jsonify(member_id=user['id'] if user else None,supervisor=is_supervisor,moderator=is_mod,admin=bool(user and user['role']=='admin'),assigned=assigned,permissions=permissions,actor_permissions=actor_permissions,adminsiempre_member_id=owner_id,available_permissions=MODERATOR_PERMISSIONS)
 
 @bp.post('/api/admin/subscription-moderator')
 @require_admin
 def assign_moderator():
- name=str(payload().get('username','Gref')).strip().lower()
- if name!='gref':return jsonify(error='El moderador designado para estos acuerdos es Gref.'),400
+ data=payload();ident=data.get('member_id')
+ if ident is not None:
+  if not isinstance(ident,str) or not re.fullmatch(r'[a-f0-9]{32}',ident):return jsonify(error='Selecciona una cuenta válida.'),400
+ else:
+  value=data.get('username','AdminSiempre')
+  if not isinstance(value,str) or not value.strip():return jsonify(error='Indica la cuenta que quieres designar.'),400
+  name=value.strip().lower()
+ actor=get_user()
  with database() as conn:
-  conn.execute('BEGIN IMMEDIATE');row=conn.execute('SELECT id,password_hash,role FROM members WHERE LOWER(username)=?',(name,)).fetchone()
-  if not row:return jsonify(error='Crea primero la cuenta o una invitación privada de Gref desde administración.'),404
-  if row['role']=='admin':return jsonify(error='La cuenta del moderador debe ser distinta de la administración.'),409
+  conn.execute('BEGIN IMMEDIATE')
+  fresh=_current_actor(conn,actor)
+  if not fresh or fresh['role']!='admin':return jsonify(error='La sesión de administración ha cambiado. Vuelve a entrar.'),403
+  row=(conn.execute('SELECT id,username,password_hash,role FROM members WHERE id=?',(ident,)).fetchone() if ident is not None
+       else conn.execute('SELECT id,username,password_hash,role FROM members WHERE LOWER(username)=?',(name,)).fetchone())
+  if not row:return jsonify(error='Crea primero la cuenta o su invitación privada desde administración.'),404
+  from account_archives import is_archived
+  from account_blocks import is_blocked
+  if is_archived(conn,row['id']) or is_blocked(conn,row['id']):return jsonify(error='Esta cuenta no está disponible para moderar acuerdos.'),409
   previous=conn.execute('SELECT revoked_at FROM pricing_moderators WHERE member_id=?',(row['id'],)).fetchone()
   if not previous or previous['revoked_at']:conn.execute('DELETE FROM moderator_permissions WHERE member_id=?',(row['id'],))
-  conn.execute('UPDATE pricing_moderators SET revoked_at=? WHERE member_id!=?',(stamp(now_utc()),row['id']))
-  conn.execute('DELETE FROM moderator_permissions WHERE member_id!=?',(row['id'],))
-  conn.execute('INSERT INTO pricing_moderators(member_id,assigned_by,assigned_at) VALUES(?,?,?) ON CONFLICT(member_id) DO UPDATE SET assigned_by=excluded.assigned_by,assigned_at=excluded.assigned_at,revoked_at=NULL',(row['id'],get_user()['id'],stamp(now_utc())))
- return jsonify(ok=True,username='Gref',activated=bool(row['password_hash']))
+  conn.execute('INSERT INTO pricing_moderators(member_id,assigned_by,assigned_at) VALUES(?,?,?) ON CONFLICT(member_id) DO UPDATE SET assigned_by=excluded.assigned_by,assigned_at=excluded.assigned_at,revoked_at=NULL',(row['id'],actor['id'],_next_moderator_assignment(conn)))
+ return jsonify(ok=True,username=row['username'],activated=bool(row['password_hash']))
 
 @bp.post('/api/admin/moderator-permissions')
 @require_admin
@@ -153,12 +313,15 @@ def update_moderator_permissions():
  permissions=payload().get('permissions')
  if not isinstance(permissions,list) or any(not isinstance(p,str) or p not in MODERATOR_PERMISSIONS for p in permissions):return jsonify(error='Permisos no válidos.'),400
  if 'approve_agreements' in permissions and 'review_agreements' not in permissions:return jsonify(error='Para aprobar acuerdos debes permitir también verlos.'),400
+ actor=get_user()
  with database() as conn:
   conn.execute('BEGIN IMMEDIATE')
-  row=conn.execute('SELECT member_id FROM pricing_moderators WHERE revoked_at IS NULL ORDER BY assigned_at DESC LIMIT 1').fetchone()
+  fresh=_current_actor(conn,actor)
+  if not fresh or fresh['role']!='admin':return jsonify(error='La sesión de administración ha cambiado. Vuelve a entrar.'),403
+  row=primary_moderator(conn)
   if not row:return jsonify(error='Designa primero la cuenta del moderador.'),409
   conn.execute('DELETE FROM moderator_permissions WHERE member_id=?',(row['member_id'],))
-  for permission in set(permissions):conn.execute('INSERT INTO moderator_permissions(member_id,permission,granted_by,granted_at) VALUES(?,?,?,?)',(row['member_id'],permission,get_user()['id'],stamp(now_utc())))
+  for permission in set(permissions):conn.execute('INSERT INTO moderator_permissions(member_id,permission,granted_by,granted_at) VALUES(?,?,?,?)',(row['member_id'],permission,actor['id'],stamp(now_utc())))
  return jsonify(ok=True,permissions=sorted(set(permissions)))
 
 @bp.get('/api/channel-subscriptions/creator')
@@ -193,8 +356,8 @@ def propose():
   payout=('stripe:'+account if account else '') if provider()=='stripe' else channel['paypal_url']
   pending=[]
   if not payout:pending.append('Conectar Stripe del creador' if provider()=='stripe' else 'Configurar destinatario')
-  mod=conn.execute('SELECT p.member_id FROM pricing_moderators p JOIN members m ON m.id=p.member_id WHERE p.revoked_at IS NULL AND LOWER(m.username)=? ORDER BY p.assigned_at DESC LIMIT 1',('gref',)).fetchone()
-  if not mod:pending.append('Designar a Gref desde administración')
+  mod=primary_moderator(conn,exclude_member_id=user['id'])
+  if not mod:pending.append('Designar una cuenta de moderación distinta del creador')
   if pending:
    conn.execute('INSERT INTO channel_subscription_drafts VALUES(?,?,?,?) ON CONFLICT(channel_id) DO UPDATE SET price_cents=excluded.price_cents,benefits_json=excluded.benefits_json,updated_at=excluded.updated_at',(channel['id'],cents,json.dumps(sorted(set(benefits))),stamp(now_utc())))
    return jsonify(ok=True,draft=True,published=False,pending=pending,message='Borrador guardado. Falta: '+'. '.join(pending)+'. Después se solicitarán las tres aprobaciones.')
@@ -221,7 +384,13 @@ def review_queue():
   base='FROM subscription_agreements a WHERE a.version=(SELECT MAX(b.version) FROM subscription_agreements b WHERE b.channel_id=a.channel_id)'+where
   total=conn.execute('SELECT COUNT(*) AS n '+base,params).fetchone()['n']
   rows=conn.execute('SELECT a.* '+base+' ORDER BY a.created_at DESC LIMIT 25 OFFSET ?',params+((page-1)*25,)).fetchall()
-  result=[public_agreement(conn,row,True) for row in rows]
+  result=[]
+  for row in rows:
+   item=public_agreement(conn,row,True)
+   item['approval_party']=('moderator' if user['id']==row['moderator_id'] and moderator(conn,user)
+                          else 'admin' if user['role']=='admin' and user['id'] not in {row['creator_id'],row['moderator_id']}
+                          else None) if user['id']!=row['creator_id'] else None
+   result.append(item)
  return jsonify(agreements=result,page=page,pages=max(1,(total+24)//25),total=total,party='admin' if user['role']=='admin' else 'supervisor' if supervising else 'moderator',benefits=BENEFITS)
 
 @bp.post('/api/channel-subscriptions/approve')
@@ -229,9 +398,12 @@ def approve():
  user=get_user();data=payload();party=data.get('party')
  if not user or party not in {'creator','admin','moderator'}:return jsonify(error='Entra con la cuenta de la parte que aprueba.'),403
  with database() as conn:
-  conn.execute('BEGIN IMMEDIATE');row=conn.execute('SELECT * FROM subscription_agreements WHERE id=?',(str(data.get('agreement_id','')),)).fetchone()
+  conn.execute('BEGIN IMMEDIATE')
+  fresh=_current_actor(conn,user)
+  if not fresh:return jsonify(error='La sesión ha cambiado. Vuelve a entrar.'),403
+  row=conn.execute('SELECT * FROM subscription_agreements WHERE id=?',(str(data.get('agreement_id','')),)).fetchone()
   if not row:return jsonify(error='El acuerdo no existe.'),404
-  allowed=(party=='creator' and user['id']==row['creator_id']) or (party=='admin' and user['role']=='admin' and user['id'] not in {row['creator_id'],row['moderator_id']}) or (party=='moderator' and user['id']==row['moderator_id'] and user['id']!=row['creator_id'] and moderator(conn,user,'approve_agreements'))
+  allowed=(party=='creator' and user['id']==row['creator_id']) or (party=='admin' and fresh['role']=='admin' and user['id'] not in {row['creator_id'],row['moderator_id']}) or (party=='moderator' and user['id']==row['moderator_id'] and user['id']!=row['creator_id'] and moderator(conn,user,'approve_agreements'))
   if not allowed:return jsonify(error='Cada parte debe aprobar desde su propia cuenta autorizada.'),403
   latest=conn.execute('SELECT MAX(version) AS n FROM subscription_agreements WHERE channel_id=?',(row['channel_id'],)).fetchone()['n']
   if row['version']!=latest:return jsonify(error='Este acuerdo fue sustituido. Revisa la versión actual.'),409

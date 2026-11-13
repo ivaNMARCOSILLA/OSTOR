@@ -6,7 +6,7 @@ Implementación preparada el 26 de octubre de 2026. No se han abierto cuentas co
 
 Stripe Checkout con Connect Standard: Ol cobra su acceso de 25 EUR y cada creador conecta su propia cuenta para cobrar directamente sus suscripciones. No hay comisión de Ol para el creador ni custodia de regalos. El procesador descuenta sus comisiones del importe cobrado: eso reduce ingresos, no equivale a financiar costes con beneficios netos ni garantiza que Ol no tenga otros costes. Las obligaciones fiscales son de cada vendedor.
 
-Se mantiene la mensualidad de canal como periodo con renovación **manual**, según el acuerdo entre creador, administración y Gref. No se suscribe a nadie a cargos recurrentes por defecto. Esto evita introducir Stripe Billing y sus costes adicionales sin otra decisión. Los beneficios y el destinatario se versionan y requieren las tres aprobaciones; Rubi solo puede consultar si administración se lo permite.
+Se mantiene la mensualidad de canal como periodo con renovación **manual**, según el acuerdo entre creador, administración y moderación de acuerdos. No se suscribe a nadie a cargos recurrentes por defecto. Esto evita introducir Stripe Billing y sus costes adicionales sin otra decisión. Los beneficios y el destinatario se versionan y requieren las tres aprobaciones; Rubi solo puede consultar si administración se lo permite.
 
 Comparar precios oficiales según país y tipo de tarjeta: [Stripe España](https://stripe.com/es/pricing), [Connect](https://stripe.com/es/connect/pricing), [Mollie](https://www.mollie.com/es/pricing), [PayPal empresas](https://www.paypal.com/es/business/paypal-business-fees). No se afirma que una opción sea la más barata en todos los mercados.
 

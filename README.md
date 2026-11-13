@@ -21,7 +21,7 @@ La transcripción de voz de Ol Live depende del navegador y puede fallar; la int
 
 Las primeras 100 plazas disponibles se reservan con la prueba de siete días. Para conservar el número se debe confirmar un único pago de 25 €; se ofrece al finalizar los siete días de prueba. Al vencer sin pago, la plaza vuelve a estar disponible y su historial se archiva en privado. No se reinicia la prueba de la cuenta y pagar tarde no garantiza recuperar el número anterior. Si las 100 plazas están ocupadas, no se inicia una nueva prueba con plaza hasta que se libere una.
 
-Las suscripciones a creadores siguen en preparación. Sus precios y beneficios requieren acuerdo entre creador, administración y Gref. La configuración de Stripe solo se muestra en administración; durante el próximo estreno no se ofrecen cobros, enlaces externos ni regalos monetarios.
+Las suscripciones a creadores siguen en preparación. Sus precios y beneficios requieren acuerdo entre creador, administración y moderación de acuerdos. La configuración de Stripe solo se muestra en administración; durante el próximo estreno no se ofrecen cobros, enlaces externos ni regalos monetarios.
 
 La cuenta permite activar voluntariamente verificación de dos factores TOTP con una app autenticadora y ocho códigos de recuperación de un solo uso. No se activa automáticamente ni requiere SMS. Conserva el mismo secreto de servidor al migrar cuentas que tengan 2FA activa.
 

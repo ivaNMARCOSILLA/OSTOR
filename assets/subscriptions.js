@@ -11,7 +11,16 @@ async function api(path,data){
  const r=await fetch(path,options),d=await r.json();if(!r.ok)throw Error(d.error||'No se pudo completar la operación.');return d;
 }
 function cents(v){const value=String(v).trim().replace(',','.');if(!/^\d{1,6}(?:\.\d{1,2})?$/.test(value))throw Error('Indica euros con hasta dos decimales.');return Math.round(Number(value)*100);}
-function card(a,benefits){const e=node('article','');e.className='subscription-agreement-card';e.append(node('h3',(a.title||'Canal')+' · '+(a.creator_name||'')),node('strong','Versión '+a.version+' · '+money(a.current_price_cents??a.price_cents)+' · '+period(a.period)),node('p',a.benefits.map(b=>benefits[b]||b).join(' · ')),node('p','Creador: '+(a.approvals.creator?'aprobado':'pendiente')+' · Administración: '+(a.approvals.admin?'aprobado':'pendiente')+' · Gref: '+(a.approvals.moderator?'aprobado':'pendiente')));if(a.payout_account)e.append(node('p','Gestor y destinatario: Stripe · '+a.payout_account));return e;}
+function card(a,benefits){
+ const e=node('article',''),approvals=node('p','');e.className='subscription-agreement-card';
+ for(const [index,[party,label]] of [['creator','Creador'],['admin','Administración'],['moderator','Moderación de acuerdos']].entries()){
+  if(index)approvals.append(document.createTextNode(' · '));approvals.append(node('span',label));
+  if(party==='moderator'&&a.moderator_username){const name=node('span',' (@'+a.moderator_username+')');name.setAttribute('translate','no');approvals.append(name);}
+  approvals.append(document.createTextNode(': '),node('span',a.approvals[party]?'aprobado':'pendiente'));
+ }
+ e.append(node('h3',(a.title||'Canal')+' · '+(a.creator_name||'')),node('strong','Versión '+a.version+' · '+money(a.current_price_cents??a.price_cents)+' · '+period(a.period)),node('p',a.benefits.map(b=>benefits[b]||b).join(' · ')),approvals);
+ if(a.payout_account)e.append(node('p','Gestor y destinatario: Stripe · '+a.payout_account));return e;
+}
 export async function openSubscription(id){
  const dialog=$('creator-subscription-dialog');if(!dialog)return;dialog.showModal();$('creator-subscription-details').replaceChildren();$('creator-subscription-status').textContent='Comprobando el acuerdo…';
  try{const d=await api('/api/channel-subscriptions/'+encodeURIComponent(id));$('creator-subscription-title').textContent='Suscripción · '+d.title;const target=$('creator-subscription-details');target.append(node('p',d.subscriber_count+' suscriptores activos'),node('p','Suscripción opcional, distinta del acceso de 25 € al año a Ol Live. El gestor confirma el pago al creador y descuenta sus comisiones. electronicama no añade comisión. La renovación mensual es manual.'));
@@ -26,22 +35,35 @@ $('creator-subscription-close')?.addEventListener('click',()=>$('creator-subscri
 async function reviewStatus(){
  if(!$('subscription-review-panel'))return;
  try{reviewer=await api('/api/channel-subscriptions/reviewer');$('subscription-review-panel').classList.toggle('hidden',!reviewer.admin&&!reviewer.moderator&&!reviewer.supervisor);$('subscription-moderator-admin').classList.toggle('hidden',!reviewer.admin);
- if(reviewer.admin)$('subscription-moderator-status').textContent=reviewer.assigned?'Gref · '+(reviewer.assigned.activated?'cuenta activada y designada':'designado, pendiente de activar su cuenta con la invitación privada'):'Gref todavía no está designado.';
- if(reviewer.admin){$('moderator-review').checked=reviewer.permissions.includes('review_agreements');$('moderator-approve').checked=reviewer.permissions.includes('approve_agreements');}
+ if(reviewer.admin){
+  const status=$('subscription-moderator-status');status.replaceChildren();
+  if(reviewer.assigned){const name=node('span','@'+reviewer.assigned.username);name.setAttribute('translate','no');status.append(node('span','Moderación de acuerdos'),document.createTextNode(' · '),name,document.createTextNode(' · '),node('span',reviewer.assigned.activated?'Cuenta activada y designada.':'Pendiente de activar la cuenta designada.'));}
+  else status.textContent='No hay ninguna cuenta designada para moderación de acuerdos.';
+ }
+ if(reviewer.admin){
+  $('moderator-review').checked=reviewer.permissions.includes('review_agreements');$('moderator-approve').checked=reviewer.permissions.includes('approve_agreements');
+  const assign=$('subscription-assign-moderator');assign.disabled=!reviewer.adminsiempre_member_id;assign.title=reviewer.adminsiempre_member_id?'':'La cuenta de AdminSiempre todavía no está disponible.';
+ }
  if(reviewer.moderator||reviewer.supervisor)$('subscription-review-panel').open=true;if($('subscription-review-panel').open)await review();
  }catch(e){$('subscription-review-status').textContent=e.message;}
 }
 async function review(){
  try{const d=await api('/api/channel-subscriptions/review?page='+reviewPage);$('subscription-review-list').replaceChildren();$('subscription-review-page').textContent='Página '+d.page+' de '+d.pages+' · '+d.total+' acuerdos';$('subscription-review-prev').disabled=d.page<=1;$('subscription-review-next').disabled=d.page>=d.pages;
  if(!d.agreements.length)$('subscription-review-list').append(node('p','Todavía no hay propuestas.'));
- for(const a of d.agreements){const e=card(a,d.benefits),b=node('button','Aprobar como '+(d.party==='admin'?'administración':d.party==='supervisor'?'supervisión · solo lectura':'Gref'));b.type='button';b.disabled=d.party==='supervisor'||a.approvals[d.party]||a.creator_id===reviewer?.member_id||(d.party==='moderator'&&!reviewer.permissions.includes('approve_agreements'));
- b.addEventListener('click',async()=>{b.disabled=true;try{const r=await api('/api/channel-subscriptions/approve',{agreement_id:a.id,party:d.party});$('subscription-review-status').textContent=r.agreement_activated?'Las tres partes han aprobado. Los términos están publicados; cobrar requiere vídeo y pagos habilitados.':'Tu aprobación está guardada. Faltan las demás partes.';await review();}catch(error){$('subscription-review-status').textContent=error.message;b.disabled=false;}});
- e.append(b);$('subscription-review-list').append(e);}
+ for(const a of d.agreements){
+  const party=Object.prototype.hasOwnProperty.call(a,'approval_party')?a.approval_party:d.party;
+  const actorPermissions=Array.isArray(reviewer?.actor_permissions)?reviewer.actor_permissions:(reviewer?.permissions||[]);
+  const allowed=['admin','moderator'].includes(party)&&a.creator_id!==reviewer?.member_id&&(party!=='moderator'||actorPermissions.includes('approve_agreements'));
+  const e=card(a,d.benefits),b=node('button',party==='admin'?'Aprobar como administración':party==='moderator'?'Aprobar como moderación de acuerdos':'Sin aprobación disponible para esta cuenta');
+  b.type='button';b.dataset.approvalParty=party||'readonly';b.disabled=!allowed||Boolean(a.approvals[party]);
+  b.addEventListener('click',async()=>{if(b.disabled)return;b.disabled=true;try{const r=await api('/api/channel-subscriptions/approve',{agreement_id:a.id,party});$('subscription-review-status').textContent=r.agreement_activated?'Las tres partes han aprobado. Los términos están publicados; cobrar requiere vídeo y pagos habilitados.':'Tu aprobación está guardada. Faltan las demás partes.';await review();}catch(error){$('subscription-review-status').textContent=error.message;b.disabled=false;}});
+  e.append(b);$('subscription-review-list').append(e);
+ }
  }catch(e){$('subscription-review-status').textContent=e.message;}
 }
 $('subscription-review-panel')?.addEventListener('toggle',()=>{if($('subscription-review-panel').open)review();});
 $('subscription-review-refresh')?.addEventListener('click',reviewStatus);
-$('subscription-assign-gref')?.addEventListener('click',async()=>{const b=$('subscription-assign-gref');b.disabled=true;try{await api('/api/admin/subscription-moderator',{username:'Gref'});await reviewStatus();}catch(e){$('subscription-review-status').textContent=e.message;}finally{b.disabled=false;}});
+$('subscription-assign-moderator')?.addEventListener('click',async()=>{const b=$('subscription-assign-moderator'),memberId=reviewer?.adminsiempre_member_id;if(!memberId)return;b.disabled=true;try{await api('/api/admin/subscription-moderator',{member_id:memberId});await reviewStatus();}catch(e){$('subscription-review-status').textContent=e.message;}finally{b.disabled=!reviewer?.adminsiempre_member_id;}});
 $('subscription-review-prev')?.addEventListener('click',()=>{reviewPage=Math.max(1,reviewPage-1);review();});$('subscription-review-next')?.addEventListener('click',()=>{reviewPage++;review();});
 async function creatorStatus(){
  if(!$('creator-subscriptions'))return;
@@ -52,12 +74,12 @@ async function creatorStatus(){
  else{$('creator-agreement-current').append(node('p','Propón un precio y sus beneficios. Aún no hay tarifa.'));$('creator-offer-approve').classList.add('hidden');}
  $('creator-chat-exclusive').checked=Boolean(d.settings.subscriber_chat);$('creator-live-exclusive').checked=Boolean(d.settings.exclusive_live);
  const returned=new URL(location.href);
- if(returned.searchParams.get('stripe')==='connected'&&d.stripe_connected&&!resumingStripeDraft){resumingStripeDraft=true;$('channel-subscription-settings').open=true;returned.searchParams.delete('stripe');history.replaceState(null,'',returned.pathname+returned.search+returned.hash);if(d.draft){$('creator-offer-status').textContent='Stripe conectado. Recuperando tu propuesta…';const resumed=await api('/api/channel-subscriptions/propose',{price_cents:d.draft.price_cents,period:'month',benefits:d.draft.benefits});$('creator-offer-status').textContent=resumed.draft?resumed.message:'Stripe conectado y propuesta recuperada automáticamente. Ahora pueden aprobar los beneficios creador, administración y Gref.';await creatorStatus();}else $('creator-offer-status').textContent='Stripe conectado. Ya puedes guardar tu precio y beneficios.';}
+ if(returned.searchParams.get('stripe')==='connected'&&d.stripe_connected&&!resumingStripeDraft){resumingStripeDraft=true;$('channel-subscription-settings').open=true;returned.searchParams.delete('stripe');history.replaceState(null,'',returned.pathname+returned.search+returned.hash);if(d.draft){$('creator-offer-status').textContent='Stripe conectado. Recuperando tu propuesta…';const resumed=await api('/api/channel-subscriptions/propose',{price_cents:d.draft.price_cents,period:'month',benefits:d.draft.benefits});$('creator-offer-status').textContent=resumed.draft?resumed.message:'Stripe conectado y propuesta recuperada automáticamente. Ahora pueden aprobar los beneficios creador, administración y moderación de acuerdos.';await creatorStatus();}else $('creator-offer-status').textContent='Stripe conectado. Ya puedes guardar tu precio y beneficios.';}
 
  }catch(e){$('creator-offer-status').textContent=e.message;}
 }
 $('creator-offer-form')?.addEventListener('submit',async e=>{e.preventDefault();const b=e.target.querySelector('button');b.disabled=true;try{const d=await api('/api/channel-subscriptions/propose',{price_cents:cents($('creator-offer-price').value),period:$('creator-offer-period').value,benefits:[...document.querySelectorAll('[name=creator-benefit]:checked')].map(i=>i.value)});$('creator-offer-status').textContent=d.draft||d.automatic_price?d.message:'Propuesta guardada. Cada parte debe aprobar esta versión expresamente.';await creatorStatus();}catch(error){$('creator-offer-status').textContent=error.message;}finally{b.disabled=false;}});
-$('creator-offer-approve')?.addEventListener('click',async()=>{try{await api('/api/channel-subscriptions/approve',{agreement_id:$('creator-offer-approve').dataset.agreement,party:'creator'});await creatorStatus();$('creator-offer-status').textContent='Tu aprobación está guardada. Faltan administración y Gref.';}catch(e){$('creator-offer-status').textContent=e.message;}});
+$('creator-offer-approve')?.addEventListener('click',async()=>{try{await api('/api/channel-subscriptions/approve',{agreement_id:$('creator-offer-approve').dataset.agreement,party:'creator'});await creatorStatus();$('creator-offer-status').textContent='Tu aprobación está guardada. Faltan administración y moderación de acuerdos.';}catch(e){$('creator-offer-status').textContent=e.message;}});
 $('creator-exclusive-form')?.addEventListener('submit',async e=>{e.preventDefault();try{await api('/api/channel-subscriptions/'+creator.id+'/mode',{subscriber_chat:$('creator-chat-exclusive').checked,exclusive_live:$('creator-live-exclusive').checked});$('creator-offer-status').textContent='Modos del canal guardados.';}catch(error){$('creator-offer-status').textContent=error.message;}});
 async function members(){if(!creator)return;try{const d=await api('/api/channel-subscriptions/'+creator.id+'/members?page='+memberPage);$('creator-subscribers-rows').replaceChildren(...d.members.map(m=>node('p',m.username+' · '+money(m.amount_cents)+' · '+date(m.starts_at)+' → '+date(m.ends_at))));$('creator-subscribers-page').textContent='Página '+d.page+' de '+d.pages+' · '+d.total+' registros';$('creator-subscribers-prev').disabled=d.page<=1;$('creator-subscribers-next').disabled=d.page>=d.pages;}catch(e){$('creator-offer-status').textContent=e.message;}}
 $('creator-subscribers-list')?.addEventListener('toggle',()=>{if($('creator-subscribers-list').open)members();});$('creator-subscribers-prev')?.addEventListener('click',()=>{memberPage=Math.max(1,memberPage-1);members();});$('creator-subscribers-next')?.addEventListener('click',()=>{memberPage++;members();});
